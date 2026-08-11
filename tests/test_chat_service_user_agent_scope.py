@@ -657,7 +657,7 @@ def test_prompt_injects_json_render_contract(monkeypatch, tmp_path):
     )
 
     assert "[RENDERING_CONTRACT]" in prompt
-    assert "才需要调用对应的 DramaClaw 展示工具" in prompt
+    assert "才需要调用对应的 DramaHub 展示工具" in prompt
     assert "不要向用户解释内部渲染格式、渲染机制、工具调用过程或工具名" in prompt
     assert "不要用文字列表、文件名列表、Beat 名称列表或 URL 列表替代媒体展示" in prompt
     assert "必须调用对应展示工具" in prompt

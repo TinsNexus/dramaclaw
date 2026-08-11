@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- TBD: replace with official logo assets/logo.svg -->
-<h1>DramaClaw</h1>
+<h1>DramaHub</h1>
 
 ## Make Your Own DC.
 
@@ -32,7 +32,7 @@ From script to storyboard, from assets to finished film — the whole chain.<br/
 Because people aren't beasts of burden.<br/>
 Because creativity is humanity's last line of defense.<br/>
 <br/>
-What DramaClaw sets out to do is simple:<br/>
+What DramaHub sets out to do is simple:<br/>
 <br/>
 <strong>Tear down the wall.</strong><br/>
 <br/>
@@ -59,7 +59,7 @@ We'll keep tearing down walls.
 <br/>
 
 <p align="center">
-  <img src="./assets/hero.png" alt="DramaClaw — storytellers, back in front of the camera" width="820"/>
+  <img src="./assets/hero.png" alt="DramaHub — storytellers, back in front of the camera" width="820"/>
 </p>
 
 <!--
@@ -80,7 +80,7 @@ We'll keep tearing down walls.
 
 <div align="center">
 
-## 🎬 Made with DramaClaw
+## 🎬 Made with DramaHub
 
 <sub>Real short dramas our team produced on this very pipeline &mdash; click a link to play.</sub>
 
@@ -129,9 +129,9 @@ We'll keep tearing down walls.
 
 <br/>
 
-## What is DramaClaw?
+## What is DramaHub?
 
-DramaClaw is an industrialized drama-production line whose **source is available**. Drop in a manuscript and DramaClaw takes over all the heavy lifting: extracting characters, planning episodes, generating scripts, drawing storyboards and first frames, synthesizing voice-over, and cutting the final film.
+DramaHub is an industrialized drama-production line whose **source is available**. Drop in a manuscript and DramaHub takes over all the heavy lifting: extracting characters, planning episodes, generating scripts, drawing storyboards and first frames, synthesizing voice-over, and cutting the final film.
 
 It's built for creators, indie studios, and creative engineers — letting you run the whole "drama factory" on your own infrastructure, without stitching together a dozen disconnected tools or handing your material to an opaque black-box cloud service.
 
@@ -142,7 +142,7 @@ And although it's built around drama production, the same pipeline — character
 ## Core Capabilities
 
 <p align="center">
-  <img src="https://nfg-web-assets.cdnfg.com/dramaclaw/readme/oss-launch.jpg?v=2" width="760" alt="DramaClaw 源码发布 · source-available launch"/>
+  <img src="https://nfg-web-assets.cdnfg.com/dramaclaw/readme/oss-launch.jpg?v=2" width="760" alt="DramaHub 源码发布 · source-available launch"/>
 </p>
 
 - **Novel parsing & story graph** &mdash; parse the manuscript into a queryable graph of characters, relationships, and timeline
@@ -167,7 +167,7 @@ And although it's built around drama production, the same pipeline — character
 ## Pipeline at a Glance
 
 <p align="center">
-  <img src="./assets/pipeline.png" alt="DramaClaw pipeline — Ingest, Plan, Produce, Deliver" width="900"/>
+  <img src="./assets/pipeline.png" alt="DramaHub pipeline — Ingest, Plan, Produce, Deliver" width="900"/>
 </p>
 
 Every step has its own interface — run them in order, skip steps, resume from any checkpoint, or even plug in your own orchestrator.
@@ -176,7 +176,7 @@ Every step has its own interface — run them in order, skip steps, resume from 
 
 ## System Requirements
 
-DramaClaw runs all inference through a **remote OpenAI-compatible gateway** — nothing runs models on your machine — so the local footprint is light. An ordinary laptop or a small VPS is enough.
+DramaHub runs all inference through a **remote OpenAI-compatible gateway** — nothing runs models on your machine — so the local footprint is light. An ordinary laptop or a small VPS is enough.
 
 | Item | Requirement |
 |---|---|
@@ -234,16 +234,16 @@ uv run novelvideo api --port 8780   # start the REST API (CE defaults to inline 
 
 ## Supported Models & Providers
 
-DramaClaw stays model-neutral — all text/image/video/audio models connect through a single **OpenAI-compatible gateway**, in two ways:
+DramaHub stays model-neutral — all text/image/video/audio models connect through a single **OpenAI-compatible gateway**, in two ways:
 
-- **DramaClaw official key (recommended)**: `docker compose up`, open <http://localhost:8080> → Settings → Model Config → Official, paste your DC key, save. Works instantly — no model mapping needed. Get a key at <https://relayclaw.cdnfg.com>.
+- **DramaHub official key (recommended)**: `docker compose up`, open <http://localhost:8080> → Settings → Model Config → Official, paste your DC key, save. Works instantly — no model mapping needed. Get a key at <https://relayclaw.cdnfg.com>.
 - **Bring your own gateway (BYO)**: point `NEWAPI_BASE_URL` at your own OpenAI-compatible endpoint and map model names (see [Configuring Models](docs/en/getting-started/configuring-models.md)).
 
 > Prefer fully local? Run `docker compose -f docker-compose.selfhosted.yml up` for a bundled `newapi` gateway you configure yourself (prebuilt-image variant: `docker-compose.selfhosted.release.yml`).
 
 | Stage                | Connected via gateway                                               |
 |----------------------|---------------------------------------------------------------------|
-| **Text / LLM**       | via OpenAI-compatible gateway (DramaClaw official key, or BYO)      |
+| **Text / LLM**       | via OpenAI-compatible gateway (DramaHub official key, or BYO)      |
 | **Image**            | gpt-image · nano-banana                                             |
 | **Video**            | Seedance 1.0 / 1.5 / 2.0 series · happyhorse                        |
 | **Voice-over**       | IndexTTS2                                                           |
@@ -253,21 +253,21 @@ DramaClaw stays model-neutral — all text/image/video/audio models connect thro
 
 <br/>
 
-## Why DramaClaw?
+## Why DramaHub?
 
-**Built for novel-to-short-drama.** General workflow tools can wire nodes together, but they don't know what an "episode beat" is, don't understand why a character's cross-scene identity consistency matters, and won't guard a chapter's emotional arc across image + voice + editing. DramaClaw builds all that judgment into the tool.
+**Built for novel-to-short-drama.** General workflow tools can wire nodes together, but they don't know what an "episode beat" is, don't understand why a character's cross-scene identity consistency matters, and won't guard a chapter's emotional arc across image + voice + editing. DramaHub builds all that judgment into the tool.
 
 **Every step is decomposable.** Each stage is an independent async task with its own interface. Run sequentially, skip steps, resume mid-way — the toolchain itself is the product, with no hidden black box.
 
-**Self-hostable, model-neutral.** Your manuscript, your characters, your models, your servers. Use closed-source frontier models when you want the best results; switch to open-weight models when you want full control. DramaClaw won't lock you into any single vendor.
+**Self-hostable, model-neutral.** Your manuscript, your characters, your models, your servers. Use closed-source frontier models when you want the best results; switch to open-weight models when you want full control. DramaHub won't lock you into any single vendor.
 
-### How DramaClaw compares
+### How DramaHub compares
 
 The edge isn't "more generation" — it's organizing the whole short-drama production loop (script → assets → shots → canvas → final cut) into something reusable, collaborative and scalable.
 
 <sub>Legend: ✅ Full · ◐ Partial · ○ Planned · ❌ None — competitor names partially masked; comparison based on publicly available product docs and positioning.</sub>
 
-| Capability | L\*TV | R\*Hub | T\*Now | S\*ko | U\*dream | O\*II | J\*/K\* | **DramaClaw** |
+| Capability | L\*TV | R\*Hub | T\*Now | S\*ko | U\*dream | O\*II | J\*/K\* | **DramaHub** |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | Storyboard preview (script→shots, boards) | ◐ | ✅ | ◐ | ✅ | ◐ | ❌ | ❌ | ✅ |
 | Interactive series (multi-episode, branching, IP) | ◐ | ◐ | ◐ | ✅ | ◐ | ❌ | ❌ | ✅ |
@@ -311,7 +311,7 @@ We continuously curate and label [`good first issue`](https://github.com/dramacl
 
 ## Contributors
 
-The people building DramaClaw — thank you. 💜
+The people building DramaHub — thank you. 💜
 
 <table>
   <tr>

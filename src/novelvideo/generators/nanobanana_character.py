@@ -1167,7 +1167,7 @@ STRICT REQUIREMENTS (MUST AVOID):
                     print(f"[NanoBanana Character] OpenAI 失败详情: {error_detail}")
                     raise RuntimeError(error_detail)
             elif self.provider == "newapi":
-                print(f"[NanoBanana Character] 调用 DramaClawAPI ({self.model}) 生成图像...")
+                print(f"[NanoBanana Character] 调用 DramaHubAPI ({self.model}) 生成图像...")
                 image_bytes, _text_response, error_detail = await _call_newapi_image_api(
                     api_key=self.api_key,
                     model=self.model,
@@ -1183,7 +1183,7 @@ STRICT REQUIREMENTS (MUST AVOID):
                     base_url=self.base_url,
                 )
                 if not image_bytes and error_detail:
-                    print(f"[NanoBanana Character] DramaClawAPI 失败详情: {error_detail}")
+                    print(f"[NanoBanana Character] DramaHubAPI 失败详情: {error_detail}")
                     raise RuntimeError(error_detail)
             else:
                 # Google 直连模式
@@ -1389,7 +1389,7 @@ STRICT REQUIREMENTS (MUST AVOID):
                     print(f"[NanoBanana Character] OpenAI 失败详情: {error_detail}")
                     raise RuntimeError(error_detail)
             elif self.provider == "newapi":
-                print(f"[NanoBanana Character] 调用 DramaClawAPI ({self.model}) 生成图像（带参考图）...")
+                print(f"[NanoBanana Character] 调用 DramaHubAPI ({self.model}) 生成图像（带参考图）...")
                 ref_images = []
                 if reference_image_bytes:
                     ref_images.append(_named_image_ref(reference_image_bytes, reference_image_name))
@@ -1417,7 +1417,7 @@ STRICT REQUIREMENTS (MUST AVOID):
                     base_url=self.base_url,
                 )
                 if not image_bytes and error_detail:
-                    print(f"[NanoBanana Character] DramaClawAPI 失败详情: {error_detail}")
+                    print(f"[NanoBanana Character] DramaHubAPI 失败详情: {error_detail}")
                     raise RuntimeError(error_detail)
             else:
                 # Google 直连模式

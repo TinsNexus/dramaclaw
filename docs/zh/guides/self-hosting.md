@@ -3,9 +3,9 @@
 
 # 自托管手册（Docker）
 
-> 用 Docker 部署、配置、升级、备份 DramaClaw CE。
+> 用 Docker 部署、配置、升级、备份 DramaHub CE。
 
-CE 默认两个容器：`api` + `web`，**无 PostgreSQL / 无 Redis / 无 Celery**（`ST_EDITION=ce`，任务在进程内 inline 执行）。模型默认走 DramaClaw 官方网关；想纯本地自建网关,用 `docker-compose.selfhosted.yml`(多一个内置 `newapi` 容器)。
+CE 默认两个容器：`api` + `web`，**无 PostgreSQL / 无 Redis / 无 Celery**（`ST_EDITION=ce`，任务在进程内 inline 执行）。模型默认走 DramaHub 官方网关；想纯本地自建网关,用 `docker-compose.selfhosted.yml`(多一个内置 `newapi` 容器)。
 
 ## 1. 前置
 

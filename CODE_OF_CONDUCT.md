@@ -1,6 +1,6 @@
 # Contributor Covenant Code of Conduct · 贡献者公约行为准则
 
-DramaClaw adopts the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+DramaHub adopts the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 本项目采用 [贡献者公约 v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)。
 
 By participating — through issues, pull requests, discussions, or any other

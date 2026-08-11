@@ -2347,7 +2347,7 @@ async function buildAttachmentAnalysisContext(
 ): Promise<string> {
   const lines = [
     "[DRAMACLAW_ATTACHMENT_CONTEXT]",
-    "The user attached file(s). No explicit video-generation instruction was detected, so do not start the DramaClaw/SuperTale video pipeline unless the user asks for it later. Analyze the attached text when available, and ask a focused follow-up if the intent is ambiguous.",
+    "The user attached file(s). No explicit video-generation instruction was detected, so do not start the DramaHub/SuperTale video pipeline unless the user asks for it later. Analyze the attached text when available, and ask a focused follow-up if the intent is ambiguous.",
   ];
 
   for (const prepared of preparedAttachments) {
@@ -2414,7 +2414,7 @@ function appendIngestAutomationContext(
     result.taskType ? `task_type: ${result.taskType}` : null,
     result.taskKey ? `task_key: ${result.taskKey}` : null,
     result.message ? `message: ${result.message}` : null,
-    "The uploaded novel has already been submitted to the project ingest API. Continue the DramaClaw/SuperTale video creation workflow from this task instead of asking the user to upload a novel again.",
+    "The uploaded novel has already been submitted to the project ingest API. Continue the DramaHub/SuperTale video creation workflow from this task instead of asking the user to upload a novel again.",
     "[/DRAMACLAW_INGEST_AUTOMATION]",
   ].filter((line): line is string => line !== null).join("\n");
 }

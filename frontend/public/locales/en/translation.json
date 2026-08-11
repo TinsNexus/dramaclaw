@@ -50,7 +50,8 @@
         "save": "Save avatar",
         "saving": "Saving…",
         "error": "Avatar upload failed, please try again"
-      }
+      },
+      "languageVietnamese": "Tiếng Việt"
     }
   },
   "notifications": {
@@ -967,17 +968,17 @@
     },
     "stage": {
       "eyebrow": "Drama creation platform",
-      "headline": "Make Your Own DC Universe",
+      "headline": "Make Your Own DH Universe",
       "headlines": {
         "createUniverse": "Open Your Creative Universe",
         "dramaUniverse": "Open Your Drama Universe",
         "storyWorld": "Build Your Story World"
       },
       "headlinePrefix": "Make Your Own",
-      "headlineBrand": "DC",
+      "headlineBrand": "DH",
       "headlineSuffix": "Universe",
       "subtitlePrefix": "Make Your Own",
-      "subtitleBrand": "DC",
+      "subtitleBrand": "DH",
       "subtitleSuffix": "",
       "start": "Inspiration happens",
       "sub": "WHERE EVERY SPARK OF INSPIRATION MEETS THE POWER OF EFFORTLESS AI CREATION",
@@ -986,7 +987,7 @@
     },
     "community": {
       "label": "Community works",
-      "heading": "DramaClaw TV",
+      "heading": "DramaHub TV",
       "likes": "{{count}} likes",
       "openWork": "Open work \"{{title}}\"",
       "works": {
@@ -1526,7 +1527,7 @@
     "novelFormat": {
       "button": "Premium drama format guide",
       "title": "Premium drama format",
-      "intro": "Premium drama scripts need explicit episode and scene boundaries. DramaClaw splits the script by scene headers before generating visuals, dialogue, and audio line by line; it does not invent scene breaks for headerless prose.",
+      "intro": "Premium drama scripts need explicit episode and scene boundaries. DramaHub splits the script by scene headers before generating visuals, dialogue, and audio line by line; it does not invent scene breaks for headerless prose.",
       "standardStatus": "Standard · ready to import",
       "standardStatusHint": "Several industry formats are supported. Complete location, time, and INT/EXT metadata can be parsed reliably.",
       "warningStatus": "Repairable · import allowed",
@@ -4082,7 +4083,7 @@
         "mediaCatalogCheckFailed": "Could not check the official media model catalog. Try again later."
       },
       "custom": {
-        "description": "CE uses a local SQLite-backed NewAPI. DramaClaw connects the database, creates a runtime token, and enables the local channel automatically.",
+        "description": "CE uses a local SQLite-backed NewAPI. DramaHub connects the database, creates a runtime token, and enables the local channel automatically.",
         "init": "Initialize Local NewAPI",
         "repair": "Check & Repair",
         "initialized": "Local NewAPI is ready.",
@@ -4101,7 +4102,7 @@
         "setupConfirmPassword": "Confirm Password",
         "setupPasswordPlaceholder": "At least 8 characters",
         "setupConfirmPasswordPlaceholder": "Enter it again",
-        "setupPasswordOnlyOnce": "This username and password are sent to your NewAPI instance only when creating the first admin on a fresh NewAPI install. If NewAPI is already initialized, entering a password here will not change the existing admin password. DramaClaw does not save the password or use it for later operations; keep it for logging into the NewAPI admin console after first-time setup.",
+        "setupPasswordOnlyOnce": "This username and password are sent to your NewAPI instance only when creating the first admin on a fresh NewAPI install. If NewAPI is already initialized, entering a password here will not change the existing admin password. DramaHub does not save the password or use it for later operations; keep it for logging into the NewAPI admin console after first-time setup.",
         "setupRequired": "Local NewAPI has not been initialized yet. Enter the setup password and confirmation, then try again.",
         "setupAlreadyInitializedPasswordIgnored": "Your NewAPI instance is already initialized. This run did not call the NewAPI setup endpoint and did not change the existing admin password; the password you entered was ignored and cleared.",
         "setupPasswordMissingUsername": "Enter the admin username.",
@@ -4561,5 +4562,286 @@
     "zoom": "Zoom",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
+  },
+  "landing": {
+    "common": {
+      "watchNow": "Watch now",
+      "watchNowAria": "Watch community work",
+      "backToTop": "Back to top",
+      "contactBusiness": "Contact sales",
+      "contactBusinessAria": "Open business contact",
+      "contactBusinessDialog": "Business contact",
+      "businessQrAlt": "Business WeChat QR code"
+    },
+    "hero": {
+      "primary": "Let inspiration happen"
+    },
+    "second": {
+      "title": "From spark to project",
+      "subtitle": "In DramaHub, creation no longer stops at one prompt and one result"
+    },
+    "third": {
+      "title": "Let the story be the starting point",
+      "subtitle": "Import a novel, script, or per-episode text and the system parses it automatically, laying the groundwork for asset extraction, episode planning, and shot breakdown."
+    },
+    "fourth": {
+      "sets": {
+        "s1": {
+          "titleTop": "The story enters",
+          "titleBottom": "production state",
+          "lead": "Start from a single premise: characters, conflict, scenes, and shots become creative assets you can keep pushing forward."
+        },
+        "s2": {
+          "titleTop": "The world keeps",
+          "titleBottom": "one cold light",
+          "lead": "Characters hold together, shots stay on track. Every generation returns to the same narrative direction."
+        },
+        "s3": {
+          "titleTop": "Inspiration pushed",
+          "titleBottom": "into moving image",
+          "lead": "Not one still image, but storyboards, clips, trailers, and finished work you can publish."
+        }
+      },
+      "items": {
+        "i1": {
+          "title": "Story breakdown",
+          "body": "Slice an idea into characters, conflict, scenes, and shots so the story doesn't stall at one sentence."
+        },
+        "i2": {
+          "title": "Visual lock",
+          "body": "Keep characters, scenes, and shots in one consistent register, reducing the randomness of generation."
+        },
+        "i3": {
+          "title": "Image advance",
+          "body": "Move past a single spark into clips, trailers, and more complete forms of the work."
+        }
+      }
+    },
+    "fifth": {
+      "title": "Settle countless sparks into assets",
+      "body": "DramaHub organizes them into a project asset library so later shots can reference them continuously, maintain them consistently, and roll back versions when needed."
+    },
+    "sixth": {
+      "title": "Push episode by episode to a finished cut",
+      "subtitle": "An infinite canvas supports multi-reference, multi-node, multi-version exploration, then writes confirmed results back to the main flow — freedom without losing the pipeline"
+    },
+    "seventh": {
+      "title": "Turn short-drama generation from gacha into a pipeline",
+      "subtitle": "DramaHub decomposes the uncertainty of AI video creation into text, assets, shots, and task flow",
+      "steps": {
+        "01": {
+          "title": "Premise input",
+          "body": "One opening line splits into characters, scenes, and narrative constraints."
+        },
+        "02": {
+          "title": "Character breakdown",
+          "body": "Identity, motivation, and relationships lock first so later generations stop drifting."
+        },
+        "03": {
+          "title": "Conflict generation",
+          "body": "Push events to the point where a choice is forced and the story heats itself."
+        },
+        "04": {
+          "title": "Shot planning",
+          "body": "Viewpoint, rhythm, and framing enter one controllable track."
+        },
+        "05": {
+          "title": "Clip takes shape",
+          "body": "A single spark moves forward into scenes, trailers, and continuous clips."
+        },
+        "06": {
+          "title": "Work expansion",
+          "body": "Every result can re-enter the pipeline and branch again."
+        }
+      }
+    },
+    "eighth": {
+      "title": "Built for complete project planning",
+      "subtitle": "DramaHub cares how a series keeps producing: text intake, character consistency, scene reuse, shot progression, team delivery.",
+      "output": {
+        "title": "Night Passage Protocol · Shot sequence 08",
+        "body": "An unregistered freighter drags an entire city's secret into the night layer."
+      },
+      "decisions": {
+        "KEEP": {
+          "title": "Keep",
+          "body": "Lock the current character, shot, or clip as the baseline for what comes next."
+        },
+        "REWRITE": {
+          "title": "Rewrite",
+          "body": "Swap only the conflict, dialogue, or shot direction without overturning the established world."
+        },
+        "EXTEND": {
+          "title": "Extend",
+          "body": "Continue from the current clip into the next scene, a trailer, or a full branch."
+        },
+        "REJECT": {
+          "title": "Reject",
+          "body": "Return to the previous node, take another narrative path, and put the story back in the pipeline."
+        }
+      }
+    },
+    "ninth": {
+      "titleTop": "One premise, straight into",
+      "titleBottom": "shots",
+      "subtitle": "No full script required. Give a direction and DramaHub breaks it into characters, conflict, scenes, and a shot chain you can advance.",
+      "previewTitle": "Luban's Secret Art",
+      "steps": {
+        "01": {
+          "title": "One premise",
+          "body": "A lost city lights up again and every survivor hears the same countdown."
+        },
+        "02": {
+          "title": "Break into structure",
+          "body": "Characters, conflict, scenes, and narrative limits split into nodes you can keep advancing."
+        },
+        "03": {
+          "title": "Form the shots",
+          "body": "Shot order, scene mood, and rhythm lock in; the clip gains a viewing direction."
+        },
+        "04": {
+          "title": "Clip output",
+          "body": "A story clip you can extend, recut, or send to the work wall."
+        }
+      }
+    },
+    "tenth": {
+      "title": "No more starting from blank",
+      "subtitle": "Concept shorts, character tests, continuous clips — going straight from one premise into the pipeline.",
+      "quotes": {
+        "q1": {
+          "name": "Short-film director",
+          "tag": "Concept previz",
+          "text": "No more starting from a blank timeline. I see the conflict and the shots first, then decide which branch is worth producing."
+        },
+        "q2": {
+          "name": "AI video creator",
+          "tag": "Continuous clips",
+          "text": "The useful part isn't generating one image — it's pushing a clip further forward."
+        },
+        "q3": {
+          "name": "Screenwriter",
+          "tag": "Character test",
+          "text": "Once characters, conflict, and scenes are separated, I can judge faster whether a story is worth continuing."
+        },
+        "q4": {
+          "name": "Animation team",
+          "tag": "Pacing check",
+          "text": "We use it for concept previz first — check pacing and shots — then decide whether to go into full production."
+        },
+        "q5": {
+          "name": "Independent producer",
+          "tag": "Trailer generation",
+          "text": "It compresses an idea into something watchable, so discussion stops living in written notes."
+        },
+        "q6": {
+          "name": "Visual director",
+          "tag": "World expansion",
+          "text": "One world keeps branching. The wildness survives, but the direction stays controllable."
+        },
+        "q7": {
+          "name": "Story planner",
+          "tag": "Branch selection",
+          "text": "I use it to rule out dead branches fast and save time for the line that actually has tension."
+        },
+        "q8": {
+          "name": "Creative studio",
+          "tag": "Pitch reel",
+          "text": "From one premise to a watchable clip — enough to carry a much more concrete creative conversation."
+        },
+        "q9": {
+          "name": "Assistant director",
+          "tag": "Shot organization",
+          "text": "It keeps shots from scattering. Every generation lands back on a track you can keep advancing."
+        }
+      }
+    },
+    "eleventh": {
+      "title": "Questions, answered directly",
+      "subtitle": "On generation, control, collaboration, and business access — only the questions that actually change your decision.",
+      "footerQuestion": "Have a specific partnership question?",
+      "faqs": {
+        "f1": {
+          "question": "How is DramaHub different from ordinary AI video generation tools?",
+          "answer": "Ordinary tools work around one prompt, one clip, or one image. DramaHub targets the whole project: text import, asset accumulation, episode planning, shot production, and compositing export — a traceable, collaborative, reusable production loop."
+        },
+        "f2": {
+          "question": "Where should I start on my first run?",
+          "answer": "Follow the main workflow: import text in Story Source, confirm characters/scenes/props/voices in Asset Library, plan episodes and generate script and shots in Episode Studio, then export from the compositing page. The first goal isn't perfection — it's getting one episode all the way through."
+        },
+        "f3": {
+          "question": "What is Episode Studio for, and what is Freezone for?",
+          "answer": "Episode Studio is the main line — batch, stable, episode by episode. Freezone is the director's bench — refining key shots, exploring versions, finalizing assets, and handling complex video work. In a real project, ordinary shots go through Episode Studio and hard shots go to Freezone."
+        },
+        "f4": {
+          "question": "Do results in Freezone automatically overwrite main-line assets?",
+          "answer": "No. Anything generated or uploaded in Freezone is a candidate by default. Results only enter the project's main line after you explicitly write them back and pick a target slot — character, scene, prop, beat sketch, first frame, or video."
+        },
+        "f5": {
+          "question": "Why organize characters, scenes, props, and voices first?",
+          "answer": "Rework in AI video usually doesn't come from the final generation step — it comes from unstable characters, vague scenes, unreferenced props, and inconsistent voices upstream. Asset Library turns those into assets first, which sharply reduces chaos in the later shot stage."
+        },
+        "f6": {
+          "question": "What content types is DramaHub good for?",
+          "answer": "AI short dramas, comic-style series, novel promos, narrated shows, ads, and training video — plus team projects that maintain IP characters and serialized content long term. Solo creators use it to run the whole flow; teams use it to produce together."
+        },
+        "f7": {
+          "question": "How should a team divide the work?",
+          "answer": "Split by stage: the lead manages project, cost, and QA; the writer handles text and script; the artist maintains characters, scenes, and props; the storyboard artist or director owns shot expression; the video operator handles first frames, video, and compositing. Permissions map to viewer, editor, admin, and owner."
+        },
+        "f8": {
+          "question": "What should I check first when generation is unstable?",
+          "answer": "First locate which stage is failing: is the text clear, is the character identity right, do scenes and props have references, does the sketch explain the shot, is the first frame stable, does the audio match? Don't start by regenerating video over and over — fix the upstream assets and shot descriptions first."
+        },
+        "f9": {
+          "question": "What does “Make Your DH Universe.” mean?",
+          "answer": "DH isn't only short for DramaHub — it also stands for each creator's own content universe. DramaHub aims to help you start from one story and gradually build characters, a world, scene assets, and the capacity to produce serialized content."
+        },
+        "f10": {
+          "question": "Where do I land after logging in?",
+          "answer": "You land in the project management center. You can open an existing project or create a new one to start a new episode. Each project is its own space containing text, assets, episodes, shots, video, tasks, and composite results."
+        }
+      }
+    },
+    "twelfth": {
+      "title": "Push one premise into a universe you can watch",
+      "subtitle": "Enter a character, a conflict, or a world — let DramaHub break it into shot nodes and keep extending",
+      "primary": "Start creating without limits",
+      "secondary": "Request an account"
+    },
+    "showcase": {
+      "luban": {
+        "title": "Luban",
+        "logline": "Machinery and ancient craft mesh again on a single timeline."
+      },
+      "guilingsi": {
+        "title": "Spirit Reclamation Bureau",
+        "logline": "Every reflective surface in the city turns at once, forcing the spirit-catcher to hunt the source in the mirror."
+      },
+      "shixiong-butianle": {
+        "title": "Senior Brother, Why Stop Fawning?",
+        "logline": "The first act after rebirth is refusing to stay fate's supporting role."
+      },
+      "tianmingbukeqi": {
+        "title": "Fate Cannot Be Deceived",
+        "logline": "On the wedding day, the way home and the dynasty's secret surface together."
+      },
+      "wulongxiantu": {
+        "title": "Blunderous Path to Immortality",
+        "logline": "The ascension system finally activates — and drags the cultivation path somewhere absurd."
+      },
+      "feiyi-zhouwu": {
+        "title": "Intangible Heritage Dance",
+        "logline": "Traditional movement, rhythm, and framing rearranged into a watchable piece."
+      },
+      "3d-anime-montage-demo": {
+        "title": "3D Anime Montage",
+        "logline": "Multiple animated clips cut into one dense shot rhythm."
+      },
+      "dongtai-dadou": {
+        "title": "Dynamic Combat",
+        "logline": "Action, speed lines, and shot pressure advance continuously through the short."
+      }
+    }
   }
 }

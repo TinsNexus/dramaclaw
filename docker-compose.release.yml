@@ -1,4 +1,4 @@
-# DramaClaw CE — 官方 release 镜像版(不本地构建):官方 DC key 路径。
+# DramaHub CE — 官方 release 镜像版(不本地构建):官方 DC key 路径。
 # 跑法:docker compose -f docker-compose.release.yml up -d
 # 与 docker-compose.yml 服务结构一致,区别仅在镜像来自 Docker Hub release
 # (每次 GitHub Release 自动发布),无需 clone 源码即可运行:

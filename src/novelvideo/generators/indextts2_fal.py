@@ -148,7 +148,7 @@ class IndexTTS2FalClient:
     ) -> TTSResult:
         """Generate dialogue audio from a reference sample and save it to ``output_path``."""
         if not self.api_key:
-            key_name = "DramaClawAPI API key" if self.provider == "newapi" else "FAL_KEY/FAL_API_KEY"
+            key_name = "DramaHubAPI API key" if self.provider == "newapi" else "FAL_KEY/FAL_API_KEY"
             return TTSResult(success=False, error=f"{key_name} not set")
         prompt = str(prompt or "").strip()
         if not prompt:
@@ -305,7 +305,7 @@ class IndexTTS2FalClient:
                     if not result_url:
                         return TTSResult(
                             success=False,
-                            error="DramaClawAPI IndexTTS2 response missing audio bytes or URL",
+                            error="DramaHubAPI IndexTTS2 response missing audio bytes or URL",
                         )
                     audio_response = await client.get(result_url)
                     audio_response.raise_for_status()

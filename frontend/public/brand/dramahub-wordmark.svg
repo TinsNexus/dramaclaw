@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2010 530" fill="none" role="img" aria-label="DramaHub">
+  <title>DramaHub</title>
+  <!--
+    Wordmark dựng lại theo nhận diện cũ: nét khối rất đậm, mọi góc đều vát
+    nhọn (không bo tròn), cạnh trái chữ D thắt vào giữa, và vài khe cắt chéo
+    mảnh xuyên thân chữ. Dùng vector thay PNG để nét luôn sắc ở mọi kích thước.
+    Baseline y=430, đỉnh chữ hoa y=95, đỉnh chữ thường y=190.
+  -->
+  <!--
+    scale(.755,1) nén ngang để ra dáng condensed như bộ chữ cũ, đồng thời kéo
+    8 ký tự về đúng tỉ lệ khung ~3.8:1 của wordmark gốc.
+    Màu tô cứng #fff: wordmark được nhúng bằng <img>, currentColor không kế
+    thừa qua ranh giới đó nên sẽ rơi về màu đen.
+  -->
+  <g transform="scale(.755 1)" fill="#fff" fill-rule="evenodd">
+    <!-- D: cạnh trái thắt nhọn vào tâm, tạo dáng đặc trưng của logo gốc -->
+    <path d="M60 95 H290 L360 165 V360 L290 430 H60 L128 262 Z
+             M175 168 H272 L296 196 V329 L272 357 H175 L214 262 Z" />
+
+    <!-- r: thân đứng + móc vai cắt chéo -->
+    <path d="M400 190 H495 V243 L556 196 H645 L662 262 L566 285 L520 316 V430 H400 Z" />
+
+    <!-- a: bụng khối, đuôi phải hạ thẳng -->
+    <path d="M700 190 H878 L910 232 V430 H700 L672 388 V318 L700 286 H812 V252 H676 Z
+             M760 336 H812 V378 H760 Z" />
+
+    <!-- m: ba chân, hai vai gãy góc -->
+    <path d="M960 190 H1052 V232 L1096 190 H1180 L1216 232 L1260 190 H1344 L1376 236 V430 H1284 V270 H1224 V430 H1132 V270 H1072 V430 H960 Z" />
+
+    <!-- a (thứ hai): trùng dáng chữ a đầu để giữ nhịp chữ -->
+    <path d="M1424 190 H1602 L1634 232 V430 H1424 L1396 388 V318 L1424 286 H1536 V252 H1400 Z
+             M1484 336 H1536 V378 H1484 Z" />
+
+    <!-- H: hai cột nghiêng nhẹ, thanh ngang vát chéo -->
+    <path d="M1690 95 H1800 V240 H1912 V95 H2022 V430 H1912 V296 H1800 V430 H1690 Z" />
+
+    <!-- u: hai cột + đáy khối, đuôi phải cao hơn -->
+    <path d="M2064 190 H2156 V352 H2216 V190 H2308 V430 H2096 L2064 388 Z" />
+
+    <!-- b: cột đứng vươn lên đỉnh chữ hoa + bụng dưới -->
+    <path d="M2356 95 H2448 V190 H2596 L2628 232 V388 L2596 430 H2356 Z
+             M2448 262 H2552 V358 H2448 Z" />
+  </g>
+
+  <!-- Khe cắt chéo mảnh: chi tiết chữ ký của bộ nhận diện gốc -->
+  <g transform="scale(.755 1)" fill="#0b0b0d" opacity=".75">
+    <path d="M406 214 l58 -22 6 16 -58 22 Z" />
+    <path d="M706 214 l58 -22 6 16 -58 22 Z" />
+    <path d="M2074 214 l58 -22 6 16 -58 22 Z" />
+  </g>
+</svg>

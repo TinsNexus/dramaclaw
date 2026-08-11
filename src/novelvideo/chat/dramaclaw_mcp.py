@@ -1,8 +1,8 @@
-"""MCP bridge for DramaClaw tools.
+"""MCP bridge for DramaHub tools.
 
 Hermes uses ``.hermes/plugins/dramaclaw`` directly. Claude, Codex, and other
 MCP-speaking agents use this stdio server to call that same toolset without
-duplicating DramaClaw API wrappers.
+duplicating DramaHub API wrappers.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def _load_dramaclaw_plugin() -> Any:
         plugin_path,
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load DramaClaw plugin from {plugin_path}")
+        raise RuntimeError(f"cannot load DramaHub plugin from {plugin_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -93,7 +93,7 @@ async def list_tools() -> list[types.Tool]:
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
     item = TOOLS.get(name)
     if item is None:
-        raise ValueError(f"unknown DramaClaw tool: {name}")
+        raise ValueError(f"unknown DramaHub tool: {name}")
     _schema, handler = item
     text = handler(arguments or {})
     return [types.TextContent(type="text", text=str(text or ""))]

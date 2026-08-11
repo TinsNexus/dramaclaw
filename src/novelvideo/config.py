@@ -250,7 +250,7 @@ def get_newapi_text_pydantic_model(
         env_base_url="MODEL_BASE_URL",
     )
     if not api_key:
-        raise ValueError("API key not set. Configure DramaClawAPI credentials.")
+        raise ValueError("API key not set. Configure DramaHubAPI credentials.")
     timeout_seconds = (
         float(timeout_seconds_override)
         if timeout_seconds_override is not None
@@ -271,7 +271,7 @@ def get_newapi_text_pydantic_model(
 def get_newapi_structured_output_model_settings() -> dict:
     """Disable reasoning for PydanticAI structured output requests.
 
-    DramaClaw sends opaque ``DC-*`` aliases through an OpenAI-compatible
+    DramaHub sends opaque ``DC-*`` aliases through an OpenAI-compatible
     NewAPI endpoint.  PydanticAI cannot infer thinking capabilities from those
     aliases, so its unified ``thinking=False`` setting is silently ignored.
     Use the explicit OpenAI-compatible wire contract that existing deployments

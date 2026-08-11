@@ -111,7 +111,7 @@ class _WorkerSlot:
 class HermesPool:
     """Process-wide pool of per-user hermes workers.
 
-    Single instance per DramaClaw process (see ``pool`` singleton at module bottom).
+    Single instance per DramaHub process (see ``pool`` singleton at module bottom).
     """
 
     def __init__(

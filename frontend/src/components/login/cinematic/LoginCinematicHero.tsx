@@ -319,7 +319,7 @@ export function LoginCinematicHero({
               className={`${styles.heroPrimary} ${layout.heroPrimary}`}
               onClick={onStart}
             >
-              让灵感发生
+              {t("landing.hero.primary")}
             </button>
             <a
               className={`${styles.heroSecondary} ${layout.heroSecondary}`}

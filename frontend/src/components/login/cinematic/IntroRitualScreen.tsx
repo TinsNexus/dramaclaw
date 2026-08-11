@@ -23,7 +23,7 @@ export function IntroRitualScreen({
   return (
     <section
       className={styles.layer}
-      aria-label="DramaClaw intro"
+      aria-label="DramaHub intro"
       onClick={onComplete}
       onWheel={onComplete}
     >

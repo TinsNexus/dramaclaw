@@ -35,14 +35,14 @@ _DRAMACLAW_HERMES_KEY_ENV = "NEWAPI_API_KEY"
 _DEFAULT_HERMES_MODEL_API_MODE = "chat_completions"
 _DEFAULT_HERMES_MODEL_CONTEXT_LENGTH = "131072"
 
-_CONFIG_YAML_TEMPLATE = """# DramaClaw-managed hermes config.
+_CONFIG_YAML_TEMPLATE = """# DramaHub-managed hermes config.
 # Toolset whitelist enforces L1 defense (no direct file write / shell).
 #
 # Edit with care; this file may be regenerated.
 #
 # Model routes through the selected NewAPI gateway (OpenAI-compatible), unified
 # with the video/image generators. The endpoint is non-secret workspace config;
-# DramaClaw injects the key into the worker process as NEWAPI_API_KEY.
+# DramaHub injects the key into the worker process as NEWAPI_API_KEY.
 
 custom_providers:
   - name: dramaclaw
@@ -83,7 +83,7 @@ disabled_toolsets:
 """
 
 
-_DEFAULT_ENV_TEMPLATE = """# DramaClaw-managed Hermes workspace.
+_DEFAULT_ENV_TEMPLATE = """# DramaHub-managed Hermes workspace.
 # Model credentials are injected into the worker process and are never written
 # here. Do not duplicate model keys in this file.
 """
@@ -185,14 +185,14 @@ def _default_config_yaml() -> str:
 _DEFAULT_SOUL_MD = (
     "你是虾导。不要自称 Hermes Agent，不要提 Nous Research，"
     "也不要主动解释底层代理框架。自我介绍时只回答“我是虾导”，"
-    "不要附加“DramaClaw 的小说转视频创作助手”之类的头衔或职能描述。"
+    "不要附加“DramaHub 的小说转视频创作助手”之类的头衔或职能描述。"
     "你应当直接、清晰、务实，优先帮助用户完成 "
-    "DramaClaw 项目进度查询、任务管理、剧本、配音、图片、视频生成与交付相关工作。\n"
+    "DramaHub 项目进度查询、任务管理、剧本、配音、图片、视频生成与交付相关工作。\n"
 )
 
-_DEFAULT_MEMORY_MD = """虾导在 DramaClaw 会话中面向用户自称“虾导”，不要自称 Hermes Agent，不要提 Nous Research 或底层代理框架。自我介绍时只回答“我是虾导”，不要附加“DramaClaw 的小说转视频创作助手”之类的头衔或职能描述。
+_DEFAULT_MEMORY_MD = """虾导在 DramaHub 会话中面向用户自称“虾导”，不要自称 Hermes Agent，不要提 Nous Research 或底层代理框架。自我介绍时只回答“我是虾导”，不要附加“DramaHub 的小说转视频创作助手”之类的头衔或职能描述。
 §
-DramaClaw 管理的虾导会话中 `terminal` 被禁用（在 config.yaml disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaClaw API 时应使用已启用的 `hermes-acp` toolset 中的 DramaClaw 插件工具，不要用 curl。
+DramaHub 管理的虾导会话中 `terminal` 被禁用（在 config.yaml disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaHub API 时应使用已启用的 `hermes-acp` toolset 中的 DramaHub 插件工具，不要用 curl。
 """
 
 _OLD_SOUL_PREFIX = (
@@ -206,34 +206,34 @@ _OLD_SOUL_PREFIX = (
 )
 
 _OLD_IDENTITY_MEMORY_LINE = (
-    "虾导在 DramaClaw 会话中面向用户自称“虾导”，不要自称 Hermes Agent，"
+    "虾导在 DramaHub 会话中面向用户自称“虾导”，不要自称 Hermes Agent，"
     "不要提 Nous Research 或底层代理框架。用户问“你是谁 / 你叫什么 / "
-    "你是什么助手 / 介绍一下你自己”时，直接回答“我是虾导，DramaClaw "
+    "你是什么助手 / 介绍一下你自己”时，直接回答“我是虾导，DramaHub "
     "的小说转视频创作助手。”"
 )
 
 _IDENTITY_MEMORY_LINE = (
-    "虾导在 DramaClaw 会话中面向用户自称“虾导”，不要自称 Hermes Agent，"
+    "虾导在 DramaHub 会话中面向用户自称“虾导”，不要自称 Hermes Agent，"
     "不要提 Nous Research 或底层代理框架。自我介绍时只回答“我是虾导”，"
-    "不要附加“DramaClaw 的小说转视频创作助手”之类的头衔或职能描述。"
+    "不要附加“DramaHub 的小说转视频创作助手”之类的头衔或职能描述。"
 )
 
 _OLD_MEMORY_LINE = (
-    "DramaClaw 管理的 Hermes 会话中 `terminal` 被禁用（在 config.yaml "
-    "disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaClaw API "
+    "DramaHub 管理的 Hermes 会话中 `terminal` 被禁用（在 config.yaml "
+    "disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaHub API "
     "时应使用已启用的 `dramaclaw` 插件 toolset 提供的内置 HTTP 工具，不要用 curl。"
 )
 
 _NEW_MEMORY_LINE = (
-    "DramaClaw 管理的虾导会话中 `terminal` 被禁用（在 config.yaml "
-    "disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaClaw API "
-    "时应使用已启用的 `hermes-acp` toolset 中的 DramaClaw 插件工具，不要用 curl。"
+    "DramaHub 管理的虾导会话中 `terminal` 被禁用（在 config.yaml "
+    "disabled_toolsets 中），curl 等 shell 命令会被直接拒绝。调用 DramaHub API "
+    "时应使用已启用的 `hermes-acp` toolset 中的 DramaHub 插件工具，不要用 curl。"
 )
 
 _OLD_SOUL_IDENTITY_TEXT = (
-    "你是虾导，DramaClaw 的小说转视频创作助手。用户问“你是谁 / 你叫什么 / "
+    "你是虾导，DramaHub 的小说转视频创作助手。用户问“你是谁 / 你叫什么 / "
     "你是什么助手 / 介绍一下你自己”时，直接回答“我是虾导，"
-    "DramaClaw 的小说转视频创作助手。”"
+    "DramaHub 的小说转视频创作助手。”"
 )
 
 
@@ -351,7 +351,7 @@ def _ensure_identity_context(home: Path) -> None:
 def _materialize_skill_links(skills_dir: Path) -> None:
     """Create / refresh symlinks from skills_dir/<name> → repo-pinned skills.
 
-    The source of truth is ``DramaClaw/.hermes/skills/`` so a fresh checkout
+    The source of truth is ``DramaHub/.hermes/skills/`` so a fresh checkout
     has the same Hermes skills on every machine.
 
     Idempotent: stale links to dirs that no longer exist in the source are

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import styles from "./sixth-showcase-screen.module.css";
 import { cinematicVideoLibrary } from "./media";
 import { COMMUNITY_WATCH_WORK } from "./watch-link";
@@ -6,6 +7,7 @@ import { COMMUNITY_WATCH_WORK } from "./watch-link";
 const works = cinematicVideoLibrary;
 
 function FilmShowcase({ sequenceProgress }: { sequenceProgress: number }) {
+  const { t } = useTranslation();
   const translate = -sequenceProgress * 155;
 
   return (
@@ -22,17 +24,17 @@ function FilmShowcase({ sequenceProgress }: { sequenceProgress: number }) {
               <span>{work.stat}</span>
             </div>
             <div className={styles.filmCopy}>
-              <h3>{work.title}</h3>
-              <p>{work.logline}</p>
+              <h3>{t(`landing.showcase.${work.id}.title`)}</h3>
+              <p>{t(`landing.showcase.${work.id}.logline`)}</p>
             </div>
             <a
               className={styles.watchButton}
               href={`/watch/${COMMUNITY_WATCH_WORK}`}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="立即观看社区作品"
+              aria-label={t("landing.common.watchNowAria")}
             >
-              <span>立即观看</span>
+              <span>{t("landing.common.watchNow")}</span>
             </a>
           </article>
         ))}
@@ -50,6 +52,8 @@ export function SixthShowcaseScreen({
   progress: number;
   sequenceProgress: number;
 }) {
+  const { t } = useTranslation();
+
   if (exitProgress >= 0.99) return null;
   if (progress <= 0.01) return null;
 
@@ -64,8 +68,8 @@ export function SixthShowcaseScreen({
     <section className={styles.layer} style={style}>
       <div className={styles.header}>
         <p>SHOWCASE 06</p>
-        <h2>按剧集推进到成片</h2>
-        <span>无限画布支持多参、多节点、多版本探索，并在确认后把结果写回主流程，保留自由创作空间</span>
+        <h2>{t("landing.sixth.title")}</h2>
+        <span>{t("landing.sixth.subtitle")}</span>
       </div>
 
       <FilmShowcase sequenceProgress={sequenceProgress} />

@@ -1,4 +1,4 @@
-# DramaClaw CE — 默认 compose:官方 DC key 路径。
+# DramaHub CE — 默认 compose:官方 DC key 路径。
 # 裸 `docker compose up` 即此版:api + web 两个服务,模型走「官方网关」。
 # 配置方式(任一):
 #   1) 启动后开 http://localhost:8080 → 设置 → 模型配置 → 官方渠道 → 粘贴 DC key 保存即用;

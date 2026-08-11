@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import LightRays from "@/components/login/light-rays";
 import { LoginCinematicHeader } from "./LoginCinematicHero";
 import { businessWechatQrUrl } from "./media";
@@ -11,6 +12,8 @@ export function TwelfthFinalScreen({
   onStart: () => void;
   progress: number;
 }) {
+  const { t } = useTranslation();
+
   if (progress <= 0.01) return null;
 
   const style = {
@@ -44,25 +47,25 @@ export function TwelfthFinalScreen({
           draggable={false}
           aria-hidden="true"
         />
-        <h2>把一句设定推进成可看的宇宙</h2>
-        <p>输入角色冲突或世界观 让 DramaClaw 拆成镜头节点并持续延展</p>
+        <h2>{t("landing.twelfth.title")}</h2>
+        <p>{t("landing.twelfth.subtitle")}</p>
         <div className={styles.actions}>
           <button type="button" className={styles.primary} onClick={onStart}>
-            开启无限创作
+            {t("landing.twelfth.primary")}
           </button>
           <div className={styles.business}>
             <button type="button" className={styles.secondary}>
-              快速申请账号
+              {t("landing.twelfth.secondary")}
             </button>
             <div
               className={styles.businessPopover}
               role="dialog"
-              aria-label="商务联系"
+              aria-label={t("landing.common.contactBusinessDialog")}
             >
               <div className={styles.businessPanel}>
                 <img
                   src={businessWechatQrUrl}
-                  alt="商务微信二维码"
+                  alt={t("landing.common.businessQrAlt")}
                   draggable={false}
                 />
               </div>

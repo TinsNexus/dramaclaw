@@ -3,7 +3,7 @@
 
 # Troubleshooting
 
-> Common failures and how to diagnose them when self-hosting DramaClaw CE. Check the logs first: `docker compose logs -f api`, or the terminal output of `novelvideo api` during local development.
+> Common failures and how to diagnose them when self-hosting DramaHub CE. Check the logs first: `docker compose logs -f api`, or the terminal output of `novelvideo api` during local development.
 
 ## Startup
 

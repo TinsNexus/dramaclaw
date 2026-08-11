@@ -3,9 +3,9 @@
 
 # 快速开始
 
-> 本地跑起 DramaClaw,产出第一个结果。
+> 本地跑起 DramaHub,产出第一个结果。
 
-DramaClaw 是社区版(CE),单机运行、无需 PostgreSQL / Redis。默认 `docker compose` 起两个服务:`api`(创作后端,:8780)与 `web`(浏览器界面,:8080);模型走 **DramaClaw 官方网关(RelayClaw)**,填一个 DC key 即用。
+DramaHub 是社区版(CE),单机运行、无需 PostgreSQL / Redis。默认 `docker compose` 起两个服务:`api`(创作后端,:8780)与 `web`(浏览器界面,:8080);模型走 **DramaHub 官方网关(RelayClaw)**,填一个 DC key 即用。
 
 ## 前置
 
@@ -33,7 +33,7 @@ docker compose ps   # api、web 均应 running
 
 ## 填入 DC key(必做一次)
 
-1. 浏览器打开 **`http://localhost:8080`** —— 这就是 DramaClaw 的界面。
+1. 浏览器打开 **`http://localhost:8080`** —— 这就是 DramaHub 的界面。
 2. 进入设置 → **模型配置 → 官方渠道**。网关地址已预填 `https://relayclaw.cdnfg.com/v1`。
 3. **粘贴你的 DC key**,点「保存并启用」。立即可用,**无需映射任何模型**(RelayClaw 后台已配齐)。
 

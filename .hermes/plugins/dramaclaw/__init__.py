@@ -1,7 +1,7 @@
-"""DramaClaw API toolset for Hermes.
+"""DramaHub API toolset for Hermes.
 
 This plugin intentionally avoids terminal/shell/subprocess access. It uses
-Python's stdlib HTTP client and the DramaClaw agent environment injected by
+Python's stdlib HTTP client and the DramaHub agent environment injected by
 ``novelvideo.chat.hermes_pool``.
 """
 
@@ -258,7 +258,7 @@ def _normalize_api_path(path: str) -> str:
     if not raw:
         raise ValueError("path is required")
     if raw.startswith("http://") or raw.startswith("https://") or raw.startswith("//"):
-        raise ValueError("absolute URLs are not allowed; pass a DramaClaw API path")
+        raise ValueError("absolute URLs are not allowed; pass a DramaHub API path")
     if not raw.startswith("/"):
         raw = f"/{raw}"
     if raw.startswith("/projects/"):
@@ -1666,7 +1666,7 @@ _PATH_PROPS = {
     "path": {
         "type": "string",
         "description": (
-            "DramaClaw relative API path. Must start with /api/v1/ or /projects/. "
+            "DramaHub relative API path. Must start with /api/v1/ or /projects/. "
             "Absolute URLs are rejected. Ingest routes are only "
             "/projects/{project}/ingest/upload and /projects/{project}/ingest/start; "
             "ingest_fast is a task_type, not an endpoint."
@@ -1691,29 +1691,29 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
 TOOLS = (
     (
         "dramaclaw_get",
-        _schema("dramaclaw_get", "Call a DramaClaw GET API path without using curl.", _PATH_PROPS, ["path"]),
+        _schema("dramaclaw_get", "Call a DramaHub GET API path without using curl.", _PATH_PROPS, ["path"]),
         _handle_get,
     ),
     (
         "dramaclaw_post",
-        _schema("dramaclaw_post", "Call a DramaClaw POST API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
+        _schema("dramaclaw_post", "Call a DramaHub POST API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
         _handle_post,
     ),
     (
         "dramaclaw_patch",
-        _schema("dramaclaw_patch", "Call a DramaClaw PATCH API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
+        _schema("dramaclaw_patch", "Call a DramaHub PATCH API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
         _handle_patch,
     ),
     (
         "dramaclaw_delete",
-        _schema("dramaclaw_delete", "Call a DramaClaw DELETE API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
+        _schema("dramaclaw_delete", "Call a DramaHub DELETE API path without using curl.", {**_PATH_PROPS, "body": {"type": "object"}}, ["path"]),
         _handle_delete,
     ),
     (
         "dramaclaw_pipeline_status",
         _schema(
             "dramaclaw_pipeline_status",
-            "Get the current DramaClaw project pipeline status.",
+            "Get the current DramaHub project pipeline status.",
             {
                 "project_id": {"type": "string", "description": "Project id. Defaults to DRAMACLAW_PROJECT_ID."},
                 "episode": {"type": "integer", "description": "Optional episode number."},
@@ -1725,7 +1725,7 @@ TOOLS = (
         "dramaclaw_list_tasks",
         _schema(
             "dramaclaw_list_tasks",
-            "List DramaClaw tasks for the current or specified project.",
+            "List DramaHub tasks for the current or specified project.",
             {
                 "project_id": {"type": "string"},
                 "episode": {"type": "integer"},
@@ -1739,7 +1739,7 @@ TOOLS = (
         "dramaclaw_get_task",
         _schema(
             "dramaclaw_get_task",
-            "Get one DramaClaw task status by task type, episode, and optional beat/scope.",
+            "Get one DramaHub task status by task type, episode, and optional beat/scope.",
             {
                 "project_id": {"type": "string"},
                 "task_type": {"type": "string"},

@@ -3,7 +3,7 @@
 
 # 排错
 
-> 自托管 DramaClaw CE 时的常见故障与排查。先看日志:`docker compose logs -f api`,或本地开发时看 `novelvideo api` 的终端输出。
+> 自托管 DramaHub CE 时的常见故障与排查。先看日志:`docker compose logs -f api`,或本地开发时看 `novelvideo api` 的终端输出。
 
 ## 启动类
 
