@@ -453,6 +453,7 @@ class FreezoneGenRequest(BaseModel):
         default=None, description="可选：注册表模型 id，用于还原节点时回填 model"
     )
     gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    model_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FreezoneEditRequest(BaseModel):
@@ -484,6 +485,13 @@ class FreezoneEditRequest(BaseModel):
         default=None, description="可选：注册表模型 id，用于还原节点时回填 model"
     )
     gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    model_params: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "媒体模型目录声明的动态参数取值。与 /freezone/gen 同一口径 —— "
+            "带参考图的图编辑走这条路由，少了这个字段目录参数在图编辑侧等于没生效"
+        ),
+    )
 
 
 class FreezoneSketchFromContextRequest(BaseModel):
@@ -545,6 +553,10 @@ class FreezoneScene360Request(BaseModel):
     model: str = Field(
         default=FREEZONE_DEFAULT_IMAGE_MODEL,
         description=f"图片模型名，默认 {FREEZONE_DEFAULT_IMAGE_MODEL}",
+    )
+    catalog_id: str = Field(
+        default="",
+        description="媒体模型目录条目 id。前端按目录条目报价时必须一并下发，否则计费口径与报价不一致",
     )
     quality: Optional[str] = Field(default="medium", description="图片画质档位，默认 medium")
 
@@ -771,6 +783,10 @@ class FreezoneTemplateEditRequest(BaseModel):
         default=FREEZONE_DEFAULT_IMAGE_MODEL,
         description=f"图片模型名，默认 {FREEZONE_DEFAULT_IMAGE_MODEL}",
     )
+    catalog_id: str = Field(
+        default="",
+        description="媒体模型目录条目 id。前端按目录条目报价时必须一并下发，否则计费口径与报价不一致",
+    )
     quality: Optional[str] = Field(default="medium", description="图片画质档位，默认 medium")
 
 
@@ -883,13 +899,17 @@ class FreezoneRedrawRequest(BaseModel):
 
     统一承接整体重绘和局部擦除：
     - 不传 mask_url：整体/局部自由重绘
-    - 传 mask_url：仅在 mask 透明区域内按 prompt 执行局部编辑
+    - 传 mask_url：仅在标注的编辑区内按 prompt 执行局部编辑。mask 约定为
+      「源图 + 涂抹区半透明红色高亮」（红色仅作区域标注，不进入结果）
     """
 
     source_url: str = Field(description="待重绘的源图静态地址，作为图生图的 base 图")
     mask_url: Optional[str] = Field(
         default=None,
-        description="可选的遮罩图静态地址。传入后表示走局部擦除/局部重绘模式",
+        description=(
+            "可选的遮罩图静态地址。传入后走局部擦除/局部重绘模式；约定为"
+            "「源图 + 涂抹区半透明红色高亮」，仅编辑红色区域"
+        ),
     )
     aspect_ratio: Literal["original", "1:1", "4:3", "3:4", "16:9", "9:16"] = Field(
         default="original",
@@ -960,15 +980,28 @@ class FreezoneRelightRequest(BaseModel):
 
 
 class FreezoneVideoCharacterLibraryItemRequest(BaseModel):
-    """视频节点角色库录入请求。
+    """视频节点资产库录入请求。
 
-    角色图片先通过通用 upload 上传，再把静态地址登记到视频角色库。
+    素材先通过通用 upload 上传，再把静态地址登记到资产库。图片走 image_urls，
+    视频/音频走对应的单地址字段。
     """
 
-    name: str = Field(description="角色名称，用于前端角色库展示")
+    name: str = Field(description="资产名称，用于前端资产库展示")
+    media: Literal["image", "video", "audio"] = Field(
+        default="image",
+        description="素材类型：图片 / 视频 / 音频",
+    )
     image_urls: list[str] = Field(
         default_factory=list,
-        description="角色参考图静态地址列表，至少一张",
+        description="图片参考图静态地址列表（media=image 时至少一张）",
+    )
+    video_url: str | None = Field(
+        default=None,
+        description="视频静态地址（media=video 时必填）",
+    )
+    audio_url: str | None = Field(
+        default=None,
+        description="音频静态地址（media=audio 时必填）",
     )
 
 
@@ -991,11 +1024,11 @@ class FreezoneVideoGenRequest(BaseModel):
         default_factory=list,
         description="局部元素标记列表。来自前端点击图片选中的主体/物体局部区域，不是普通 tags",
     )
-    aspect_ratio: Literal["auto", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"] = Field(
+    aspect_ratio: str = Field(
         default="16:9",
         description="视频比例；auto 当前回退为 16:9",
     )
-    resolution: Literal["480p", "720p", "1080p"] = Field(
+    resolution: str = Field(
         default="720p",
         description="输出清晰度档位",
     )
@@ -1019,20 +1052,24 @@ class FreezoneVideoGenRequest(BaseModel):
     )
     canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
-    gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    gen_mode: Literal["textToVideo"] = Field(
+        default="textToVideo",
+        description="文生视频入口的固定业务模式",
+    )
+    model_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FreezoneImageToVideoRequest(BaseModel):
     """图片参考视频请求。
 
     统一承接图生视频和图片参考视频：
-    - 1 张图片：首帧图生视频
+    - 图生视频：1 张图片作为整体画面参考，不锁定第一帧
     - 2-9 张图片：多图图片参考视频
     """
 
     image_urls: list[str] = Field(
         default_factory=list,
-        description="图片参考静态地址列表，支持 1-9 张。第一张默认作为主参考图/首帧参考图",
+        description="图片参考静态地址列表。图生视频只允许 1 张，图片参考模式按模型上限接收多张",
     )
     prompt: str = Field(default="", description="用户补充视频描述，可为空")
     camera_template_id: Optional[str] = Field(
@@ -1043,11 +1080,11 @@ class FreezoneImageToVideoRequest(BaseModel):
         default_factory=list,
         description="局部元素标记列表。来自前端点击图片选中的主体/物体局部区域，不是普通 tags",
     )
-    aspect_ratio: Literal["auto", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"] = Field(
+    aspect_ratio: str = Field(
         default="16:9",
         description="视频比例；auto 当前回退为 16:9",
     )
-    resolution: Literal["480p", "720p", "1080p"] = Field(
+    resolution: str = Field(
         default="720p",
         description="输出清晰度档位",
     )
@@ -1071,13 +1108,19 @@ class FreezoneImageToVideoRequest(BaseModel):
     )
     canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
-    gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    gen_mode: Literal["imageToVideo", "imageReference"] = Field(
+        description=(
+            "必填：imageToVideo 表示单图整体参考；imageReference 表示按目录上限接收图片参考。"
+            "两者执行时都使用 image_reference 协议，不代表首帧。"
+        )
+    )
+    model_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FreezoneKeyframeVideoRequest(BaseModel):
-    """首尾帧视频请求。
+    """关键帧视频请求。
 
-    接受首帧 / 尾帧两个输入，至少需要提供一个。
+    接受仅首帧、首帧+尾帧或仅尾帧，至少需要提供一个槽位。
     """
 
     first_frame_url: Optional[str] = Field(
@@ -1097,11 +1140,11 @@ class FreezoneKeyframeVideoRequest(BaseModel):
         default_factory=list,
         description="局部元素标记列表。来自前端点击图片选中的主体/物体局部区域，不是普通 tags",
     )
-    aspect_ratio: Literal["auto", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"] = Field(
+    aspect_ratio: str = Field(
         default="16:9",
         description="视频比例；auto 当前回退为 16:9",
     )
-    resolution: Literal["480p", "720p", "1080p"] = Field(
+    resolution: str = Field(
         default="720p",
         description="输出清晰度档位",
     )
@@ -1125,7 +1168,65 @@ class FreezoneKeyframeVideoRequest(BaseModel):
     )
     canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
-    gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    gen_mode: Literal["firstFrame", "firstLastFrame"] = Field(
+        description="必填：首帧或首尾帧业务模式；不能根据实际上传的帧数推断",
+    )
+    model_params: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreezoneVideoEditRequest(BaseModel):
+    """视频编辑请求（HappyHorse 视频编辑功能）。
+
+    输入 1 个源视频 + 0-5 张参考图，对视频进行编辑改写。
+    """
+
+    video_url: str = Field(description="源视频静态地址，必填")
+    image_urls: list[str] = Field(
+        default_factory=list,
+        description="参考图静态地址列表，0-5 张，单张 <= 10MB",
+    )
+    prompt: str = Field(default="", description="用户编辑指令/视频描述，可为空")
+    camera_template_id: Optional[str] = Field(
+        default=None,
+        description="运镜模板 id，例如 locked_off / follow_tracking / pedestal_up",
+    )
+    marks: list["FreezoneVideoMark"] = Field(
+        default_factory=list,
+        description="局部元素标记列表",
+    )
+    aspect_ratio: str = Field(
+        default="16:9",
+        description="视频比例；视频编辑画幅由源视频决定，此字段仅占位",
+    )
+    resolution: str = Field(
+        default="720p",
+        description="输出清晰度档位",
+    )
+    duration_seconds: int = Field(
+        default=5,
+        ge=1,
+        description="视频时长，至少 1 秒；不同模型支持的时长范围可能不同",
+    )
+    audio_setting: Literal["auto", "origin"] = Field(
+        default="auto",
+        description="视频编辑音频策略：auto 自动 / origin 保留原声",
+    )
+    generate_audio: bool = Field(default=False, description="是否生成原生音频")
+    human_review: bool = Field(
+        default=False,
+        description="是否开启真人素材审核/加白流程",
+    )
+    model: str = Field(
+        default="newapi_happyhorse-1.0",
+        description="视频模型或模型选项 id。请传 /freezone/video/models 返回值之一",
+    )
+    canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
+    node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
+    gen_mode: Literal["videoEdit"] = Field(
+        default="videoEdit",
+        description="视频编辑入口的固定业务模式",
+    )
+    model_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FreezoneVideoReferenceItem(BaseModel):
@@ -1222,6 +1323,7 @@ class FreezoneImageReversePromptRequest(BaseModel):
     """图反推提示词请求。"""
 
     source_url: str = Field(description="待分析图片静态地址")
+    instruction: str = Field(default="", description="可选：反推提示词的补充要求")
     canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
 
@@ -1257,11 +1359,11 @@ class FreezoneVideoOmniGenRequest(BaseModel):
         default_factory=list,
         description="局部元素标记列表。来自前端点击图片选中的主体/物体局部区域，不是普通 tags",
     )
-    aspect_ratio: Literal["auto", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"] = Field(
+    aspect_ratio: str = Field(
         default="16:9",
         description="视频比例；auto 当前回退为 16:9",
     )
-    resolution: Literal["480p", "720p", "1080p"] = Field(
+    resolution: str = Field(
         default="720p",
         description="输出清晰度档位",
     )
@@ -1285,7 +1387,11 @@ class FreezoneVideoOmniGenRequest(BaseModel):
     )
     canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
-    gen_mode: Optional[str] = Field(default=None, description="可选：生成模式，用于还原节点时回填 genMode")
+    gen_mode: Literal["allReference"] = Field(
+        default="allReference",
+        description="全能参考入口的固定业务模式",
+    )
+    model_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FreezoneVideoEraseRequest(BaseModel):
@@ -1454,7 +1560,7 @@ class FreezoneAudioMusicRequest(BaseModel):
         description="音乐描述 prompt。",
         examples=["cinematic rain-soaked suspense music"],
     )
-    model: str = Field(default="eleven-music", description="音乐模型，默认 eleven-music。")
+    model: str = Field(default="LingShan-MU-11", description="音乐模型，默认 LingShan-MU-11。")
     response_format: Literal["mp3", "opus", "pcm", "ulaw", "alaw"] = Field(
         default="mp3",
         description="音频返回格式。mp3 会自动映射为 mp3_44100_128。",
@@ -1525,6 +1631,14 @@ class FreezoneTextTranslateRequest(BaseModel):
     node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
 
 
+class FreezoneTextGenerateRequest(BaseModel):
+    """Freezone 文本节点：根据创作要求生成自由文本。"""
+
+    prompt: str = Field(min_length=1, max_length=20000, description="文本创作要求")
+    canvas_id: str = Field(default="", description="可选：来源画布 id，用于记录节点生成历史")
+    node_id: str = Field(default="", description="可选：来源节点 id，用于记录节点生成历史")
+
+
 class FreezoneTextTranslateData(BaseModel):
     translated_text: str
     source_language: Literal["zh", "en"]
@@ -1537,16 +1651,56 @@ class FreezoneTextTranslateResponse(BaseModel):
     data: FreezoneTextTranslateData
 
 
+class FreezoneStoryScriptCharacterRef(BaseModel):
+    """角色参考输入项：画布上连进脚本节点的角色图节点。"""
+
+    name: str = Field(default="", description="角色名/角色标签，用于和生成行里的角色名对齐")
+    description: str = Field(default="", description="可选：已有角色描述")
+    image_url: str = Field(default="", description="角色参考图静态 URL（/static/...）")
+    role: str = Field(default="", description="可选：角色定位或叙事功能，如「女主」")
+
+
 class FreezoneStoryScriptGenerateRequest(BaseModel):
-    """Freezone 文本节点：故事脚本生成请求。"""
+    """Freezone 文本节点：故事脚本生成请求。
+
+    四种输入至少给一个：``source_text`` / ``source_url``（剧本文本）、
+    ``video_url``（视频参考，走抽帧 + 视觉模型）、``character_refs``（角色图参考）。
+    早期版本只声明了文本字段，前端发来的 ``video_url`` / ``character_refs`` 会被
+    Pydantic 的 ``extra="ignore"`` 静默丢弃，导致「视频参考生成分镜脚本」实际上
+    从未把视频交给模型（issue #207）。
+    """
 
     source_text: str = Field(
         default="",
-        description="已上传剧本的文本内容。与 source_url 至少提供一个",
+        description="已上传剧本的文本内容。与 source_url / video_url / character_refs 至少提供一个",
     )
     source_url: Optional[str] = Field(
         default=None,
-        description="已上传剧本文本文件的静态 URL。与 source_text 至少提供一个",
+        description="已上传剧本文本文件的静态 URL",
+    )
+    video_url: Optional[str] = Field(
+        default=None,
+        description="视频参考的静态 URL；给了就先抽关键帧再交给视觉模型拆分镜",
+    )
+    duration_sec: Optional[float] = Field(
+        default=None,
+        description="视频总时长（秒），用于让分镜时长分配更贴近原视频",
+    )
+    character_refs: list[FreezoneStoryScriptCharacterRef] = Field(
+        default_factory=list,
+        description="角色参考图列表；生成后按角色名回填 character_image_1/2",
+    )
+    max_frames: int = Field(
+        default=20,
+        ge=3,
+        le=50,
+        description="视频参考时的最大抽帧数",
+    )
+    scene_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="视频参考时 ffmpeg 场景切换检测阈值",
     )
     prompt: str = Field(
         default="根据我上传的剧本生成一个完整的故事脚本",
@@ -1566,8 +1720,24 @@ class FreezoneStoryScriptRow(BaseModel):
     visual_description: str = Field(description="画面描述")
     character_1: str = Field(default="", description="角色1")
     character_description_1: str = Field(default="", description="角色描述1")
-    character_image_1: str = Field(default="", description="角色图1，占位字段")
-    reference: str = Field(default="", description="参考")
+    character_image_1: str = Field(
+        default="",
+        description="角色图1 URL；模型留空，由后端按角色名匹配 character_refs 回填",
+    )
+    character_2: str = Field(default="", description="角色2")
+    character_description_2: str = Field(default="", description="角色描述2")
+    character_image_2: str = Field(
+        default="",
+        description="角色图2 URL；模型留空，由后端按角色名匹配 character_refs 回填",
+    )
+    reference: str = Field(
+        default="",
+        description="参考图 URL；模型留空，由后端按 keyframe_index 回填对应关键帧",
+    )
+    keyframe_index: int = Field(
+        default=0,
+        description="视频参考模式下，这一镜对应的输入关键帧序号（1-based，0 表示无）",
+    )
     shot: str = Field(default="", description="景别")
     character_action: str = Field(default="", description="角色动作")
     emotion: str = Field(default="", description="情绪")
@@ -1795,6 +1965,10 @@ class ScenePanoGenerateRequest(BaseModel):
     timeout_seconds: int = 1800
 
 
+class SceneReferenceGenerateRequest(BaseModel):
+    model: Optional[str] = None
+
+
 # ── 道具资产 ─────────────────────────────────────────────────────────────────
 
 
@@ -1820,6 +1994,7 @@ class PropUpdate(BaseModel):
 
 class PropReferenceGenerateRequest(BaseModel):
     style: Optional[str] = None
+    model: Optional[str] = None
 
 
 # ── 身份 CRUD ────────────────────────────────────────────────────────────────
@@ -1847,6 +2022,10 @@ class CharacterAssetRestoreRequest(BaseModel):
 
 class CharacterImageSelectionRequest(BaseModel):
     character_image_selection: str
+
+
+class AssetImageSourceSelectionRequest(BaseModel):
+    image_source_selection: str
 
 
 class CharacterVoiceRecordRequest(BaseModel):

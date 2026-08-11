@@ -1,321 +1,272 @@
 <!-- lang-switch -->
 [English](../../en/getting-started/configuring-models.md) · **简体中文**
 
-# 配置模型供应商
+# 配置模型
 
-DramaClaw CE 通过 OpenAI 兼容网关接入文本、图片、视频、音频和 embedding 模型。最简单的方式是使用 DramaClaw 官方网关 RelayClaw：填一个 DC key 即可使用全部默认模型。也可以接入你自己的 OpenAI 兼容网关，或使用自部署 NewAPI 管理上游渠道和模型映射。
+DramaClaw CE 通过 NewAPI 兼容网关调用文本、视觉理解、Embedding、图片、视频和音频模型。模型设置保存在 CE 的本地 `settings.db` 中；密钥不会回传到浏览器，只会显示脱敏后的保存状态。
 
-## 先选一种接入方式
+启动后打开 `http://localhost:8080`，进入 **设置 → 模型与渠道**。页面顶部的“当前生效”表示实际运行模式，不是当前正在查看的标签。
 
-| 方式 | 适合场景 | 是否需要映射模型 |
+## 选择运行模式
+
+| 模式 | 适用场景 | 需要配置的内容 |
 |---|---|---|
-| 官方渠道 / RelayClaw | 想最快跑通，使用官方预置模型 | 不需要 |
-| 官方渠道 / 自带 OpenAI 兼容网关 | 已有自己的统一网关，只想直接转发请求 | 需要在你的网关侧支持 DramaClaw 逻辑模型名，或改 `.env` 模型名 |
-| 自定义 NewAPI | 希望在 DramaClaw UI 里配置 NewAPI 上游渠道、模型映射、媒体模型和 embedding | 需要在 UI 里保存映射 |
+| 官方 | 直接使用 RelayClaw（虾驿）提供的模型 | 只需 DC Key |
+| 自定义 | 所有模型都通过自定义 NewAPI 配置 | 初始化 NewAPI、供应商渠道、业务模型、Embedding、媒体模型 |
+| 本地 + 官方混合 | 官方模型照常使用，同时新增本地 ComfyUI 视频模型，或用本地模型覆盖同名官方模型 | 官方 DC Key、本地 NewAPI、ComfyUI URL 和 Workflow |
 
-## 两种配置入口
+配置完成后点击对应模式的启用按钮。更换模式、Key 或模型后，新任务会读取新配置；正在运行的任务不会中途切换。
 
-DramaClaw 支持两种配置入口：网页设置和 `.env` 固定环境变量。
+## 官方模式
 
-| 入口 | 适合场景 | 生效方式 |
-|---|---|---|
-| 网页设置 | 本地使用、需要经常换 key、换模型、换渠道 | 保存到 DramaClaw 本地 SQLite；保存后新任务优先读取 |
-| `.env` 固定环境变量 | 首次启动、无头部署、CI、服务器固定配置 | 启动时由后端读取；修改后通常需要重启后端或容器 |
+官方模式是最简单的接入方式：
 
-优先级是：**网页设置写入的本地 SQLite 配置优先，其次才是 `.env` 环境变量**。也就是说，`.env` 可以作为默认值；一旦你在网页里保存过模型配置，后续运行会优先使用网页保存的配置。
+1. 打开 **官方**。
+2. 填写 RelayClaw DC Key。
+3. 点击 **保存并启用**。
 
-### 入口 1：网页设置 推荐
+官方网关地址由 DramaClaw 固定管理。RelayClaw 已配置 `DC-*-LLM`、`DC-cognee-embedding` 和官方媒体模型，不需要在 CE 中填写上游模型映射。
 
-启动后打开 `http://localhost:8080`，进入设置 -> 模型配置。
+官方媒体模型及其分辨率、比例、时长和参考素材能力来自 CE 内置的 `src/novelvideo/official_media_models.json`。
 
-在网页里可以完成：
+### 更新官方媒体模型列表
 
-- 官方渠道：填写 RelayClaw / 自带网关地址和 key，点击“保存并启用”。
-- 自定义 NewAPI：初始化 NewAPI、创建或复用 runtime token、配置供应商渠道、保存模型映射。
-- 媒体存储：配置 OSS 或 Cloudinary。
-- Embedding：配置模型、维度和批量大小。
+官方模式和本地 + 官方混合模式会显示当前官方模型列表的版本、模型数量和来源：
 
-网页保存适合绝大多数本地用户。更换 key 或模型后，新任务会读取新配置；已经运行中的任务不会强制中途切换。
+- 点击 **立即检查更新**，可以从 DramaClaw 官方发布地址获取最新模型列表并立即应用。
+- **自动更新官方模型列表**默认关闭。开启后，后端默认每 5 分钟检查一次；打开对应设置面板时也会立即检查。
+- 下载的模型列表保存在本地 `state/local/official_media_models.json`，重启后继续生效。
+- DramaClaw 不会安装低于当前生效版本的远端列表。应用升级后，如果新版内置列表比本地缓存更新，会优先使用新版内置列表。
+- 开启自动更新后，已打开的虾画浏览器每分钟观察一次目录状态；内容 SHA256 变化时会自动刷新图片和视频模型列表。
+- 状态接口会返回当前内容的 SHA256、发布 Git revision、发布时间、远端地址和最近一次更新错误，便于确认每个实例实际使用的版本。
 
-### 入口 2：`.env` 固定
+用户在自定义模式中维护的渠道、模型映射和能力配置不受官方模型列表更新影响。
 
-如果不想使用网页设置，或需要服务器固定配置，可以在项目根目录复制并编辑 `.env`：
+官方目录默认使用成都地域的 `dramaclaw-dl` Bucket：`https://dramaclaw-dl.oss-cn-chengdu.aliyuncs.com/official-media-catalog/manifest.json`。manifest 指向按 SHA256 命名、永不覆盖的目录快照；后端会校验 manifest、目录版本和内容 SHA256，并使用 ETag 检查更新。可通过 `OFFICIAL_MEDIA_CATALOG_MANIFEST_URL` 覆盖默认地址；`OFFICIAL_MEDIA_CATALOG_URL` 是兼容旧部署的直接 JSON 地址。轮询间隔可通过 `OFFICIAL_MEDIA_CATALOG_POLL_SECONDS` 调整，最低为 60 秒。
 
-```bash
-cp .env.example .env
-```
+仓库的 `publish-official-media-catalog` 工作流负责发布：先上传带长期不可变缓存头的 `catalogs/<sha256>.json`，最后上传缓存 60 秒的 `manifest.json`。以下密钥既可配置为仓库级 Secrets，也可配置在 GitHub `official-media-catalog` environment 中：
 
-常用变量：
+- Variables 可选：默认使用 `oss-cn-chengdu.aliyuncs.com`、`dramaclaw-dl` 和 `official-media-catalog`；可用 `OFFICIAL_CATALOG_OSS_ENDPOINT`、`OFFICIAL_CATALOG_OSS_BUCKET`、`OFFICIAL_CATALOG_OSS_PREFIX` 覆盖。
+- Secrets：优先使用 `OFFICIAL_CATALOG_OSS_ACCESS_KEY_ID`、`OFFICIAL_CATALOG_OSS_ACCESS_KEY_SECRET`；未配置时复用组织级 `OSS_RELAY_AK`、`OSS_RELAY_SK`。
 
-```bash
-MODEL_GATEWAY_MODE=official
-NEWAPI_BASE_URL=https://relayclaw.cdnfg.com/v1
-NEWAPI_API_KEY=你的_DC_key
-```
+`dramaclaw-dl` Bucket 本身保持私有，只对 `official-media-catalog/*` 前缀授予匿名 `GetObject`，CI 身份仅需该前缀的写权限。模型目录仍以 Git PR 为唯一内容源；建议开启 Bucket 版本控制作为基础设施灾备。
 
-自带网关时：
+还没有 DC Key 时，可前往 <https://relayclaw.cdnfg.com> 注册或购买。
 
-```bash
-MODEL_GATEWAY_MODE=official
-NEWAPI_BASE_URL=https://你的网关/v1
-NEWAPI_API_KEY=你的_token
-```
+## 自定义模式
 
-自定义 NewAPI 手动 token 流程时：
+### 1. 启动本地服务
 
-```bash
-MODEL_GATEWAY_MODE=official
-NEWAPI_BASE_URL=http://newapi:3000/v1
-NEWAPI_API_KEY=你在_NewAPI_后台创建的_runtime_token
-```
-
-这里仍然使用 `MODEL_GATEWAY_MODE=official`，因为这条路径只是把 NewAPI 当作普通 OpenAI 兼容网关直接调用，不使用 DramaClaw 的“自定义 NewAPI”初始化、渠道同步和模型映射管理。
-
-如果启用网页自定义 NewAPI 初始化向导，`.env` 还需要提供 provisioner 默认配置：
-
-```bash
-NEWAPI_PROVISIONER_ENABLED=true
-NEWAPI_ADMIN_BASE_URL=http://127.0.0.1:3000
-NEWAPI_SQL_DSN=...
-NEWAPI_ADMIN_USERNAME=root
-```
-
-`.env` 修改后，如果后端已经启动，通常需要重启 api 或重新 `docker compose up -d` 才会重新读取。
-
-## A. 官方渠道 / RelayClaw 推荐
-
-默认 `docker-compose.yml` 已使用官方渠道。启动后：
-
-1. 浏览器打开 `http://localhost:8080`。
-2. 进入设置 -> 模型配置 -> 官方渠道。
-3. 网关地址默认是 `https://relayclaw.cdnfg.com/v1`。
-4. 粘贴你的 DC key，点击“保存并启用”。
-
-RelayClaw 后台已经配置好 DramaClaw 需要的逻辑模型名，所以不需要手动映射 `*_MODEL`。
-
-还没有 DC key 时，到 <https://relayclaw.cdnfg.com> 注册 / 购买。
-
-也可以不进网页，直接在 `.env` 固定：
-
-```bash
-NEWAPI_BASE_URL=https://relayclaw.cdnfg.com/v1
-NEWAPI_API_KEY=你的_DC_key
-MODEL_GATEWAY_MODE=official
-```
-
-如果你只是更换 DC key，可以在网页里只更新 key。已保存过网关地址时，网页配置会继续沿用已保存地址；没有网页配置时会回退到 `.env`。
-
-## B. 官方渠道 / 自带 OpenAI 兼容网关
-
-如果你已经有自己的 OpenAI 兼容网关，可以继续使用“官方渠道”面板，把地址和 token 换成你自己的网关：
-
-```bash
-NEWAPI_BASE_URL=https://你的网关/v1
-NEWAPI_API_KEY=你的_token
-MODEL_GATEWAY_MODE=official
-```
-
-这里的“官方渠道”不是只能填 RelayClaw。它表示 DramaClaw 直接把请求发到 `NEWAPI_BASE_URL`，使用 `NEWAPI_API_KEY` 鉴权。
-
-自带网关需要满足其中一种条件：
-
-1. 网关里已经有同名逻辑模型，例如 `DC-hermes-LLM`、`DC-cognee-embedding`、`gpt-image-2`。
-2. 或者你在 `.env` 里把 DramaClaw 的 `*_MODEL` 改成网关实际模型名。
-
-如果你的网关只是普通 OpenAI API 代理，没有模型别名能力，建议使用方式 C 的“自定义 NewAPI”，由 DramaClaw 在 NewAPI 里创建渠道和映射。
-
-## C. 自定义 NewAPI
-
-“自定义 NewAPI”适合用户自己运行 NewAPI，并希望在 DramaClaw 设置页里管理：
-
-- NewAPI runtime token。
-- 上游供应商渠道和 key。
-- 文本、图片、视频、音频模型映射。
-- Cognee embedding 模型、维度和批量大小。
-
-### 1. 准备 NewAPI
-
-如果用仓库内置 selfhosted 编排：
+推荐使用仓库提供的自托管编排：
 
 ```bash
 docker compose -f docker-compose.selfhosted.yml up -d --build
 ```
 
-该编排会启动 `api`、`web` 和内置 `newapi`。NewAPI 后台默认在 `http://localhost:3000`。
+它会启动 DramaClaw API、Web 和内置 NewAPI。默认情况下 DramaClaw 在容器网络中访问 NewAPI；浏览器访问的宿主机端口可以不同，不需要把内部地址改成浏览器地址。
 
-当前 `docker-compose.selfhosted.yml` 默认走最小手动流程：进入 NewAPI 后台注册管理员、配置上游渠道、创建令牌，再把令牌写入 `.env` 的 `NEWAPI_API_KEY` 后重启 api。这种方式不依赖 DramaClaw 读取 NewAPI 数据库。
+仓库编排已经启用设置页所需的初始化和渠道管理能力。CE 使用 `${NOVELVIDEO_STATE_DIR}/newapi/one-api.db`，通常不需要手动填写 SQLite 路径或数据库 DSN。
 
-NewAPI 也可以不手动注册。只要启用 DramaClaw 的初始化向导，并让 DramaClaw 后端能访问 NewAPI 管理地址和数据库，就可以直接在 DramaClaw 设置页里完成首次初始化。初始化向导会调用 NewAPI `/api/setup` 创建管理员，再创建或复用 runtime token。
+### 2. 初始化本地 NewAPI
 
-如果要使用网页“自定义 NewAPI”初始化向导，而不是手动进入 NewAPI 后台注册，需要满足：
+打开 **自定义**。如果状态为“等待初始化”：
 
-```bash
-NEWAPI_PROVISIONER_ENABLED=true
-NEWAPI_ADMIN_BASE_URL=http://127.0.0.1:3000
-NEWAPI_SQL_DSN=...
-# 仅 NEWAPI_SQL_DSN=local 时需要：
-NEWAPI_SQLITE_PATH=/absolute/path/to/new-api/one-api.db
-NEWAPI_ADMIN_USERNAME=root
+1. 为全新的 NewAPI 设置 root 管理员密码并确认，密码至少 8 位。
+2. 点击 **初始化本地 NewAPI**。
+
+初始化会：
+
+- 首次运行时创建 NewAPI 管理员；已经初始化时跳过该步骤。
+- 创建或复用 `dramaclaw-ce-runtime` 运行令牌。
+- 将运行地址和令牌保存到 CE 本地配置。
+- 检查 NewAPI SQLite 数据库与管理员访问是否可用。
+
+DramaClaw 不保存管理员密码。初始化完成后请自行保管该密码，以便登录 NewAPI 后台。对已经初始化的 NewAPI 再填写密码不会重置原密码。
+
+### 3. 使用推荐配置
+
+初始化完成后，推荐先使用 **推荐配置**。一份配置会同时处理：
+
+- 供应商渠道及上游 Key。
+- DramaClaw 业务模型映射。
+- Cognee Embedding 模型、维度和批量大小。
+- 图片、视频和音频模型映射。
+
+按渠道填写 API Key，然后点击 **保存并应用全部配置**。Key 独立保存，不会写入配置 JSON；已经保存的 Key 可以留空，重新输入会替换旧值。
+
+内置推荐配置是只读模板。切换到 **我的配置** 后可以编辑 JSON，保存后的个人配置会在下次打开时恢复。JSON 的主要结构如下：
+
+```json
+{
+  "version": 2,
+  "name": "My CE profile",
+  "channels": [
+    {
+      "id": "openrouter",
+      "provider": "openrouter",
+      "baseUrl": "",
+      "priority": 0,
+      "settings": {}
+    }
+  ],
+  "featureModels": {
+    "text": {"channel": "openrouter", "model": "upstream-text-model"},
+    "vision": {"channel": "openrouter", "model": "upstream-vision-model"},
+    "overrides": {}
+  },
+  "embedding": {
+    "channel": "openrouter",
+    "model": "upstream-embedding-model",
+    "dimension": 1024,
+    "batchSize": 10
+  },
+  "mediaModels": {
+    "my-video-model": {
+      "channel": "openrouter",
+      "model": "upstream-video-model",
+      "mediaType": "video",
+      "label": "My Video Model",
+      "enabled": true,
+      "sortOrder": 100,
+      "config": {}
+    }
+  }
+}
 ```
 
-说明：
+`channel` 引用 `channels[].id`。当前一个 profile 中同一 `provider` 只能配置一次。修改推荐配置或我的配置 JSON 会同步到下方高级配置；高级配置保存后也会成为当前个人配置，避免两套配置同时生效。推荐配置不包含 ComfyUI；需要在自定义模式使用 ComfyUI 时，请在高级配置中新增 ComfyUI 渠道、Workflow 和媒体模型。
 
-- `NEWAPI_ADMIN_BASE_URL` 是 NewAPI 管理地址，不带 `/v1`。
-- `NEWAPI_SQL_DSN` 用于让 DramaClaw 读取 NewAPI 数据库，支持 PostgreSQL、MySQL、SQLite 或 `local`。
-- PostgreSQL 示例：`postgresql://user:password@127.0.0.1:5432/new-api`。
-- MySQL 示例：`mysql://user:password@127.0.0.1:3306/new-api`。
-- SQLite 可直接把 `NEWAPI_SQL_DSN` 设为 `.db` 文件路径，也可以设为 `local` 并填写 `NEWAPI_SQLITE_PATH`。
-- SQLite 必须指向已经存在的 NewAPI 数据库文件；不会自动创建空库。使用 `docker-compose.selfhosted.yml` 默认 SQLite 卷时，api 容器默认读不到 `newapi-data` 卷，所以默认是手动流程；如果想走初始化向导，需要把数据库改成 api 可访问的 PostgreSQL/MySQL，或显式把 SQLite 数据库挂载给 api 读取。
-- 如果 DramaClaw 跑在 Docker 容器内，数据库地址要使用容器内可访问的地址；如果后端跑在宿主机，通常使用 `127.0.0.1` 和宿主映射端口。
+### 4. 高级配置
 
-### 2. 初始化配置
+高级配置用于逐项调整推荐配置应用后的结果。
 
-进入设置 -> 模型配置 -> 自定义 NewAPI：
+#### 供应商渠道
 
-1. 填 NewAPI 地址，例如 `http://127.0.0.1:3000`。
-2. 填 NewAPI 数据库 DSN 或 SQLite 路径。
-3. 如果 NewAPI 尚未初始化，填写管理员用户名和首次初始化密码。
-4. 点击“初始化配置”。
+渠道类型从当前 NewAPI 的 `/api/channel/types` 动态读取。每个供应商只能添加一次。
 
-初始化按钮会做这些事：
+- **保存渠道配置**：保存 CE 本地渠道预设。
+- **更新 NewAPI 渠道**：立即更新 NewAPI 中对应渠道的 Key 和 Base URL。
+- **Base URL 覆盖**：通常留空，使用渠道默认地址；只有自建代理或供应商要求时填写。
 
-- 如果 NewAPI 没初始化，调用 NewAPI `/api/setup` 创建管理员。
-- 如果 NewAPI 已初始化，会跳过管理员创建；你填的初始化密码不会修改已有管理员密码。
-- 创建或复用名为 `dramaclaw-ce-runtime` 的 runtime token。
-- 把 runtime token 写入 DramaClaw 本地配置数据库。
-- 将模型网关模式切换为 `custom`。
+保存推荐配置后，渠道 Key 应显示为“已保存”及脱敏预览。输入框中只有密码圆点且没有“已保存”标记时，它仍是尚未提交的草稿。
 
-管理员密码只用于首次初始化 NewAPI。DramaClaw 不保存这个密码，也不会用它做后续管理操作。初始化完成后请自行保存 NewAPI 管理员账号密码，用于登录 NewAPI 后台。
+#### 业务模型
 
-因此有两种可选流程：
+DramaClaw 使用稳定的内部逻辑模型名，例如 `DC-scene-builder-LLM` 和 `DC-freezone-vision-LLM`。自定义模式下，应保留这些内部名称，在 NewAPI 渠道中把它们映射到真实上游模型。
 
-| 流程 | 操作 |
-|---|---|
-| 默认手动流程 | 先到 `http://localhost:3000` 注册 NewAPI 管理员、建 token，再把 token 写入 `.env`。 |
-| DramaClaw 初始化向导 | 不需要先注册 NewAPI；在 DramaClaw 设置页填写 NewAPI 地址、数据库信息和首次管理员密码，点击“初始化配置”。 |
+- 文本理解与生成可以选择普通文本模型。
+- 视觉理解功能会发送图片或视频，必须选择支持相应输入的多模态模型。
+- 批量填充只修改页面草稿，仍需点击保存映射。
+- Hermes 可以使用独立模型；其他 `DC-*-LLM` 可以按需要统一映射或单独覆盖。
 
-如果 NewAPI 已经初始化过，初始化密码可以留空；点击“初始化配置”只会创建或复用 DramaClaw runtime token，不会重置已有管理员密码。
+#### Embedding
 
-### 3. 配置供应商渠道
+`DC-cognee-embedding` 用于小说知识图谱和语义检索。需要设置：
 
-供应商渠道用于保存上游模型厂商的 key 和可选 Base URL 覆盖，例如 Ali、OpenRouter、OpenAI、Midjourney 等。
+- 上游 embedding 模型。
+- 模型输出维度。
+- 批量大小，默认 10。
 
-页面里的按钮含义：
+Embedding 模型和维度在项目创建时绑定。修改配置只自动影响新项目；已有项目更换模型或维度前，需要清空并重建知识图谱。
 
-- “保存渠道配置”：只保存到 DramaClaw 本地配置，作为后续模型映射的渠道预设；不会立刻修改 NewAPI 已有渠道。
-- “更新 NewAPI 渠道”：立刻把当前这一行的 key / Base URL 更新到 NewAPI 对应渠道。
-- “保存模型映射”：根据当前文本、图片、视频、音频、embedding 映射，把需要的渠道和模型写入 NewAPI，并保存本地配置。
+出现 embedding HTTP 400/422 时，优先检查模型是否支持配置维度，以及批量大小是否超过上游单次 `input` 上限。
 
-如果你更换某个逻辑模型的供应商，保存映射时会把该逻辑模型从旧渠道的模型列表移除，再写入新渠道，避免 NewAPI 在多个渠道之间随机选择同名模型。
+#### 图片、视频和音频模型
 
-### 4. 配置模型映射
+媒体模型配置同时决定：
 
-DramaClaw 使用一组内部逻辑模型名。你可以把每个逻辑模型映射到某个供应商渠道和真实上游模型。
+- 虾画中是否显示该模型。
+- 显示名称与排序。
+- 发送给 NewAPI 的上游模型名。
+- 分辨率、比例、图片质量、时长等控件选项。
+- 文生视频、首帧、首尾帧、图片参考、全能参考和视频编辑等能力。
+- 参考图片、视频和音频数量上限。
+- 是否显示真人审核选项。
+- 模型专属请求参数。
 
-页面里的模型配置分为几类：
+主线内置模型提供默认能力基线，不能从配置中删除。我的配置可以新增图片或视频模型，并编辑自定义模型能力。保存后刷新虾画，模型列表和控件会使用最新配置。
 
-- 纯文本模型：只发送文本输入，例如 Hermes、Cognee、身份规划、场景规划、道具规划、内容改写、脚本规范化等。
-- 多模态模型：会把图片发送给上游模型，例如 AI 优化提示词、AI 检测身份与道具颜色标记、上传参考图创建自定义风格。这里必须选择支持图片输入 / 视觉理解的上游模型；纯文本模型可能运行失败。
-- Embedding：`DC-cognee-embedding`，用于导入小说、Cognee 建图和向量检索。
-- 图片：`gpt-image-2`、`nano-banana-2` 及场景、角色、草图相关图片模型。
-- 视频：`seedance-*`、`happyhorse-1.0` 等。
-- 音频：`index-tts-2`、`eleven-music` 等。
+模型 ID 是 DramaClaw 使用的稳定名称，**上游模型名**是 NewAPI 渠道实际调用的名称，两者可以不同。
 
-纯文本模型和多模态模型区块顶部都有批量填充控件。选择渠道、填写上游模型名后点击“应用到全部”，只会把当前区块的模型草稿填到页面里，不会立即写入 NewAPI。你可以继续展开分组，单独调整某一行的渠道或上游模型名；最后点击“保存映射”才会写入 NewAPI 并保存到 DramaClaw 本地配置。
+### 5. ComfyUI 配置
 
-如果使用 RelayClaw 官方 DC key，可以跳过映射；官方已配置好默认逻辑模型。
+在 **自定义** 模式中，ComfyUI 通过 **高级配置 → 供应商渠道** 添加。在 **本地 + 官方混合** 模式中，使用独立的 **ComfyUI 配置**，并提供 MiniMax H3 Workflow 初始模板。两种模式读取同一个本地 NewAPI 和 SQLite 数据。
 
-如果使用自带 NewAPI，请优先保持 DramaClaw 内部逻辑模型名不变，只在 NewAPI 渠道里映射到真实上游模型。这样后续升级 `.env.example` 时最少改动。
+每个 ComfyUI 渠道配置需要：
 
-## Embedding 批量大小
+- 一个 DramaClaw 使用的模型名称。该名称会注册到本地 NewAPI，并显示在虾画中。
+- ComfyUI 服务地址；本机默认是 `http://127.0.0.1:8188`。
+- 一条或多条 Workflow。每条包含唯一的 **Workflow ID** 和从 ComfyUI 导出的 **API Format Workflow JSON**，不能使用浏览器工作流 JSON。
+- 该模型的媒体能力，例如支持模式、比例、分辨率、时长和参考素材数量。
 
-Cognee 建图会批量调用 embedding。默认批量大小是 36：
+普通本地 ComfyUI 不需要 API Key，可以留空。只有在 ComfyUI 前方部署了要求认证的代理时，才需要按代理方案提供认证信息。
 
-```bash
-EMBEDDING_BATCH_SIZE=36
-```
+同一个模型名称可以绑定多条 Workflow。DramaClaw 将模型名称、Workflow ID 和 Workflow JSON 保存到 NewAPI，具体选择哪条 Workflow 由虾驿处理；虾画只显示一个统一模型，不再为每条 Workflow 创建一个模型。
 
-不同上游 embedding 模型的单请求 `input` 数量上限不同：
+MiniMax H3 模板使用模型名 `MiniMax-H3-local`，内置文生、首帧和全能参考三条 Workflow。初始媒体能力为文生视频、首帧和全能参考，分辨率为 `480p`、`768p`、`1080p`，比例为 `21:9`、`16:9`、`4:3`、`1:1`、`3:4`、`9:16`。这些是初始值，仍可在媒体模型能力配置中调整。
 
-- Gemini 类 embedding 通常可以使用 36。
-- 部分 Qwen / 阿里 embedding 模型上限较低，建议设为 10。
+删除单条 Workflow 只删除该路由，不会自动删除统一模型。需要彻底移除时，点击仅在已配置后显示的 **清除 ComfyUI 配置**，确认后会删除本地和 NewAPI 中的 ComfyUI 渠道、Workflow 及对应媒体模型映射；项目和已生成媒体不会被删除。
 
-如果建图阶段出现 embedding HTTP 400/422，且错误发生在导入小说或 Cognee 阶段，优先检查：
+## 本地 + 官方混合模式
 
-1. embedding 真实模型是否支持当前维度。
-2. `EMBEDDING_BATCH_SIZE` 是否超过上游单请求 input 上限。
-3. NewAPI 渠道里 `DC-cognee-embedding` 是否映射到了正确的 embedding 模型。
+混合模式用于保留官方 RelayClaw，同时让指定视频模型从本地 ComfyUI 生成：
 
-在自定义 NewAPI 页面保存 Embedding 配置时，维度和批量大小会同时保存到本地配置；后续建图优先使用本地配置。
+1. 先在 **官方** 保存 DC Key。
+2. 在 **自定义** 中初始化一次 NewAPI；同一个 SQLite 不需要重复初始化。
+3. 打开 **本地 + 官方混合**。
+4. 打开独立的 **ComfyUI 配置**，确认或修改服务地址；本机默认是 `http://127.0.0.1:8188`。
+5. 使用混合模式提供的 MiniMax H3 Workflow 初始模板，或填写一个本地视频模型名称，再为它添加一条或多条 Workflow ID 和 **API Format Workflow JSON**。
+6. 保存视频配置并启用混合模式。
 
-## 参考媒体 relay
+ComfyUI API Key 是可选项。Workflow 必须是 API Format，而不是浏览器工作流格式。自定义模式与混合模式共享 ComfyUI 渠道、Workflow 和媒体模型能力配置；任一模式保存后，另一模式会读取相同结果。
 
-当上游模型需要读取本地参考图、首帧、角色图或身份图时，DramaClaw 需要先把本地文件上传到一个公网可访问的临时地址，再把 URL 传给模型网关。
+MiniMax H3 模板按钮会一直保留，方便恢复缺少的模板。重复载入时会把模板合并到现有 Workflow 中，保留用户已经配置的同 ID Workflow；当 ComfyUI 地址为空时，会自动填入 `http://127.0.0.1:8188`，不会覆盖非空的自定义地址。
 
-纯文本流程、纯文生图流程通常不需要配置参考媒体 relay。图生图、视频首帧、角色参考图、身份图、Freezone 图片参考等场景会用到。
+混合模式按模型 ID 路由：本地 ComfyUI 模型可以作为新模型加入虾画；本地存在与官方同名的视频模型时，则使用本地模型覆盖该官方模型。其他模型继续使用官方 RelayClaw。保存视频配置时，DramaClaw 会先保存 ComfyUI 渠道，再保存对应媒体模型。DramaClaw 不会在本地生成失败后自动回退官方，是否重试或改选官方模型由用户决定。混合模式只管理本地视频模型，不要求再次配置 OpenRouter、火山等官方上游渠道。
 
-支持两种方式：
+## 参考媒体存储
+
+图生图、视频首帧、首尾帧、参考图片和身份图等功能需要让上游模型读取本地文件。进入 **设置 → 媒体存储**，配置公网可访问的临时媒体 relay。
 
 ### 阿里云 OSS
 
-阿里云 OSS 需要先在阿里云控制台创建 Bucket，再创建一个有该 Bucket 读写权限的 AccessKey。推荐使用只授权到该 Bucket 的 RAM 子账号，不要使用主账号 AccessKey。
+需要 Bucket 和拥有该 Bucket 读写权限的 AccessKey。推荐使用只授权该 Bucket 的 RAM 子账号。
 
-```bash
-MEDIA_RELAY_PROVIDER=aliyun_oss
-OSS_RELAY_ENDPOINT=oss-cn-chengdu.aliyuncs.com
-OSS_RELAY_BUCKET=你的_bucket
-OSS_RELAY_AK=你的_access_key_id
-OSS_RELAY_SK=你的_access_key_secret
-MEDIA_RELAY_TTL_SECONDS=1800
-```
-
-字段说明：
-
-| 网页字段 | 环境变量 | 说明 |
+| 网页字段 | 环境变量 | 示例或说明 |
 |---|---|---|
-| Endpoint / 地域 | `OSS_RELAY_ENDPOINT` | OSS 外网 Endpoint，不要带 `https://`，例如 `oss-cn-chengdu.aliyuncs.com`。 |
-| Bucket | `OSS_RELAY_BUCKET` | 用于临时参考图 relay 的 Bucket 名称。 |
-| AccessKey ID | `OSS_RELAY_AK` | 有 Bucket 上传和签名读取权限的 AccessKey ID。 |
-| AccessKey Secret | `OSS_RELAY_SK` | 对应的 AccessKey Secret。 |
-| 有效期 | `MEDIA_RELAY_TTL_SECONDS` | 生成签名 URL 的有效时间，默认 1800 秒。 |
+| Endpoint | `OSS_RELAY_ENDPOINT` | `oss-cn-chengdu.aliyuncs.com`，不要带 `https://` |
+| Bucket | `OSS_RELAY_BUCKET` | 临时媒体 Bucket 名称 |
+| AccessKey ID | `OSS_RELAY_AK` | Bucket 有限权限的 AK |
+| AccessKey Secret | `OSS_RELAY_SK` | 对应 SK |
+| 有效期 | `MEDIA_RELAY_TTL_SECONDS` | 默认 1800 秒 |
 
-Bucket 需要允许后端上传对象，并能生成临时签名 URL 供上游模型读取。一般不需要把 Bucket 设为公开读；DramaClaw 会使用签名 URL 暂时授权访问。建议单独建一个 Bucket 或独立前缀，只给 DramaClaw 存放参考图临时文件。
+Bucket 无需公开读；DramaClaw 使用临时签名 URL 授权上游读取。
 
-### Cloudinary 免费方案
+### Cloudinary
 
-还没有 Cloudinary 账号时，到 <https://cloudinary.com/users/register_free> 注册免费账号。
-
-```bash
-MEDIA_RELAY_PROVIDER=cloudinary
-CLOUDINARY_RELAY_CLOUD_NAME=你的_cloud_name
-CLOUDINARY_RELAY_API_KEY=你的_api_key
-CLOUDINARY_RELAY_API_SECRET=你的_api_secret
-CLOUDINARY_RELAY_FOLDER=relay
-MEDIA_RELAY_TTL_SECONDS=1800
-```
-
-Cloudinary 的 Cloud name、API Key、API Secret 可以在 Cloudinary 控制台的 API Keys 页面查看。进入控制台后，打开 Product environment settings -> API Keys，即可看到 `CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>` 格式的提示。
-
-`CLOUDINARY_RELAY_FOLDER` 对应网页里的“API 文件夹（可选）”。这里填的是 Cloudinary 后台里的 folder 名称，不是本地文件夹路径。例如填 `dramaclaw-relay` 后，上传的参考图会放在 Cloudinary 的 `dramaclaw-relay` 文件夹下，便于后台管理；留空时上传到 Cloudinary 根目录。
-
-网页设置中保存媒体存储配置后，本地 SQLite 配置优先生效，后端不会回传完整密钥给前端显示。
+填写 Cloud name、API Key、API Secret 和可选文件夹。可在 Cloudinary 控制台的 **Product environment settings → API Keys** 查看这些值。保存后本地数据库配置优先于环境变量，完整密钥不会返回前端。
 
 ## 常见问题
 
-| 现象 | 处理 |
+| 现象 | 检查方法 |
 |---|---|
-| 保存官方渠道后仍调用旧 key | 确认当前生效渠道是否为“官方渠道”；新任务会读取最新本地配置，已在运行中的任务不会强制中途切换。 |
-| 自定义 NewAPI 初始化失败 | 检查 NewAPI 地址不带 `/v1`、数据库 DSN 是否能从 DramaClaw 后端访问、`NEWAPI_PROVISIONER_ENABLED=true` 是否生效。 |
-| 已初始化 NewAPI 后再次填密码点击初始化 | 不会修改已有管理员密码；密码只在首次初始化时使用。 |
-| NewAPI 报 `No available channel for model ...` | 对应逻辑模型没有写入 NewAPI 渠道，或渠道未启用，或模型映射保存失败。 |
-| 更换供应商后仍偶尔走旧渠道 | 检查 NewAPI 后台是否存在多个渠道同时包含同一个逻辑模型；重新保存模型映射或更新对应渠道。 |
-| embedding 建图 400/422 | 降低 `EMBEDDING_BATCH_SIZE`，并确认 embedding 模型、维度和渠道映射正确。 |
-| 参考图 / 视频首帧上传失败 | 检查 OSS 或 Cloudinary 配置；纯文本流程不需要媒体 relay，但带参考图的图片/视频模型需要。 |
+| 保存 Key 后高级配置仍没有“已保存”标记 | Key 可能只存在于页面草稿。重新保存对应渠道或重新应用完整配置，并确认使用的是包含最新代码的镜像。 |
+| 添加媒体模型时提示缺少供应商 Key | 对应供应商渠道尚未真正写入 NewAPI；先保存/更新渠道，再保存媒体模型。 |
+| NewAPI 报 `No available channel for model ...` | 检查逻辑模型映射、渠道是否启用、上游模型名及分组。 |
+| 本地 NewAPI 初始化失败 | 检查 NewAPI 服务、SQLite 挂载、目录权限和 `NEWAPI_PROVISIONER_ENABLED`。 |
+| 虾画没有显示新增模型 | 确认模型已启用、媒体类型正确、已保存全部配置并刷新页面。 |
+| 模型控件与实际能力不一致 | 检查媒体模型的 `config`，尤其是分辨率、比例、模式和参考素材上限。 |
+| 知识图谱 embedding 失败 | 检查 embedding Key、上游模型、维度和批量大小；429 表示上游限流。 |
+| 参考图或首帧无法读取 | 检查媒体存储配置和临时 URL 是否能被上游公网访问。 |
+| 混合模式本地视频失败后没有走官方 | 这是预期行为；混合模式不做自动失败回退。 |
+| ComfyUI 无法连接 `127.0.0.1:8188` | `127.0.0.1` 指 DramaClaw 后端所在环境。容器或远程部署时改为后端可访问的宿主机名或局域网地址。 |
+| MiniMax H3 Workflow 执行时报节点或模型缺失 | 确认 ComfyUI 已安装推荐 Workflow 使用的自定义节点和模型文件，并按本机安装情况修改 Workflow。 |
 
 ## 相关文件
 
-- `.env.example`：完整环境变量列表和默认值。
-- `docker-compose.yml`：默认官方渠道部署。
+- `src/novelvideo/official_media_models.json`：CE 官方媒体模型与能力。
+- `.env.example`：环境变量参考。
+- `docker-compose.yml`：官方模式部署。
 - `docker-compose.selfhosted.yml`：内置 NewAPI 自托管部署。
 - [自托管手册](../guides/self-hosting.md)
 - [环境变量参考](../reference/environment-variables.md)

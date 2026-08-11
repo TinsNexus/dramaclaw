@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from novelvideo.graph_preview import delete_graph_preview, write_graph_preview
 from novelvideo.models import CharacterIdentity, NovelCharacter, NovelEpisode, NovelProp, NovelScene
 from novelvideo.project_context import ProjectContext
 
@@ -43,6 +44,39 @@ def _write_media(path: Path, content: bytes = b"media") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return path
+
+
+def _graph_snapshot_payload() -> dict:
+    return {
+        "nodes": [
+            {
+                "id": "character-1",
+                "label": _CHARACTER,
+                "type": "Entity",
+                "degree": 1,
+                "properties": {"description": "雨巷少年"},
+            },
+            {
+                "id": "scene-1",
+                "label": _SCENE,
+                "type": "Entity",
+                "degree": 1,
+                "properties": {},
+            },
+        ],
+        "edges": [
+            {
+                "id": "edge-1",
+                "source": "character-1",
+                "target": "scene-1",
+                "relation": "appears_in",
+                "properties": {},
+            }
+        ],
+        "total_nodes": 2,
+        "total_edges": 1,
+        "truncated": False,
+    }
 
 
 class _M06Store:
@@ -117,6 +151,9 @@ class _M06Store:
 
     async def get_episode_from_graph(self, episode: int):
         return self._episodes[episode]
+
+    async def get_graph_snapshot(self):
+        return _graph_snapshot_payload()
 
     async def list_visual_beats(self):
         return []
@@ -203,6 +240,8 @@ def m06_client_factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     runtime_dir = tmp_path / "runtime" / _USER / _PROJECT
     for path in (project_dir, state_dir, runtime_dir):
         path.mkdir(parents=True, exist_ok=True)
+    write_graph_preview(state_dir, _graph_snapshot_payload())
+    (project_dir / "novel.txt").write_text("已导入小说", encoding="utf-8")
 
     source_image = _write_png(uploads_dir(project_dir) / "source.png")
     mask_image = _write_png(uploads_dir(project_dir) / "mask.png")
@@ -325,6 +364,7 @@ def m06_client_factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         app.dependency_overrides[api_auth.get_api_user] = lambda user=user: user
         app.dependency_overrides[ingest.get_api_user] = lambda user=user: user
         app.dependency_overrides[freezone.get_api_user] = lambda user=user: user
+
         return TestClient(app), task_backend, task_manager, project_dir, assets, store
 
     return build
@@ -409,12 +449,88 @@ def test_m06_ingest_upload_preview_and_unsupported_format(m06_client_factory):
     assert payload["error_type"] == "unsupported"
 
 
+def test_m06_ingest_exposes_real_knowledge_graph_snapshot(m06_client_factory):
+    client, _backend, _task_manager, _project_dir, _assets, _store = m06_client_factory("inline")
+
+    response = client.get(f"/api/v1/projects/{_PROJECT}/ingest/graph")
+    payload = _assert_ok(response)
+
+    assert payload["data"]["total_nodes"] == 2
+    assert payload["data"]["total_edges"] == 1
+    assert payload["data"]["nodes"][0]["label"] == _CHARACTER
+    assert payload["data"]["edges"][0]["relation"] == "appears_in"
+
+
+def test_m06_ingest_ignores_stale_graph_preview_without_success_marker(
+    m06_client_factory,
+    monkeypatch,
+):
+    from novelvideo.api.routes import ingest
+
+    client, _backend, _task_manager, project_dir, _assets, _store = m06_client_factory(
+        "inline"
+    )
+    (project_dir / "novel.txt").unlink()
+
+    async def fail_if_opened(_ctx):
+        raise AssertionError("an incomplete import must not open Cognee")
+
+    monkeypatch.setattr(ingest, "make_cognee_store_for_context", fail_if_opened)
+
+    response = client.get(f"/api/v1/projects/{_PROJECT}/ingest/graph")
+    payload = _assert_ok(response)
+
+    assert payload["data"]["total_nodes"] == 0
+    assert payload["data"]["total_edges"] == 0
+
+
+def test_m06_legacy_graph_is_materialized_once(
+    m06_client_factory,
+    monkeypatch,
+):
+    from novelvideo.api.routes import ingest
+
+    client, _backend, _task_manager, project_dir, assets, _store = m06_client_factory(
+        "inline"
+    )
+    delete_graph_preview(assets.ctx.state_dir)
+    (project_dir / "novel.txt").write_text("已导入小说", encoding="utf-8")
+    calls: list[str] = []
+
+    class LegacyStore:
+        async def materialize_graph_preview(self):
+            calls.append("materialize")
+            snapshot = _graph_snapshot_payload()
+            write_graph_preview(assets.ctx.state_dir, snapshot)
+            return snapshot
+
+        async def close(self):
+            calls.append("close")
+
+    async def make_legacy_store(_ctx):
+        return LegacyStore()
+
+    monkeypatch.setattr(ingest, "make_cognee_store_for_context", make_legacy_store)
+
+    first = client.get(f"/api/v1/projects/{_PROJECT}/ingest/graph")
+    second = client.get(f"/api/v1/projects/{_PROJECT}/ingest/graph")
+
+    assert _assert_ok(first)["data"]["total_nodes"] == 2
+    assert _assert_ok(second)["data"]["total_nodes"] == 2
+    assert calls == ["materialize", "close"]
+
+
 @pytest.mark.parametrize("backend", ["inline", "celery"])
 def test_m06_ingest_start_task_shape_is_ce_ee_isomorphic(m06_client_factory, backend: str):
+    from novelvideo.project_config import load_project_config_file_from_state_dir
+
     client, task_backend, _task_manager, project_dir, _assets, _store = m06_client_factory(backend)
     upload = project_dir / "uploads" / "novel.txt"
     upload.parent.mkdir(parents=True, exist_ok=True)
-    upload.write_text("第一章 雨巷\n林昭撑伞。", encoding="utf-8")
+    upload.write_text(
+        "第一章 雨巷\n1-1 雨巷 日 外\n林昭撑伞。",
+        encoding="utf-8",
+    )
 
     response = client.post(
         f"/api/v1/projects/{_PROJECT}/ingest/start",
@@ -426,6 +542,12 @@ def test_m06_ingest_start_task_shape_is_ce_ee_isomorphic(m06_client_factory, bac
     assert payload["backend"] == backend
     assert payload["queue"] == ("inline" if backend == "inline" else "default")
     assert [call["task_type"] for call in task_backend.calls] == ["ingest_fast"]
+    assert (
+        load_project_config_file_from_state_dir(_assets.ctx.state_dir)[
+            "ingest_source_filename"
+        ]
+        == "novel.txt"
+    )
 
 
 def _freezone_task_cases(client: TestClient, assets: SimpleNamespace):
@@ -547,14 +669,22 @@ def _freezone_task_cases(client: TestClient, assets: SimpleNamespace):
             "freezone_video_gen",
             client.post(
                 f"/api/v1/projects/{p}/freezone/video/i2v",
-                json={"image_urls": [image], "prompt": "move"},
+                json={
+                    "image_urls": [image],
+                    "prompt": "move",
+                    "gen_mode": "imageToVideo",
+                },
             ),
         ),
         (
             "freezone_video_gen",
             client.post(
                 f"/api/v1/projects/{p}/freezone/video/keyframes",
-                json={"first_frame_url": image, "prompt": "move"},
+                json={
+                    "first_frame_url": image,
+                    "prompt": "move",
+                    "gen_mode": "firstFrame",
+                },
             ),
         ),
         (
@@ -613,6 +743,13 @@ def _freezone_task_cases(client: TestClient, assets: SimpleNamespace):
             ),
         ),
         (
+            "freezone_text_generate",
+            client.post(
+                f"/api/v1/projects/{p}/freezone/text/generate",
+                json={"prompt": "写一段雨夜重逢的短故事"},
+            ),
+        ),
+        (
             "freezone_story_script",
             client.post(
                 f"/api/v1/projects/{p}/freezone/text/story-script",
@@ -643,7 +780,7 @@ def test_m06_freezone_task_backend_responses_are_ce_ee_isomorphic(
     client, task_backend, _task_manager, _project_dir, assets, _store = m06_client_factory(backend)
 
     cases = _freezone_task_cases(client, assets)
-    assert len(cases) == 28
+    assert len(cases) == 29
     for task_type, response in cases:
         assert response.status_code == 200, response.text
         _assert_freezone_http_task_shape(response.json(), task_type=task_type)
@@ -689,6 +826,7 @@ def test_m06_freezone_task_backend_responses_are_ce_ee_isomorphic(
         "freezone_video_gen",
         "freezone_video_compose",
         "freezone_text_translate",
+        "freezone_text_generate",
         "freezone_story_script",
         "freezone_audio_speech",
         "freezone_audio_eleven_music",

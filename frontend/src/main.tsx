@@ -3,14 +3,14 @@
 import { StrictMode } from "react";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
 import { routeTree } from "./routeTree.gen";
 import { ThemeProvider } from "./components/theme-provider";
 import { loadClusterConfig } from "@/lib/cluster-config";
-import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { isCeRuntime, loadRuntimeConfig } from "@/lib/runtime-config";
 import { initDevBackendWatch } from "@/lib/dev-backend-watch";
 import { setApiQueryClient } from "@/lib/api";
 import { setAppRouter } from "@/lib/app-router";
+import { useOfficialMediaCatalogWatcher } from "@/lib/queries/model-gateway";
 import { getOrCreateReactRoot } from "@/lib/react-root";
 import {
   installChunkLoadRecovery,
@@ -72,27 +72,6 @@ declare module "@tanstack/react-router" {
   }
 }
 
-function ThemedToaster() {
-  return (
-    <Toaster
-      position="top-center"
-      theme="dark"
-      closeButton={false}
-      duration={2200}
-      visibleToasts={1}
-      offset={24}
-      toastOptions={{
-        style: {
-          "--width": "auto",
-          minWidth: 0,
-        } as React.CSSProperties,
-        className:
-          "!py-2 !px-4 !text-sm !min-h-0 !bg-white/[0.06] !border !border-white/10 !rounded-sm !shadow-none !text-white/80",
-      }}
-    />
-  );
-}
-
 // Give the api module a handle to the QueryClient so its 400 no_region
 // handler can fan out a full cache purge via resetRegionState().
 setApiQueryClient(queryClient);
@@ -103,6 +82,7 @@ installDomReconciliationGuard();
 
 function AppRouterShell() {
   const updateRequired = useChunkLoadRecoveryRequired();
+  useOfficialMediaCatalogWatcher(isCeRuntime());
   return (
     <>
       <RouterProvider router={router} />
@@ -121,7 +101,6 @@ async function bootstrap() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AppRouterShell />
-          <ThemedToaster />
         </ThemeProvider>
       </QueryClientProvider>
     </StrictMode>,

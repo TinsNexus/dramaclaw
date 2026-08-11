@@ -137,6 +137,8 @@ async def _run_freezone_gen_async(envelope: dict[str, Any], ctx: ProjectContext)
             provider=payload.get("provider"),
             model=payload.get("model"),
             quality=payload.get("quality"),
+            model_params=payload.get("model_params") or None,
+            request_schema=payload.get("request_schema") or None,
             output_task_type=task_type,
         ),
         project_id=ctx.project_id,
@@ -191,6 +193,8 @@ async def _run_freezone_edit_async(
             provider=payload.get("provider"),
             model=payload.get("model"),
             quality=payload.get("quality"),
+            model_params=payload.get("model_params") or None,
+            request_schema=payload.get("request_schema") or None,
             output_task_type=task_type,
         ),
         project_id=ctx.project_id,
@@ -800,25 +804,124 @@ async def _run_freezone_text_translate_async(
     return result
 
 
-async def _run_freezone_story_script_async(
+async def _run_freezone_text_generate_async(
     envelope: dict[str, Any],
     ctx: ProjectContext,
 ) -> dict[str, Any]:
     from novelvideo.api.deps import make_static_url_for_context
     from novelvideo.freezone.jobs import ensure_freezone_dirs
     from novelvideo.freezone.paths import outputs_dir
-    from novelvideo.freezone.text_node import generate_freezone_story_script
+    from novelvideo.freezone.text_node import generate_freezone_text
 
     payload = envelope.get("payload") or {}
     job_id = str(payload["job_id"])
     project_dir = Path(str(payload.get("project_dir") or ctx.output_dir))
     ensure_freezone_dirs(project_dir)
-    _update(ctx, "freezone_story_script", job_id, 0.1, "开始生成故事脚本...")
-    data = await generate_freezone_story_script(
-        source_text=str(payload.get("source_text") or ""),
-        prompt=str(payload.get("prompt") or ""),
-        model=str(payload.get("model") or ""),
+    prompt = str(payload.get("prompt") or "").strip()
+    _update(ctx, "freezone_text_generate", job_id, 0.1, "开始生成文本...")
+    model, generated_text = await generate_freezone_text(prompt=prompt)
+    data = {"generated_text": generated_text, "model": model}
+    out = outputs_dir(project_dir, "freezone_text_generate") / f"{job_id}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    import json
+
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    rel = out.relative_to(project_dir).as_posix()
+    result = {
+        "job_id": job_id,
+        "output_format": "json",
+        "output_path": str(out),
+        "output_url": make_static_url_for_context(ctx, rel),
+        **data,
+    }
+    history_record = _append_node_history(
+        ctx=ctx,
+        project_dir=project_dir,
+        payload=payload,
+        task_type="freezone_text_generate",
+        job_id=job_id,
+        media_type="text",
+        input_preview=prompt[:240],
+        prompt=prompt,
+        model=model,
+        result=result,
     )
+    if history_record:
+        result["generation_history_record"] = history_record
+    return result
+
+
+async def _run_freezone_story_script_async(
+    envelope: dict[str, Any],
+    ctx: ProjectContext,
+) -> dict[str, Any]:
+    from novelvideo.api.deps import make_static_url_for_context
+    from novelvideo.freezone.jobs import ensure_freezone_dirs, run_freezone_extract_frames
+    from novelvideo.freezone.paths import outputs_dir
+    from novelvideo.freezone.text_node import (
+        bind_story_script_assets,
+        generate_freezone_story_script,
+        generate_freezone_story_script_with_vision,
+    )
+
+    payload = envelope.get("payload") or {}
+    job_id = str(payload["job_id"])
+    project_dir = Path(str(payload.get("project_dir") or ctx.output_dir))
+    ensure_freezone_dirs(project_dir)
+
+    source_text = str(payload.get("source_text") or "")
+    prompt = str(payload.get("prompt") or "")
+    character_refs = list(payload.get("character_refs") or [])
+    character_image_paths = [str(path) for path in payload.get("character_image_paths") or []]
+    video_path = str(payload.get("video_path") or "")
+    duration_sec = payload.get("duration_sec")
+
+    frame_paths: list[Path] = []
+    frame_urls: list[str] = []
+    if video_path:
+        _update(ctx, "freezone_story_script", job_id, 0.1, "ffmpeg 抽取关键帧...")
+        frame_paths = await run_freezone_extract_frames(
+            project_dir=project_dir,
+            job_id=job_id,
+            video_path=Path(video_path),
+            max_frames=int(payload.get("max_frames") or 20),
+            scene_threshold=float(payload.get("scene_threshold") or 0.3),
+        )
+        frame_urls = [
+            make_static_url_for_context(ctx, path.relative_to(project_dir).as_posix())
+            for path in frame_paths
+        ]
+
+    if frame_paths or character_image_paths:
+        _update(
+            ctx,
+            "freezone_story_script",
+            job_id,
+            0.55,
+            (
+                f"视觉模型解析 {len(frame_paths)} 帧为分镜脚本..."
+                if frame_paths
+                else "视觉模型读取角色参考图生成故事脚本..."
+            ),
+        )
+        data = await generate_freezone_story_script_with_vision(
+            frame_paths=[str(path) for path in frame_paths],
+            character_image_paths=character_image_paths,
+            source_text=source_text,
+            prompt=prompt,
+            duration_sec=float(duration_sec) if duration_sec else None,
+            character_refs=character_refs,
+        )
+    else:
+        _update(ctx, "freezone_story_script", job_id, 0.1, "开始生成故事脚本...")
+        data = await generate_freezone_story_script(
+            source_text=source_text,
+            prompt=prompt,
+            model=str(payload.get("model") or ""),
+            character_refs=character_refs,
+        )
+
+    bind_story_script_assets(data, frame_urls=frame_urls, character_refs=character_refs)
     out = outputs_dir(project_dir, "freezone_story_script") / f"{job_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     import json
@@ -833,6 +936,8 @@ async def _run_freezone_story_script_async(
         "output_url": make_static_url_for_context(ctx, rel),
         **payload_data,
     }
+    if frame_urls:
+        result["frame_urls"] = frame_urls
     history_record = _append_node_history(
         ctx=ctx,
         project_dir=project_dir,
@@ -865,7 +970,10 @@ async def _run_freezone_image_reverse_prompt_async(
     ensure_freezone_dirs(project_dir)
     source_path = Path(str(payload["source_path"]))
     _update(ctx, "freezone_image_reverse_prompt", job_id, 0.1, "开始反推图片提示词...")
-    prompt = await reverse_prompt_from_image(image_path=source_path)
+    prompt = await reverse_prompt_from_image(
+        image_path=source_path,
+        instruction=str(payload.get("instruction") or ""),
+    )
     out = outputs_dir(project_dir, "freezone_image_reverse_prompt") / f"{job_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     import json
@@ -896,6 +1004,10 @@ async def _run_freezone_image_reverse_prompt_async(
 
 def run_freezone_text_translate(envelope: dict[str, Any], ctx: ProjectContext) -> dict[str, Any]:
     return _run_cancellable(envelope, _run_freezone_text_translate_async(envelope, ctx))
+
+
+def run_freezone_text_generate(envelope: dict[str, Any], ctx: ProjectContext) -> dict[str, Any]:
+    return _run_cancellable(envelope, _run_freezone_text_generate_async(envelope, ctx))
 
 
 def run_freezone_story_script(envelope: dict[str, Any], ctx: ProjectContext) -> dict[str, Any]:
@@ -989,7 +1101,7 @@ async def _run_freezone_audio_eleven_music_async(
         project_dir=project_dir,
         job_id=job_id,
         prompt=str(payload.get("input") or ""),
-        model=str(payload.get("model") or "eleven-music"),
+        model=str(payload.get("model") or "LingShan-MU-11"),
         response_format=str(payload.get("response_format") or "mp3"),
         music_length_ms=int(payload.get("music_length_ms") or 30_000),
         force_instrumental=bool(payload.get("force_instrumental", True)),
@@ -1033,6 +1145,7 @@ register_project_task_runner("freezone_video_upscale", run_freezone_video_upscal
 register_project_task_runner("freezone_audio_separate", run_freezone_audio_separate)
 register_project_task_runner("freezone_video_compose", run_freezone_video_compose)
 register_project_task_runner("freezone_text_translate", run_freezone_text_translate)
+register_project_task_runner("freezone_text_generate", run_freezone_text_generate)
 register_project_task_runner("freezone_story_script", run_freezone_story_script)
 register_project_task_runner(
     "freezone_image_reverse_prompt",

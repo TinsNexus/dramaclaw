@@ -2,6 +2,20 @@
 // Copyright (c) 2026 ClaymoreLab
 export const queryKeys = {
   currentUser: () => ["auth", "me"] as const,
+  productSurfaces: () => ["product-surfaces", "me"] as const,
+  creditSummary: () => ["credits", "summary"] as const,
+  creditPromotions: () => ["credits", "promotions"] as const,
+  creditFilterOptions: () => ["credits", "filter-options"] as const,
+  creditTransactions: (filters: {
+    category: string;
+    page: number;
+    pageSize: number;
+    startAt?: string;
+    endAt?: string;
+    projectId?: string;
+    featureKey?: string;
+    model?: string;
+  }) => ["credits", "transactions", filters] as const,
   projects: () => ["projects"] as const,
   projectSummaries: () => ["projects", "summaries"] as const,
   project: (p: string) => ["projects", p] as const,
@@ -49,6 +63,9 @@ export const queryKeys = {
   episodeDetail: (p: string, ep: number) =>
     ["projects", p, "episodes", ep, "detail"] as const,
   chapters: (p: string) => ["projects", p, "chapters"] as const,
+  chapterPreview: (p: string, spineTemplate: string) =>
+    ["projects", p, "chapters", spineTemplate] as const,
+  knowledgeGraph: (p: string) => ["projects", p, "knowledge-graph"] as const,
   script: (p: string, ep: number) =>
     ["projects", p, "episodes", ep, "script"] as const,
   beats: (p: string, ep: number) =>
@@ -77,6 +94,7 @@ export const queryKeys = {
   narratorVoice: (p: string) => ["projects", p, "narrator-voice"] as const,
   narratorVoiceSources: (p: string) =>
     ["projects", p, "narrator-voice", "sources"] as const,
+  audioBillingQuotes: (p: string) => ["audio-billing-quote", p] as const,
   finalVideo: (p: string, ep: number) =>
     ["projects", p, "episodes", ep, "final-video"] as const,
   tasks: (p?: string) => (p ? (["projects", p, "tasks"] as const) : (["tasks"] as const)),

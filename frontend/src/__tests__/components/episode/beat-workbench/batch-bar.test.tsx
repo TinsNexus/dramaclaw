@@ -6,10 +6,7 @@ import { I18nextProvider, initReactI18next } from "react-i18next";
 import i18next from "i18next";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  BatchBar,
-  episodeAudioModelCallCount,
-} from "@/components/episode/beat-workbench/batch-bar";
+import { BatchBar } from "@/components/episode/beat-workbench/batch-bar";
 
 const i18n = i18next.createInstance();
 
@@ -125,6 +122,7 @@ const {
   regenerateSketchesMock,
   sketchStartMock,
   toastSuccessMock,
+  audioQuoteState,
 } = vi.hoisted(() => ({
   assignColorsMock: vi.fn(),
   detectIdentitiesMock: vi.fn(),
@@ -132,6 +130,7 @@ const {
   regenerateSketchesMock: vi.fn(),
   sketchStartMock: vi.fn(),
   toastSuccessMock: vi.fn(),
+  audioQuoteState: { prereqErrors: [] as string[] },
 }));
 
 vi.mock("@/lib/queries/sketches", () => ({
@@ -158,6 +157,20 @@ vi.mock("@/lib/queries/sketch-image-usage", () => ({
 }));
 
 vi.mock("@/lib/queries/audio", () => ({
+  useAudioBillingQuote: () => ({
+    data: {
+      ok: true,
+      data: {
+        beat_numbers: [1, 2, 3],
+        quantity: 3,
+        unit_cost: 6,
+        cost: 18,
+        display: "18",
+        prereq_errors: audioQuoteState.prereqErrors,
+      },
+    },
+    error: null,
+  }),
   useGenerateAudio: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
@@ -216,6 +229,18 @@ vi.mock("@/lib/queries/video", () => ({
   useGlobalOptimize: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
+  }),
+  useGlobalOptimizeBillingQuote: () => ({
+    data: {
+      ok: true,
+      data: {
+        beat_numbers: [1, 2],
+        quantity: 2,
+        unit_cost: 6,
+        cost: 12,
+        display: "12",
+      },
+    },
   }),
   useVideoBackends: () => ({
     data: {
@@ -367,38 +392,8 @@ const DEFAULT_BEATS = [
 ];
 
 describe("BatchBar", () => {
-  it("estimates whole-episode audio model calls from eligible beats", () => {
-    expect(
-      episodeAudioModelCallCount([
-        ...DEFAULT_BEATS,
-        {
-          beat_number: 4,
-          narration_segment: "no audio",
-          visual_description: "v4",
-          audio_type: "silence",
-        },
-        {
-          beat_number: 5,
-          narration_segment: "manual",
-          visual_description: "v5",
-          audio_type: "narration",
-          is_manual_shot: true,
-        },
-        {
-          beat_number: 6,
-          narration_segment: "dialogue",
-          visual_description: "v6",
-          audio_type: "dialogue",
-          speaker: "Hero_Main",
-        },
-        {
-          beat_number: 7,
-          narration_segment: "",
-          visual_description: "v7",
-          audio_type: "narration",
-        },
-      ]),
-    ).toBe(3);
+  beforeEach(() => {
+    audioQuoteState.prereqErrors = [];
   });
 
   it("hides whole-episode script rewrite from the batch toolbar", () => {
@@ -472,7 +467,8 @@ describe("BatchBar", () => {
     expect(screen.queryByText("0.5K")).not.toBeInTheDocument();
   });
 
-  it("shows whole-episode video prompt generation only for narrated projects", () => {
+  it("shows the backend batch quote for narrated projects", async () => {
+    const user = userEvent.setup();
     const { rerender } = render(
       <I18nextProvider i18n={i18n}>
         <BatchBar
@@ -487,9 +483,13 @@ describe("BatchBar", () => {
       </I18nextProvider>,
     );
 
-    expect(
-      screen.getByRole("button", { name: "生成全 Beat 视频提示词" }),
-    ).toBeInTheDocument();
+    const batchButton = screen.getByRole("button", {
+      name: /生成全 Beat 视频提示词/,
+    });
+    expect(batchButton).toHaveTextContent("12");
+    await user.click(batchButton);
+    expect(screen.getAllByText("12").length).toBeGreaterThanOrEqual(2);
+    await user.click(screen.getByRole("button", { name: "取消" }));
 
     rerender(
       <I18nextProvider i18n={i18n}>
@@ -506,7 +506,7 @@ describe("BatchBar", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "生成全 Beat 视频提示词" }),
+      screen.queryByRole("button", { name: /生成全 Beat 视频提示词/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -548,7 +548,36 @@ describe("BatchBar", () => {
     await user.click(screen.getByRole("button", { name: "生成音频" }));
 
     expect(screen.getByRole("button", { name: "确认执行" })).toBeInTheDocument();
-    expect(screen.getAllByText("5").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("18").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stops whole-episode audio before confirmation when the quote reports a voice prerequisite", async () => {
+    audioQuoteState.prereqErrors = [
+      "Beat 01 解说声线缺失：项目解说人声线未配置，请上传或录制解说人音频",
+    ];
+    const user = userEvent.setup();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <BatchBar
+          project="demo"
+          episode={1}
+          beats={DEFAULT_BEATS}
+          videoBackend="seedance"
+          spineTemplate="narrated"
+          sketchAspectRatio="2:3"
+          onSketchAspectRatioChange={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "生成音频" }));
+
+    expect(screen.queryByRole("button", { name: "确认执行" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Beat 01 解说声线缺失：项目解说人声线未配置，请上传或录制解说人音频",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("keeps whole-episode TTS generation visible but unavailable when Seedance2 is selected", async () => {

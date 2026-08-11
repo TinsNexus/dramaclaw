@@ -10,8 +10,6 @@ from typing import Literal
 from novelvideo.config import (
     HUIMENGI_API_KEY,
     HUIMENG_IMAGE_MODEL,
-    NEWAPI_API_KEY,
-    NEWAPI_BASE_URL,
     NEWAPI_IMAGE_MODEL,
     NEWAPI_NANOBANANA2_MODEL,
     OPENAI_API_KEY,
@@ -590,8 +588,13 @@ def _scene_image_config(model: str) -> dict[str, str]:
         "image_size": "1K",
         "output_format": "png",
     }
-    if str(model or "").strip().lower() in {"gpt-image-2", "image-2", "image-2-official"}:
-        image_config["quality"] = "low"
+    if str(model or "").strip().lower() in {
+        "lingshan-g2",
+        "gpt-image-2",
+        "image-2",
+        "image-2-official",
+    }:
+        image_config["quality"] = "medium"
     return image_config
 
 
@@ -664,12 +667,11 @@ async def generate_scene_reference_image(
             image_config=_scene_image_config(selected_model),
         )
     elif provider == "newapi":
-        from novelvideo.config import get_newapi_runtime_credentials
+        from novelvideo.config import get_effective_newapi_gateway_config
 
-        api_key, base_url = get_newapi_runtime_credentials(
-            api_key_override=NEWAPI_API_KEY,
-            base_url_override=NEWAPI_BASE_URL,
-        )
+        gateway = get_effective_newapi_gateway_config()
+        api_key = gateway.api_key
+        base_url = gateway.base_url
         selected_model = _scene_image_model(kind, provider, model)
         image_bytes, _text, error = await _call_newapi_image_api(
             api_key=api_key,
@@ -690,8 +692,8 @@ async def generate_scene_reference_image(
             image_config={
                 "aspect_ratio": "16:9",
                 "image_size": "1K",
-                "quality": "low",
-                "huimeng_image_quality": "low",
+                "quality": "medium",
+                "huimeng_image_quality": "medium",
             },
         )
     else:
@@ -705,7 +707,7 @@ async def generate_scene_reference_image(
             image_config={
                 "aspect_ratio": "16:9",
                 "image_size": "1K",
-                "quality": "low",
+                "quality": "medium",
             },
         )
 

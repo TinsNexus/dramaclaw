@@ -7,40 +7,43 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ChangeEvent,
   type DragEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 import {
   Handle,
   Position,
+  useStore,
   useUpdateNodeInternals,
   type NodeProps,
 } from "@xyflow/react";
+import {
+  isLowDetailZoom,
+  setNodeMediaActive,
+} from "@/features/canvas/application/canvasLod";
 import {
   AlertTriangle,
   ArrowUp,
   Camera,
   ChevronDown,
-  ChevronUp,
   Download,
   Film,
-  Languages,
+  Images,
   Layers,
   Loader2,
-  Music,
   Pause,
   Play,
   RotateCcw,
   Sparkles,
   Square,
   Upload as UploadIcon,
-  Users,
   Video as VideoIcon,
   Volume2,
   VolumeX,
   X as XIcon,
+  type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -61,11 +64,41 @@ import {
   type VideoNodeData,
 } from "@/features/canvas/domain/canvasNodes";
 import {
+  audioReferenceDurationRejection,
+  formatAudioDurationClips,
+  formatAudioDurationSeconds,
+  MAX_AUDIO_REFERENCE_DURATION_MS,
+  MAX_AUDIO_REFERENCE_TOTAL_DURATION_MS,
+  MIN_AUDIO_REFERENCE_DURATION_MS,
+  referenceDurationLimitsMs,
+  isHappyHorseVideoModel,
+  isSeedance2VideoModel,
+  isVideoModeSupportedByModel,
+  resolveVideoKeyframeUrls,
+  videoEmptyStateCtaModes,
+  videoModeRequiresPrompt,
+  videoModelReferenceDisabledReason,
+  videoMultiImageAutoSwitchMode,
+  videoReferenceAutoSwitchAction,
+  videoSubmitMediaRejectionReason,
+  videoUpstreamImageDefaultMode,
+  type VideoEmptyStateCtaMode,
+} from "@/features/canvas/nodes/shared/videoModelCapabilities";
+import {
   VIDEO_GENERATION_ASPECT_RATIOS,
-  mediaNeedsCrossOrigin,
   resolveImageDisplayUrl,
   snapToAllowedAspectRatio,
 } from "@/features/canvas/application/imageData";
+import {
+  captureVideoFrameBlob,
+  getLodStill,
+  requestLodStill,
+  subscribeLodStills,
+} from "@/features/canvas/application/videoFrameCapture";
+import {
+  FALLBACK_VIDEO_ASPECT_OPTIONS,
+  FALLBACK_VIDEO_RESOLUTION_OPTIONS,
+} from "@/features/canvas/domain/mediaModelOptions";
 import { ensureWebSafeVideo } from "@/features/canvas/application/videoTranscode";
 import { isVideoFile, VIDEO_FILE_ACCEPT } from "@/features/canvas/application/videoFileTypes";
 import { resolveNodeDisplayName } from "@/features/canvas/domain/nodeDisplay";
@@ -85,41 +118,29 @@ import {
   sortUpstreamByReferenceOrder,
   upstreamNodesInEdgeOrder,
 } from "@/features/canvas/nodes/referenceOrdering";
-import { ReferenceTextChip } from "@/features/canvas/nodes/shared/ReferenceTextChip";
-import { ReferenceDetachButton } from "@/features/canvas/nodes/shared/ReferenceDetachButton";
 import { useReferenceMentionSync } from "@/features/canvas/nodes/useReferenceMentionSync";
 import { useNodeGenerationTaskState } from "@/features/canvas/application/useNodeGenerationTaskState";
 import {
   resolveErrorContent,
   showErrorDialog,
+  notifyTaskStillRunning,
 } from "@/features/canvas/application/errorDialog";
-import { backendErrorToastMessage } from "@/lib/api-errors";
-import { extractRequestId } from "@/features/canvas/application/generationErrorReport";
 import {
-  PromptMentionEditor,
-  type MentionCandidate,
-  type PromptMentionEditorHandle,
-} from "@/features/canvas/nodes/PromptMentionEditor";
-import { NodeContextPromptPaletteButton } from "@/features/canvas/nodes/ContextPromptPaletteButton";
-import {
-  contextPromptPaletteInsertionText,
-  type ContextPromptPaletteEntry,
-} from "@/features/canvas/nodes/contextPromptPalette";
+  BillingRuleNotConfiguredError,
+  backendErrorToastMessage,
+} from "@/lib/api-errors";
+import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
+import { resolveGenerationErrorDiagnostics } from "@/features/canvas/application/generationErrorReport";
 import {
   NodeHeader,
   NODE_HEADER_FLOATING_POSITION_CLASS,
 } from "@/features/canvas/ui/NodeHeader";
 import { NodeResizeHandle } from "@/features/canvas/ui/NodeResizeHandle";
-import { PanelExpandButton } from "@/features/canvas/ui/PanelExpandButton";
-import {
-  NODE_OPS_PANEL_ENTER_CLASS,
-  OperationPanelShell,
-} from "@/features/canvas/ui/OperationPanelShell";
+import { NODE_OPS_PANEL_ENTER_CLASS } from "@/features/canvas/ui/OperationPanelShell";
 import { NodeGenerationOverlay } from "@/features/canvas/ui/NodeGenerationOverlay";
 import {
   CANVAS_NODE_INPUT_BODY_FRAME_CLASS,
   CANVAS_NODE_INPUT_BODY_SELECTED_FRAME_CLASS,
-  CANVAS_NODE_INPUT_PLACEHOLDER_CLASS,
   CANVAS_NODE_INPUT_SURFACE_CLASS,
   CANVAS_NODE_OPS_PANEL_CLASS,
   CANVAS_NODE_PANEL_SURFACE_CLASS,
@@ -132,28 +153,17 @@ import {
 } from "@/features/freezone/context/NodeContextBadges";
 import { RegenerateButton } from "@/features/canvas/ui/RegenerateButton";
 import {
-  NODE_COUNT_POPOVER_CLASS,
-  NODE_CONTEXT_CONTROL_TRIGGER_CLASS,
   NODE_CREDIT_PILL_FLAT_CLASS,
-  NODE_FLOATING_PANEL_SURFACE_CLASS,
   NODE_GENERATE_BUTTON_BASE_CLASS,
   NODE_GENERATE_BUTTON_DISABLED_CLASS,
   NODE_GENERATE_BUTTON_ENABLED_CLASS,
-  NODE_INLINE_ICON_BUTTON_ACTIVE_CLASS,
-  NODE_INLINE_ICON_BUTTON_CLASS,
-  NODE_REFERENCE_MEDIA_CHIP_CLASS,
-  NODE_REFERENCE_MEDIA_DETACH_CLASS,
-  NODE_TEXT_CONTROL_ICON_CLASS,
-  NODE_TEXT_CONTROL_TRIGGER_CLASS,
 } from "@/features/canvas/ui/nodeControlStyles";
 import {
   NODE_SIDE_ACTION_BUTTON_CLASS,
   NODE_SIDE_ACTION_ICON_CLASS,
   NodeSideActionRail,
 } from "@/features/canvas/ui/NodeSideActionRail";
-import { createPortal } from "react-dom";
 import { VideoClipPanel } from "@/features/canvas/nodes/VideoClipPanel";
-import { CameraMovementPickerPopover } from "@/features/canvas/nodes/CameraMovementPickerPopover";
 import {
   CAMERA_MOVEMENT_PRESETS,
   findCameraMovementPreset,
@@ -161,14 +171,12 @@ import {
 } from "@/features/canvas/domain/cameraMovementPresets";
 import { useFreezoneVideoCameraTemplates } from "@/features/canvas/hooks/useFreezoneVideoCameraTemplates";
 import { useFreezoneVideoModels } from "@/features/canvas/hooks/useFreezoneVideoModels";
-import { CharacterLibraryModal } from "@/features/canvas/ui/CharacterLibraryModal";
 import { useCanvasStore, useIsBoxSelecting } from "@/stores/canvasStore";
 import {
   fetchFreezoneJobResult,
-  fetchFreezoneTextTranslateResult,
-  submitFreezoneTextTranslate,
   submitFreezoneVideoCompose,
   submitFreezoneVideoErase,
+  submitFreezoneVideoEdit,
   submitFreezoneVideoGen,
   submitFreezoneVideoI2v,
   submitFreezoneVideoKeyframes,
@@ -180,7 +188,11 @@ import {
   type FreezoneVideoReferenceItem,
   type FreezoneVideoResolution,
 } from "@/api/ops";
-import { awaitTaskCompletion } from "@/api/tasks";
+import {
+  awaitTaskCompletion,
+  isTaskCancelledError,
+  isTaskPollTimeoutError,
+} from "@/api/tasks";
 import { generationTaskDescriptor } from "@/features/canvas/application/resumeGeneration";
 import { useNodeGenerationHistory } from "@/features/canvas/hooks/useNodeGenerationHistory";
 import {
@@ -190,17 +202,9 @@ import {
 } from "@/features/canvas/ui/NodeGenerationHistory";
 import type { FreezoneGenerationHistoryRecord } from "@/api/ops";
 import { readUrl } from "@/lib/url-params";
-import {
-  DEFAULT_VIDEO_MODEL_ID,
-  ProviderModelPicker,
-} from "@/features/canvas/ui/ProviderModelPicker";
-import { writeLastVideoModel } from "@/features/canvas/domain/lastVideoModel";
-import {
-  CreditCostPill,
-  formatCreditCost,
-} from "@/components/credits/credit-visual";
-import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { ModelOption } from "@/features/canvas/ui/ProviderModelPicker";
+import { CreditCostPill } from "@/components/credits/credit-visual";
+import { VideoOperationsPanel } from "@/features/canvas/nodes/VideoOperationsPanel";
 
 type VideoNodeProps = NodeProps & {
   id: string;
@@ -209,95 +213,84 @@ type VideoNodeProps = NodeProps & {
 };
 
 const DEFAULT_WIDTH = 580;
-const DEFAULT_HEIGHT = 380;
+export const DEFAULT_HEIGHT = 380;
+/**
+ * 视频生成的计费 feature key。主体（错误态重试的计费探针）与操作面板（估价
+ * 展示 + 提交置灰）共用，必须同一口径——放主体导出、面板 import。
+ */
+export const VIDEO_GENERATE_FEATURE_KEY = "freezone.video_generate";
+
 const MIN_WIDTH = 480;
 const MIN_HEIGHT = 280;
 const MAX_WIDTH = 1100;
 const MAX_HEIGHT = 1000;
 
-const OPERATIONS_PANEL_HEIGHT = 280;
-const OPERATIONS_PANEL_GAP = 12;
+// 图片节点的默认落位尺寸（与 ImageGenNode 的 DEFAULT_WIDTH/HEIGHT 对齐）。
+// 「全能参考 / 图片参考」会在视频节点左侧新建一个图片节点，排版要按它的真实尺寸算。
+const IMAGE_GEN_NODE_WIDTH = 580;
+const IMAGE_GEN_NODE_HEIGHT = 360;
+
+export const OPERATIONS_PANEL_HEIGHT = 280;
+export const OPERATIONS_PANEL_GAP = 12;
 // Extend the ops panel beyond the node's left/right edges so the textarea +
 // chips have more room than the video frame itself.
-const OPERATIONS_PANEL_OVERHANG = 120;
-// 「放大」后用居中弹窗展示，给提示词编辑更舒适的空间。
-const OPERATIONS_PANEL_EXPANDED_HEIGHT = 560;
-const OPERATIONS_PANEL_EXPANDED_WIDTH = 1040;
+export const OPERATIONS_PANEL_OVERHANG = 120;
 
-const MODE_TABS: ReadonlyArray<{ key: VideoGenMode; labelKey: string }> = [
-  { key: "textToVideo", labelKey: "node.videoNode.tabs.textToVideo" },
-  { key: "allReference", labelKey: "node.videoNode.tabs.allReference" },
-  { key: "imageToVideo", labelKey: "node.videoNode.tabs.imageToVideo" },
-  { key: "firstLastFrame", labelKey: "node.videoNode.tabs.firstLastFrame" },
-  { key: "imageReference", labelKey: "node.videoNode.tabs.imageReference" },
-];
+// 空态 CTA 的图标 + 文案：具体展示哪几个模式由 `videoEmptyStateCtaModes(modelId)`
+// 按模型能力决定（见 shared/videoModelCapabilities.ts），这里只负责「模式 → 外观」。
+const VIDEO_EMPTY_STATE_CTA_META: Record<
+  VideoEmptyStateCtaMode,
+  { Icon: LucideIcon; label: string }
+> = {
+  allReference: { Icon: Sparkles, label: "全能参考" },
+  imageReference: { Icon: Images, label: "图片参考" },
+  firstFrame: { Icon: Film, label: "首帧生成视频" },
+  imageToVideo: { Icon: Film, label: "图生视频" },
+  firstLastFrame: { Icon: Layers, label: "首尾帧生成视频" },
+};
 
 // 各 genMode 对上游引用数量的硬上限。UI 用这张表把后端字段约束（多图 / 多模态
 // 场景下）显式表达出来：超额 chip 标灰 + 从 @ 候选剔除，避免「prompt 引用了
 // @图片10 但提交时被静默丢掉」。
 //
-// 表里没出现的模式默认不限制（textToVideo 不消费上游、imageToVideo 走
-// `.slice(0, 9)` 自带兜底），各自走原有路径。
-//   - allReference (omni)  ：image 1-9 / video 0-3 / audio 0-3。总时长 ≤ 15s
-//                            的部分前端拿不到精确媒体元数据，延后交给服务端。
+// 表里没出现的模式默认不限制（textToVideo 不消费上游），走原有路径。
+//   - allReference (omni)  ：image 1-9 / video 0-3 / audio 0-3。音频另有两条厂商时长
+//                            约束——**逐条** 1.8~15.2s 和**总和** ≤15.2s（后台可配
+//                            referenceAudioTotalMaxSeconds）——都在提交前单独校验，
+//                            见 audioReferenceDurationRejection。时长口径不进这张表：
+//                            这里只表达条数。
 //   - firstLastFrame       ：仅图片 2 张（首帧 + 尾帧），不允许任何视频 / 音频。
 //                            图片 >2 时另有自动切到 allReference 的兜底（见
 //                            VideoNode 内部 effect）。
+//   - firstFrame / imageToVideo：都只接 1 张图；前者锁定首帧，后者作为整体画面参考。
 const REFERENCE_CAPS_BY_MODE: Partial<
   Record<VideoGenMode, { image: number; video: number; audio: number }>
 > = {
+  firstFrame: { image: 1, video: 0, audio: 0 },
+  imageToVideo: { image: 1, video: 0, audio: 0 },
+  imageReference: { image: 9, video: 0, audio: 0 },
+  videoEdit: { image: 5, video: 1, audio: 0 },
   allReference: { image: 9, video: 3, audio: 3 },
   firstLastFrame: { image: 2, video: 0, audio: 0 },
 };
 
-const ASPECT_RATIOS: ReadonlyArray<FreezoneVideoAspectRatio> = [
-  "auto",
-  "16:9",
-  "4:3",
-  "1:1",
-  "3:4",
-  "9:16",
-  "21:9",
-];
-const QUALITIES: ReadonlyArray<VideoGenQuality> = ["480P", "720P", "1080P"];
-const COUNT_OPTIONS: ReadonlyArray<VideoGenCount> = [1, 2, 4];
+// 后台「媒体模型」未给该模型配置比例 / 分辨率时的兜底档位。正常路径下这两项
+// 都来自目录条目的 ratioOptions / resolutionOptions。
+export const ASPECT_RATIOS: ReadonlyArray<FreezoneVideoAspectRatio> =
+  FALLBACK_VIDEO_ASPECT_OPTIONS;
+const QUALITIES: ReadonlyArray<VideoGenQuality> = FALLBACK_VIDEO_RESOLUTION_OPTIONS;
 const SCENE_OPTIMIZE_OPTIONS: ReadonlyArray<Seedance2SceneOptimize> = ["anime", "realistic"];
-const VIDEO_PARAM_POPOVER_CLASS =
-  `nodrag nowheel absolute bottom-full left-0 z-50 mb-2 w-[320px] p-4 ${NODE_FLOATING_PANEL_SURFACE_CLASS}`;
-const VIDEO_PARAM_LABEL_CLASS =
-  "mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-dark/72";
-const VIDEO_PARAM_BUTTON_BASE_CLASS =
-  "inline-flex items-center justify-center rounded-md px-2 py-2 text-xs transition-colors";
-const VIDEO_PARAM_ACTIVE_BUTTON_CLASS =
-  "bg-white/[0.13] text-text-dark ring-1 ring-white/24";
-const VIDEO_PARAM_IDLE_BUTTON_CLASS =
-  "bg-white/[0.07] text-text-muted/95 hover:bg-white/[0.11] hover:text-text-dark";
-const VIDEO_PARAM_ROW_CLASS = "mb-4 gap-2";
-const VIDEO_COUNT_OPTION_BASE_CLASS =
-  "block w-full rounded-[6px] px-3 py-1.5 text-left text-xs transition-colors";
-const VIDEO_MODE_POPOVER_CLASS =
-  `nodrag nowheel fixed z-[10000] w-[132px] overflow-hidden p-1 ${NODE_FLOATING_PANEL_SURFACE_CLASS}`;
 const DEFAULT_DURATION_MIN = 5;
 const DEFAULT_DURATION_MAX = 15;
 
-function qualityToResolution(q: VideoGenQuality): FreezoneVideoResolution {
-  return q.toLowerCase() as FreezoneVideoResolution;
-}
-
-function resolutionToQuality(resolution: string): VideoGenQuality | null {
-  const normalized = resolution.trim().toLowerCase();
-  if (normalized === "480p") return "480P";
-  if (normalized === "720p") return "720P";
-  if (normalized === "1080p") return "1080P";
-  return null;
+export function qualityToResolution(q: VideoGenQuality): FreezoneVideoResolution {
+  return q;
 }
 
 function videoQualityOptionsForModel(
   model: { resolutionOptions?: string[] } | null | undefined,
 ): readonly VideoGenQuality[] {
-  const options = (model?.resolutionOptions ?? [])
-    .map(resolutionToQuality)
-    .filter((item): item is VideoGenQuality => Boolean(item));
+  const options = (model?.resolutionOptions ?? []).map((item) => item.trim()).filter(Boolean);
   return options.length > 0 ? options : QUALITIES;
 }
 
@@ -305,8 +298,12 @@ function normalizeVideoQuality(
   value: VideoGenQuality | undefined,
   options: readonly VideoGenQuality[],
 ): VideoGenQuality {
-  const fallback = options.includes("720P") ? "720P" : options[0] ?? "720P";
-  return value && options.includes(value) ? value : fallback;
+  const configured = value
+    ? options.find((option) => option.toLowerCase() === value.toLowerCase())
+    : undefined;
+  const fallback =
+    options.find((option) => option.toLowerCase() === "720p") ?? options[0] ?? "720p";
+  return configured ?? fallback;
 }
 
 function videoDurationBoundsForModel(
@@ -319,45 +316,48 @@ function videoDurationBoundsForModel(
   return { min: resolvedMin, max: resolvedMax };
 }
 
-function clampVideoDuration(value: number, bounds: { min: number; max: number }): number {
+export function clampVideoDuration(value: number, bounds: { min: number; max: number }): number {
   return Math.min(Math.max(Math.round(value), bounds.min), bounds.max);
 }
-
-// Seedance 2.0(doubao-seedance-2-0，r2v）后端硬上限：一次请求的音频总时长
-// 必须 ≤ 15.2s，超了会以 InvalidParameter 报错。对用户按「15 秒」提示，实际
-// 用 15.2s 作拦截阈值，避免把后端本会放行的 15.0~15.2s 音频误拦。
-const MAX_AUDIO_TOTAL_DURATION_MS = 15_200;
 
 // 音频节点的 durationMs 是懒加载的（波形播放器挂载读元数据后才写入），刚上传、
 // 从未渲染过的音频节点可能为 null。提交前用一个临时 <audio> 探测真实时长兜底，
 // 探测失败（CORS/网络等）返回 null，不阻断提交，交由后端兜底。
-function probeAudioDurationMs(url: string): Promise<number | null> {
+function probeMediaDurationMs(url: string, media: "audio" | "video"): Promise<number | null> {
   return new Promise((resolve) => {
     if (!url) {
       resolve(null);
       return;
     }
-    const audio = document.createElement("audio");
+    const element = document.createElement(media);
     let settled = false;
     const finish = (ms: number | null) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
-      audio.onloadedmetadata = null;
-      audio.onerror = null;
-      audio.removeAttribute("src");
-      audio.load();
+      element.onloadedmetadata = null;
+      element.onerror = null;
+      element.removeAttribute("src");
+      element.load();
       resolve(ms);
     };
     const timer = window.setTimeout(() => finish(null), 8000);
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => {
-      const secs = audio.duration;
+    element.preload = "metadata";
+    element.onloadedmetadata = () => {
+      const secs = element.duration;
       finish(Number.isFinite(secs) && secs > 0 ? Math.round(secs * 1000) : null);
     };
-    audio.onerror = () => finish(null);
-    audio.src = url;
+    element.onerror = () => finish(null);
+    element.src = url;
   });
+}
+
+function probeAudioDurationMs(url: string): Promise<number | null> {
+  return probeMediaDurationMs(url, "audio");
+}
+
+function probeVideoDurationMs(url: string): Promise<number | null> {
+  return probeMediaDurationMs(url, "video");
 }
 
 function isSeedance2ValueModel(modelId: string | null | undefined): boolean {
@@ -368,49 +368,63 @@ function isSeedance2ValueModel(modelId: string | null | undefined): boolean {
     normalized === "huimeng_seedance-2.0-fast-value";
 }
 
-// Seedance 1 全系列(1.0 Pro Fast / 1.5 Pro / …)。素材去掉分隔符后版本号
-// `1.x` → `1x`,匹配 `seedance1` 后跟任意数字,避免误命中 2.0(`20`)。
-// 引用了素材时这些模型不可用。
-function isSeedance1xModel(modelId: string | null | undefined): boolean {
-  const normalized = String(modelId ?? "")
-    .replace(/[\s._-]/g, "")
-    .toLowerCase();
-  return /seedance1\d/.test(normalized);
-}
+// 模型能力判定（isHappyHorseVideoModel / isSeedance1xVideoModel /
+// isSeedance2VideoModel / isGrokVideoChannelModel / isVideoModeSupportedByModel）
+// 统一收敛到 nodes/shared/videoModelCapabilities.ts，作为 CTA / tab / 提交校验的
+// 单一事实来源；这里仅额外叠加媒体目录声明的逐模式素材上限。
 
-function isGrokVideoChannelModel(modelId: string | null | undefined): boolean {
-  const normalized = String(modelId ?? "")
-    .replace(/[\s._-]/g, "")
-    .toLowerCase();
-  return normalized.includes("grokvideochannel");
-}
-
-function isHappyHorseVideoModel(modelId: string | null | undefined): boolean {
-  const normalized = String(modelId ?? "")
-    .replace(/[\s._-]/g, "")
-    .toLowerCase();
-  return normalized.includes("happyhorse10");
-}
-
-function videoModelReferenceDisabledReason(
-  modelId: string | null | undefined,
+function selectedVideoModelReferenceDisabledReason(
+  model: ModelOption | null | undefined,
   counts: { images: number; videos: number; audios: number },
+  mode: VideoGenMode,
 ): string | null {
-  if (isGrokVideoChannelModel(modelId)) {
-    if (counts.videos > 0 || counts.audios > 0) {
-      return "Grok Video Channel 仅支持图片素材";
-    }
-    if (counts.images > 8) {
-      return "Grok Video Channel 最多支持 1 张首帧和 7 张参考图";
-    }
-    return null;
+  const capabilityReason = videoModelReferenceDisabledReason(model, counts);
+  if (capabilityReason) return capabilityReason;
+  const caps = referenceCapsForMode(model, mode);
+  if (!caps) return null;
+  if (counts.images > caps.image) {
+    return `该模型最多支持 ${caps.image} 张图片素材`;
   }
-  if (isSeedance1xModel(modelId)) {
-    if (counts.images > 0 || counts.videos > 0 || counts.audios > 0) {
-      return "该模型不支持当前接入的素材";
-    }
+  if (counts.videos > caps.video) {
+    return caps.video === 0
+      ? "该模型不支持视频素材"
+      : `该模型最多支持 ${caps.video} 个视频素材`;
+  }
+  if (counts.audios > caps.audio) {
+    return caps.audio === 0
+      ? "该模型不支持音频素材"
+      : `该模型最多支持 ${caps.audio} 个音频素材`;
   }
   return null;
+}
+
+// 首帧与单图图生视频的 1 张图是**结构性**的，不是模型容量。
+// 所以这条不接受媒体目录 referenceImageMax 的覆盖——那个字段表达的是「这个模型最多
+// 能吃几张参考图」，管的是参考类模式；让它盖住这里等于允许配置把首帧悄悄变成参考。
+const FIXED_IMAGE_CAP_BY_MODE: Partial<Record<VideoGenMode, number>> = {
+  firstFrame: 1,
+  imageToVideo: 1,
+};
+
+function referenceCapsForMode(
+  model: ModelOption | null | undefined,
+  mode: VideoGenMode,
+): { image: number; video: number; audio: number } | null {
+  const defaults = REFERENCE_CAPS_BY_MODE[mode];
+  if (!defaults) return null;
+  return {
+    image: FIXED_IMAGE_CAP_BY_MODE[mode] ?? model?.referenceImageMax ?? defaults.image,
+    video: model?.referenceVideoMax ?? defaults.video,
+    audio: model?.referenceAudioMax ?? defaults.audio,
+  };
+}
+
+function hasConfiguredReferenceCaps(model: ModelOption | null | undefined): boolean {
+  return (
+    model?.referenceImageMax != null ||
+    model?.referenceVideoMax != null ||
+    model?.referenceAudioMax != null
+  );
 }
 
 function sceneOptimizeOptionsForModel(
@@ -449,25 +463,6 @@ function normalizeSceneOptimize(
   return value && options.includes(value) ? value : fallback;
 }
 
-// 音频引用 chip 的展示文件名：优先节点的 displayName，否则从 audioUrl 取末段文件名。
-// 仅用于前端展示（音频_<文件名>），不影响序列化给后端的 @音频N。
-function audioReferenceFileName(item: {
-  displayName?: string | null;
-  audioUrl: string;
-}): string | null {
-  const name = item.displayName?.trim();
-  if (name) return name;
-  try {
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "http://localhost";
-    const path = new URL(item.audioUrl, origin).pathname;
-    const base = decodeURIComponent(path.split("/").filter(Boolean).pop() ?? "");
-    return base || null;
-  } catch {
-    return null;
-  }
-}
-
 function referenceImageUrl(node: CanvasNode | undefined | null): string | null {
   if (!node) return null;
   if (isImageGenNode(node)) {
@@ -492,6 +487,16 @@ function referenceImageUrl(node: CanvasNode | undefined | null): string | null {
     return data.previewImageUrl || data.imageUrl || null;
   }
   return null;
+}
+
+// 上游「视频引用」：视频节点自带 videoUrl，但从资产库选入的视频是 upload 节点，
+// 地址同样写在 data.videoUrl。所以「是不是视频上游」应按「存在非空 data.videoUrl」
+// 判定，而非节点类型——否则资产库视频会被漏认（HappyHorse 不自动切 videoEdit、
+// 提交找不到 videoUrl），还会被 referenceImageUrl / isUploadNode 误当图片。
+function referenceVideoUrl(node: CanvasNode | undefined | null): string | null {
+  if (!node) return null;
+  const url = (node.data as { videoUrl?: unknown }).videoUrl;
+  return typeof url === "string" && url.length > 0 ? url : null;
 }
 
 function submittableImageUrl(
@@ -545,93 +550,6 @@ function resolveOutputUrl(
   return null;
 }
 
-/**
- * Render a single frame from a video URL into a PNG blob using an offscreen
- * <video>. Cross-origin CDN media (absolute http(s) URL, the production case)
- * must load with CORS, otherwise drawing it to the canvas taints it and
- * `toBlob` throws. Same-origin /static (the dev vite proxy) skips crossOrigin
- * since that origin doesn't echo Access-Control-Allow-Origin and isn't tainted.
- */
-async function captureVideoFrameBlob(
-  src: string,
-  seekSec: number,
-): Promise<Blob> {
-  return await new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    if (mediaNeedsCrossOrigin(src)) video.crossOrigin = "anonymous";
-
-    const cleanup = () => {
-      video.removeAttribute("src");
-      try {
-        video.load();
-      } catch {
-        // ignored
-      }
-    };
-    const fail = (reason: unknown) => {
-      cleanup();
-      reject(reason instanceof Error ? reason : new Error(String(reason)));
-    };
-
-    video.addEventListener("error", () => fail("video element error"));
-    video.addEventListener(
-      "loadeddata",
-      () => {
-        const duration = video.duration;
-        if (!Number.isFinite(duration) || duration <= 0) {
-          fail("invalid video duration");
-          return;
-        }
-        const targetTime = Math.max(
-          0,
-          Math.min(seekSec, Math.max(0, duration - 0.05)),
-        );
-        video.addEventListener(
-          "seeked",
-          () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              fail("canvas context unavailable");
-              return;
-            }
-            try {
-              ctx.drawImage(video, 0, 0);
-            } catch (error) {
-              fail(error);
-              return;
-            }
-            canvas.toBlob((blob) => {
-              cleanup();
-              if (blob) resolve(blob);
-              else reject(new Error("canvas.toBlob returned null"));
-            }, "image/png");
-          },
-          { once: true },
-        );
-        try {
-          video.currentTime = targetTime;
-        } catch (error) {
-          fail(error);
-        }
-      },
-      { once: true },
-    );
-
-    video.src = src;
-    try {
-      video.load();
-    } catch {
-      // ignored
-    }
-  });
-}
-
 export const VideoNode = memo(
   ({ id, data, selected, width, height }: VideoNodeProps) => {
     const { t } = useTranslation();
@@ -644,7 +562,7 @@ export const VideoNode = memo(
     );
     const addNode = useCanvasStore((state) => state.addNode);
     const addEdge = useCanvasStore((state) => state.addEdge);
-    const deleteEdge = useCanvasStore((state) => state.deleteEdge);
+    const addEdgeWithData = useCanvasStore((state) => state.addEdgeWithData);
     const setActiveOverlayNodeId = useCanvasStore(
       (state) => state.setActiveOverlayNodeId,
     );
@@ -660,13 +578,20 @@ export const VideoNode = memo(
       videoRef.current = el;
       setVideoEl(el);
     }, []);
+
+    // 低缩放档：选择器返回 boolean，只在跨过阈值那一次触发重渲染；平移中
+    // transform[0]/[1] 每帧都变，但这里的返回值不变，所以不会每帧重渲染。
+    const lowDetailZoom = useStore((state) => isLowDetailZoom(state.transform[2]));
+    // 正在播放时不降级——用户主动播了就说明他在看，缩放小也别把播放器抽走。
+    const isVideoPlayingRef = useRef(false);
+    // 卸载时清掉模块级播放标记：视口裁剪把播放中的节点卸掉时 <video> 不会派发
+    // pause 事件，不清会留下陈旧的「播放中」豁免，该节点从此不再降级。
+    useEffect(() => () => setNodeMediaActive(id, false), [id]);
     const transientUrlRef = useRef<string | null>(null);
     const [transientPreviewUrl, setTransientPreviewUrl] = useState<
       string | null
     >(null);
     const [isCapturingFrame, setIsCapturingFrame] = useState(false);
-    const [isTranslatingPrompt, setIsTranslatingPrompt] = useState(false);
-    const [isCharacterLibraryOpen, setIsCharacterLibraryOpen] = useState(false);
     const [isComposingClip, setIsComposingClip] = useState(false);
     const [clipError, setClipError] = useState<string | null>(null);
 
@@ -686,30 +611,11 @@ export const VideoNode = memo(
     );
 
     const prompt = typeof data.prompt === "string" ? data.prompt : "";
-    // Local draft + composition guard so IME (中文输入法) candidates stop being
-    // wiped by the store-driven re-render. Same fix pattern as
-    // `docs/changes/2026-05-12-image-gen-ime-fix.md`.
-    const [promptDraft, setPromptDraft] = useState(prompt);
-    const isComposingRef = useRef(false);
-    const promptEditorRef = useRef<PromptMentionEditorHandle | null>(null);
-    useEffect(() => {
-      if (isComposingRef.current) return;
-      setPromptDraft(prompt);
-    }, [prompt]);
-
-    // 「上下文调色盘」：与图生节点同款，把镜头里人物/道具的标记颜色快速插进提示词。
-    // palette 的全量 nodes/edges 订阅下沉到 NodeContextPromptPaletteButton，避免本节点
-    // 为它订阅整图、被任意节点拖动牵连重渲染。插入直接走编辑器命令式 API：弹层与编辑器
-    // 同在面板里、编辑器恒已挂载，故回调无需依赖 prompt（保持稳定引用）。
-    const insertContextPaletteEntry = useCallback(
-      (entry: ContextPromptPaletteEntry) => {
-        promptEditorRef.current?.insertTextAtCursor(
-          contextPromptPaletteInsertionText(entry),
-        );
-      },
-      [],
-    );
     const genMode: VideoGenMode = data.genMode ?? "textToVideo";
+    // Billing and submission must inspect the same one-hop inputs. Keeping the
+    // subscription here also lets the displayed quote react when a source
+    // video's browser-probed duration becomes available.
+    const upstreamNodes = useUpstreamNodes(id);
     const {
       models: availableVideoModels,
       isLoading: videoModelsLoading,
@@ -730,25 +636,29 @@ export const VideoNode = memo(
           : undefined) ?? availableVideoModels[0]
       );
     }, [availableVideoModels, data.model]);
-    const modelId = selectedVideoModel?.id ?? DEFAULT_VIDEO_MODEL_ID;
+    const modelId = selectedVideoModel?.id ?? "";
     const selectedVideoModelId = selectedVideoModel?.apiModel ?? selectedVideoModel?.id ?? modelId;
     const isHappyHorseModel = isHappyHorseVideoModel(selectedVideoModelId);
-    // aspectRatio 只认合法的比例预设（含 "auto"）；历史上曾被写成像素串(如
-    // "1248:704")的旧节点在这里吸附到最接近的合法视频比例，保证 chip 显示干净。
-    const aspectRatio: FreezoneVideoAspectRatio = (
-      ASPECT_RATIOS as readonly string[]
-    ).includes(String(data.aspectRatio))
-      ? (data.aspectRatio as FreezoneVideoAspectRatio)
-      : (snapToAllowedAspectRatio(
-          String(data.aspectRatio ?? ""),
-          VIDEO_GENERATION_ASPECT_RATIOS,
-          "16:9",
-        ) as FreezoneVideoAspectRatio);
-    // 提交给后端的比例必须是 6 个合法视频比例之一、绝不发 "auto"：auto 时按节点
-    // 真实像素(若有)推导最接近的比例，否则回退 16:9。
+    const configuredAspectRatios = useMemo(
+      () => (selectedVideoModel?.ratioOptions ?? []).map((ratio) => ratio.trim()).filter(Boolean),
+      [selectedVideoModel],
+    );
+    const hasConfiguredAspectRatios = configuredAspectRatios.length > 0;
+    const aspectRatio: FreezoneVideoAspectRatio = hasConfiguredAspectRatios
+      ? configuredAspectRatios.includes(String(data.aspectRatio))
+        ? String(data.aspectRatio)
+        : configuredAspectRatios[0]
+      : (ASPECT_RATIOS as readonly string[]).includes(String(data.aspectRatio))
+        ? String(data.aspectRatio)
+        : snapToAllowedAspectRatio(
+            String(data.aspectRatio ?? ""),
+            VIDEO_GENERATION_ASPECT_RATIOS,
+            "16:9",
+          );
+    // Admin 配置存在时原样提交模型声明的比例；未配置时保留旧版 auto 推导逻辑。
     const submitAspectRatio: FreezoneVideoAspectRatio =
-      aspectRatio === "auto"
-        ? (snapToAllowedAspectRatio(
+      !hasConfiguredAspectRatios && aspectRatio === "auto"
+        ? snapToAllowedAspectRatio(
             typeof data.widthPx === "number" &&
               typeof data.heightPx === "number" &&
               data.widthPx > 0 &&
@@ -757,7 +667,7 @@ export const VideoNode = memo(
               : "",
             VIDEO_GENERATION_ASPECT_RATIOS,
             "16:9",
-          ) as FreezoneVideoAspectRatio)
+          )
         : aspectRatio;
     const qualityOptions = useMemo(
       () => videoQualityOptionsForModel(selectedVideoModel),
@@ -782,11 +692,49 @@ export const VideoNode = memo(
       defaultSceneOptimizeForModel(selectedVideoModel),
     );
     const generateAudio = Boolean(data.generateAudio);
-    // 真人素材审核开关只对 Seedance 2.0 系列模型生效。归一化掉分隔符后匹配
-    // `seedance2`，覆盖 `huimeng_seedance20_fast` / 未来可能的 `seedance_2_0` 等 id。
-    const isSeedance20Model = /seedance2/i.test(modelId.replace(/[\s._-]/g, ""));
+    // 家族判定必须喂 `selectedVideoModelId`(apiModel ?? id)，**不能用 `modelId`**：
+    // `modelId` 是 `selectedVideoModel.id`，在 EE 里是 media_model_catalog 的 ULID
+    // 主键（如 `01KZ58VSE52RFFDASY2T9SY4NC`），根本不含模型名，判定恒为 false ——
+    // 选了 Seedance 2.0 也会被「全能参考仅支持 Seedance 2.0」挡下，视频/音频上游
+    // 也不再自动切模式。CE 兜底列表恰好 id === apiModel，所以这个坑只在 EE 显形。
+    const isSeedance20Model = isSeedance2VideoModel(selectedVideoModelId);
+    const supportsAllReference = isVideoModeSupportedByModel(
+      "allReference",
+      selectedVideoModel,
+    );
+    const supportsHumanReview = selectedVideoModel?.humanReview === true;
     const humanReview = Boolean(data.humanReview);
     const count: VideoGenCount = (data.count ?? 1) as VideoGenCount;
+    const videoInputBilling = useMemo(() => {
+      if (genMode !== "allReference" && genMode !== "videoEdit") {
+        return { present: false, ready: true, durationSeconds: 0 };
+      }
+      const ordered = sortUpstreamByReferenceOrder(
+        upstreamNodes,
+        data.referenceOrder,
+      ).filter((node) => Boolean(referenceVideoUrl(node)));
+      const limit =
+        genMode === "videoEdit"
+          ? 1
+          : (selectedVideoModel?.referenceVideoMax ?? 3);
+      const videos = ordered.slice(0, Math.max(limit, 0));
+      if (videos.length === 0) {
+        return { present: false, ready: true, durationSeconds: 0 };
+      }
+      const durations = videos.map((node) =>
+        typeof node.data.durationMs === "number" && node.data.durationMs > 0
+          ? node.data.durationMs
+          : null,
+      );
+      const ready = durations.every((duration) => duration != null);
+      return {
+        present: true,
+        ready,
+        durationSeconds: ready
+          ? durations.reduce((sum, duration) => sum + (duration ?? 0), 0) / 1000
+          : 0,
+      };
+    }, [data.referenceOrder, genMode, selectedVideoModel, upstreamNodes]);
     useEffect(() => {
       const patch: Partial<VideoNodeData> = {};
       if (data.quality !== quality) {
@@ -810,29 +758,6 @@ export const VideoNode = memo(
       videoModelsLoading || videoModelsFallback
         ? null
         : (selectedVideoModel?.apiModel ?? null);
-    // Debounce the cost-estimate inputs: dragging the duration slider (and,
-    // to a lesser degree, flipping count/quality/model) churns the query key
-    // and TanStack Query aborts each in-flight request, spraying "Canceled"
-    // rows across the Network tab. Coalesce to one request once the params
-    // settle (~350ms). Primitives only — see useDebouncedValue's contract.
-    const debouncedBackend = useDebouncedValue(videoBackendForCost, 350);
-    const debouncedQuality = useDebouncedValue(quality, 350);
-    const debouncedCount = useDebouncedValue(count, 350);
-    const debouncedDurationSec = useDebouncedValue(durationSec, 350);
-    const videoCreditCost = useGenerationCreditCost(
-      "video_backend",
-      debouncedBackend,
-      {
-        surface: "canvas",
-        params: { resolution: qualityToResolution(debouncedQuality) },
-        quantity: Math.min(Math.max(debouncedCount, 1), 4) * debouncedDurationSec,
-      },
-    );
-    const totalCreditCostDisplay = useMemo(() => {
-      const total = videoCreditCost.data?.data.cost;
-      if (typeof total !== "number") return null;
-      return formatCreditCost(total);
-    }, [videoCreditCost.data?.data.cost]);
     const cameraMovementId =
       typeof data.cameraMovement === "string" ? data.cameraMovement : null;
     // Pull the camera-template catalog from `/freezone/video/camera-templates`.
@@ -900,7 +825,6 @@ export const VideoNode = memo(
     // referenceOrder taking precedence — see sortUpstreamByReferenceOrder.
     // Subscribe to ONLY this node's one-hop upstream (not the whole nodes array)
     // so dragging unrelated nodes doesn't re-render this node. See useUpstreamGraph.
-    const upstreamNodes = useUpstreamNodes(id);
     // 节点被连线（存在入边）后：隐藏「试试」CTA，只在节点中间显示一个图标（对齐 libtv）。
     const isConnected = useCanvasStore((state) =>
       state.edges.some((edge) => edge.target === id)
@@ -931,24 +855,23 @@ export const VideoNode = memo(
       );
       const items: ReferenceMediaItem[] = [];
       for (const node of upstream) {
-        if (isVideoNode(node)) {
-          const videoUrl =
-            typeof node.data.videoUrl === "string" &&
-            node.data.videoUrl.length > 0
-              ? node.data.videoUrl
-              : null;
-          if (!videoUrl) continue;
+        const videoUrl = referenceVideoUrl(node);
+        if (videoUrl) {
+          const vdata = node.data as {
+            previewImageUrl?: string | null;
+            displayName?: string | null;
+          };
           const thumbUrl =
-            typeof node.data.previewImageUrl === "string" &&
-            node.data.previewImageUrl.length > 0
-              ? node.data.previewImageUrl
+            typeof vdata.previewImageUrl === "string" &&
+            vdata.previewImageUrl.length > 0
+              ? vdata.previewImageUrl
               : null;
           items.push({
             kind: "video",
             nodeId: node.id,
             videoUrl,
             thumbUrl,
-            displayName: node.data.displayName ?? null,
+            displayName: vdata.displayName ?? null,
           });
           continue;
         }
@@ -1021,83 +944,9 @@ export const VideoNode = memo(
       applyPromptRemap,
     );
 
-    // 给每个 referenceMedia 条目补上「同类型序号 + 是否在当前模式上限内」。
-    // 当前 genMode 在 REFERENCE_CAPS_BY_MODE 里没有条目（如 textToVideo /
-    // imageToVideo / imageReference），统一按 within=true 处理；下游 chip /
-    // mention 候选会决定是否消费 within。
-    const referenceMediaCapInfo = useMemo(() => {
-      const counts = { image: 0, video: 0, audio: 0 };
-      const caps = REFERENCE_CAPS_BY_MODE[genMode];
-      return referenceMedia.map((item) => {
-        counts[item.kind] += 1;
-        const cap = caps?.[item.kind];
-        const withinCap = cap == null || counts[item.kind] <= cap;
-        return { item, typeIndex: counts[item.kind], withinCap };
-      });
-    }, [referenceMedia, genMode]);
-
-    // @ 提及候选 —— 图片、音频都可引用，但编号按 *各自类型* 的序号走，
-    // *不* 按行内混合位置。后端按上传的图片数量来对应 图片N，若用混合位置编号
-    // （音频排第一时图片就成了「图片2」），后端只看到 1 张图却被要求引用图片2
-    // 会报错。所以图片用图片序号、音频用音频序号，各自独立计数。
-    //
-    // 在 REFERENCE_CAPS_BY_MODE 表里有条目的模式（当前是 allReference /
-    // firstLastFrame），超过 cap 的条目不能进 @ 候选 —— 服务端会直接丢弃，留
-    // 在候选里只会让用户选了之后被静默忽略。其它模式（imageReference 等）各自
-    // 已有提交时 `.slice(0, N)` 兜底，本次不动。
-    const mentionCandidates = useMemo<MentionCandidate[]>(() => {
-      const out: MentionCandidate[] = [];
-      let imageIdx = 0;
-      let videoIdx = 0;
-      let audioIdx = 0;
-      const enforceCap = REFERENCE_CAPS_BY_MODE[genMode] != null;
-      for (const info of referenceMediaCapInfo) {
-        const item = info.item;
-        if (item.kind === "image") {
-          imageIdx += 1;
-          if (enforceCap && !info.withinCap) continue;
-          out.push({
-            key: item.nodeId,
-            name: `图片${imageIdx}`,
-            imageUrl: resolveImageDisplayUrl(item.imageUrl),
-            index: imageIdx,
-          });
-        } else if (item.kind === "video") {
-          videoIdx += 1;
-          if (enforceCap && !info.withinCap) continue;
-          out.push({
-            key: item.nodeId,
-            name: `视频${videoIdx}`,
-            imageUrl: item.thumbUrl ? resolveImageDisplayUrl(item.thumbUrl) : "",
-            videoUrl: resolveImageDisplayUrl(item.videoUrl),
-            index: videoIdx,
-          });
-        } else if (item.kind === "audio") {
-          audioIdx += 1;
-          if (enforceCap && !info.withinCap) continue;
-          out.push({
-            key: item.nodeId,
-            name: `音频${audioIdx}`,
-            imageUrl: "",
-            index: audioIdx,
-            audioUrl: resolveImageDisplayUrl(item.audioUrl),
-            displayName: audioReferenceFileName(item),
-          });
-        }
-      }
-      return out;
-    }, [referenceMediaCapInfo, genMode]);
-
-    // 取消关联某个上游素材：删掉「该上游节点 → 本节点」的连线。collectInputContents
-    // 只走一跳，item.nodeId 就是直接相连的上游节点，可精确定位要删的边。
-    const handleDetachUpstream = useCallback(
-      (sourceNodeId: string) => {
-        useCanvasStore
-          .getState()
-          .edges.filter((edge) => edge.source === sourceNodeId && edge.target === id)
-          .forEach((edge) => deleteEdge(edge.id));
-      },
-      [id, deleteEdge],
+    const referenceCaps = useMemo(
+      () => referenceCapsForMode(selectedVideoModel, genMode),
+      [genMode, selectedVideoModel],
     );
 
     // 通用上游遍历：拿到所有上游节点的 text/imageUrl/videoUrl/audioUrl 统一视图。
@@ -1106,13 +955,6 @@ export const VideoNode = memo(
     const upstreamContents = useMemo(
       () => upstreamNodes.map(extractUpstreamContent),
       [upstreamNodes],
-    );
-    const upstreamTextContents = useMemo(
-      () =>
-        upstreamContents.filter(
-          (c) => typeof c.text === "string" && c.text.trim().length > 0,
-        ),
-      [upstreamContents],
     );
     const upstreamTextJoined = useMemo(
       () => joinUpstreamText(upstreamContents),
@@ -1127,13 +969,9 @@ export const VideoNode = memo(
       let videos = 0;
       let audios = 0;
       for (const node of upstreamNodes) {
-        if (isVideoNode(node)) {
-          if (
-            typeof node.data.videoUrl === "string" &&
-            node.data.videoUrl.length > 0
-          ) {
-            videos += 1;
-          }
+        if (referenceVideoUrl(node)) {
+          // 视频节点或携带 videoUrl 的 upload 节点（资产库选入的视频）都算视频。
+          videos += 1;
         } else if (isAudioNode(node)) {
           if (
             typeof node.data.audioUrl === "string" &&
@@ -1142,6 +980,32 @@ export const VideoNode = memo(
             audios += 1;
           }
         } else if (referenceImageUrl(node)) {
+          images += 1;
+        }
+      }
+      return { images, videos, audios };
+    }, [upstreamNodes]);
+    // HappyHorse 的模式可用性由「上游节点类型」决定，而非素材是否已填。空的图片
+    // 节点（尚未生成/上传图）也应让「首帧 / 图片参考」可选——用户先连节点、后填图
+    // 是正常顺序。所以这里按节点类型统计，区别于 upstreamCounts 的「已解析 URL」口径。
+    const upstreamTypeCounts = useMemo(() => {
+      let images = 0;
+      let videos = 0;
+      let audios = 0;
+      for (const node of upstreamNodes) {
+        // 携带 videoUrl 的 upload 节点（资产库视频）先判为视频，避免落到下面
+        // 的 isUploadNode 分支被误算成图片。空的 video 节点（尚未生成）仍按类型算视频。
+        if (isVideoNode(node) || referenceVideoUrl(node)) {
+          videos += 1;
+        } else if (isAudioNode(node)) {
+          audios += 1;
+        } else if (
+          isImageGenNode(node) ||
+          isUploadNode(node) ||
+          isImageEditNode(node) ||
+          isExportImageNode(node) ||
+          isStoryboardGenNode(node)
+        ) {
           images += 1;
         }
       }
@@ -1361,26 +1225,48 @@ export const VideoNode = memo(
       inputRef.current?.click();
     }, []);
 
-    // Spawn one or two empty upload nodes to the left of this video node and
-    // wire them as inputs. Used by the empty-state "首帧/首尾帧 生成视频" CTAs.
+    // Spawn the source node(s) to the left of this video node and wire them as
+    // inputs. Used by the empty-state 全能参考 / 图片参考 / 首尾帧 CTAs.
+    // 全能参考 / 图片参考走图片节点（可上传也可直接生图）+ 对应参考模式；
+    // 首尾帧走两个上传节点 + firstLastFrame 关键帧。
     const spawnFrameUploads = useCallback(
-      (mode: "firstFrame" | "firstLastFrame") => {
+      (
+        mode:
+          | "allReference"
+          | "imageReference"
+          | "firstFrame"
+          | "imageToVideo"
+          | "firstLastFrame",
+      ) => {
         const state = useCanvasStore.getState();
         const self = state.nodes.find((n) => n.id === id);
         if (!self) return;
-        const UPLOAD_WIDTH = 320;
-        const UPLOAD_HEIGHT = 350;
+        // 垂直居中要按视频节点的真实高度算，优先用测量值，未测量时回退设定高度/默认值。
+        const selfHeight =
+          self.measured?.height ??
+          (typeof self.height === "number" ? self.height : DEFAULT_HEIGHT);
+        // 全能参考 / 图片参考 / 首帧生成视频都只铺一个图片节点；首尾帧要铺首帧 + 尾帧
+        // 两个上传节点。
+        const isSingleImage =
+          mode === "allReference" ||
+          mode === "imageReference" ||
+          mode === "firstFrame" ||
+          mode === "imageToVideo";
+        // 两种源节点的默认尺寸不同（图片节点 580×360 / 上传节点 320×350），
+        // 左列的定位与避让都得按实际尺寸算，否则图片节点会压到视频节点身上。
+        const FRAME_WIDTH = isSingleImage ? IMAGE_GEN_NODE_WIDTH : 320;
+        const FRAME_HEIGHT = isSingleImage ? IMAGE_GEN_NODE_HEIGHT : 350;
         const GAP_X = 40;
         const GAP_Y = 24;
-        const baseX = self.position.x - UPLOAD_WIDTH - GAP_X;
-        const stepY = UPLOAD_HEIGHT + GAP_Y;
+        const baseX = self.position.x - FRAME_WIDTH - GAP_X;
+        const stepY = FRAME_HEIGHT + GAP_Y;
         const nodeSize = (node: CanvasNode) => ({
           width:
             node.measured?.width ??
-            (typeof node.width === "number" ? node.width : UPLOAD_WIDTH),
+            (typeof node.width === "number" ? node.width : FRAME_WIDTH),
           height:
             node.measured?.height ??
-            (typeof node.height === "number" ? node.height : UPLOAD_HEIGHT),
+            (typeof node.height === "number" ? node.height : FRAME_HEIGHT),
         });
         const overlaps = (
           a: { x: number; y: number; width: number; height: number },
@@ -1410,7 +1296,12 @@ export const VideoNode = memo(
         );
         const frameColumnNodes = state.nodes.filter((node) => {
           if (!upstreamIds.has(node.id)) return false;
-          if (node.type !== CANVAS_NODE_TYPES.upload) return false;
+          if (
+            node.type !== CANVAS_NODE_TYPES.upload &&
+            node.type !== CANVAS_NODE_TYPES.imageGen
+          ) {
+            return false;
+          }
           return Math.abs(node.position.x - baseX) < 8;
         });
         const lastFrameColumnY = frameColumnNodes.reduce<number | null>(
@@ -1423,124 +1314,72 @@ export const VideoNode = memo(
               ? preferredY
               : Math.max(preferredY, lastFrameColumnY + stepY);
           for (let attempt = 0; attempt < 40; attempt += 1) {
-            const candidate = { x: baseX, y, width: UPLOAD_WIDTH, height: UPLOAD_HEIGHT };
+            const candidate = { x: baseX, y, width: FRAME_WIDTH, height: FRAME_HEIGHT };
             if (!occupiedRects.some((rect) => overlaps(candidate, rect))) {
               occupiedRects.push(candidate);
               return y;
             }
             y += stepY;
           }
-          occupiedRects.push({ x: baseX, y, width: UPLOAD_WIDTH, height: UPLOAD_HEIGHT });
+          occupiedRects.push({ x: baseX, y, width: FRAME_WIDTH, height: FRAME_HEIGHT });
           return y;
         };
-        if (mode === "firstFrame") {
-          const baseY = resolveAvailableY(self.position.y);
+        if (isSingleImage) {
+          // 直接按视频高度垂直居中，不做向下避让。resolveAvailableY 只会向下顶，
+          // 左侧空间一旦被别的节点占用就把参考图挤下一行、破坏与视频的对齐（正是
+          // 「全能参考 vs 图片参考」对不齐的成因）。这里优先保证对齐：参考图恒在视频
+          // 左侧（有 GAP_X 间隔）不会压到视频本身；万一撞上左侧的无关节点，宁可让
+          // 用户手动挪开，也不牺牲与视频的对齐。
+          const baseY = self.position.y + (selfHeight - FRAME_HEIGHT) / 2;
           const newId = addNode(
-            CANVAS_NODE_TYPES.upload,
+            CANVAS_NODE_TYPES.imageGen,
             { x: baseX, y: baseY },
             {
-              displayName: "首帧",
+              displayName: mode === "firstFrame" ? "首帧" : "参考图",
             },
           );
-          addEdge(newId, id);
-          state.autoGroupSpawn(id, [newId], { label: '首帧生成视频组' });
-        } else {
-          const totalH = UPLOAD_HEIGHT * 2 + GAP_Y;
-          const startY =
-            self.position.y + ((self.height ?? DEFAULT_HEIGHT) - totalH) / 2;
-          const firstY = resolveAvailableY(startY);
-          const lastY = resolveAvailableY(firstY + stepY);
-          const firstId = addNode(
-            CANVAS_NODE_TYPES.upload,
-            { x: baseX, y: firstY },
-            { displayName: "首帧" },
-          );
-          addEdge(firstId, id);
-          const lastId = addNode(
-            CANVAS_NODE_TYPES.upload,
-            { x: baseX, y: lastY },
-            { displayName: "尾帧" },
-          );
-          addEdge(lastId, id);
-          state.autoGroupSpawn(id, [firstId, lastId], { label: '首尾帧生成视频组' });
+          if (mode === "firstFrame") {
+            addEdgeWithData(newId, id, { keyframeSlot: "first" });
+          } else {
+            addEdge(newId, id);
+          }
+          const groupLabel =
+            mode === "imageReference"
+              ? "图片参考组"
+              : mode === "firstFrame"
+                ? "首帧生成视频组"
+                : mode === "imageToVideo"
+                  ? "图生视频组"
+                : "全能参考组";
+          state.autoGroupSpawn(id, [newId], { label: groupLabel });
+          // 上游图片直接作为素材喂给对应端点；模式切到用户点的那一个，不预填提示词
+          // （尊重用户已写内容）。HappyHorse 下由统一状态机确认（imageToVideo /
+          // imageReference 都与「1 张上游图」匹配，不会被改写）；非 HappyHorse 下
+          // data.genMode 一旦非空，默认推断 effect 就不再覆盖它。
+          updateNodeData(id, { genMode: mode });
+          return;
         }
-        // Both CTAs now route through the firstLastFrame mode — the backend
-        // keyframes endpoint accepts just the first frame too. allReference
-        // would have meant the omni-gen endpoint, which is a separate path.
+        const totalH = FRAME_HEIGHT * 2 + GAP_Y;
+        const startY = self.position.y + (selfHeight - totalH) / 2;
+        const firstY = resolveAvailableY(startY);
+        const lastY = resolveAvailableY(firstY + stepY);
+        const firstId = addNode(
+          CANVAS_NODE_TYPES.upload,
+          { x: baseX, y: firstY },
+          { displayName: "首帧" },
+        );
+        addEdgeWithData(firstId, id, { keyframeSlot: "first" });
+        const lastId = addNode(
+          CANVAS_NODE_TYPES.upload,
+          { x: baseX, y: lastY },
+          { displayName: "尾帧" },
+        );
+        addEdgeWithData(lastId, id, { keyframeSlot: "last" });
+        state.autoGroupSpawn(id, [firstId, lastId], { label: '首尾帧生成视频组' });
         updateNodeData(id, { genMode: "firstLastFrame" });
       },
-      [addEdge, addNode, id, updateNodeData],
+      [addEdge, addEdgeWithData, addNode, id, updateNodeData],
     );
-
-    // Spawn upload nodes from selected character-library entries — one per
-    // selection, stacked vertically to the left of this video node, then wired
-    // as upstream references so they show up in the operations panel.
-    const spawnCharacterLibraryReferences = useCallback(
-      (selections: ReadonlyArray<{ imageUrl: string; name: string }>) => {
-        if (selections.length === 0) return;
-        const state = useCanvasStore.getState();
-        const self = state.nodes.find((n) => n.id === id);
-        if (!self) return;
-        const UPLOAD_WIDTH = 320;
-        const UPLOAD_HEIGHT = 240;
-        const GAP_X = 40;
-        const GAP_Y = 24;
-        const baseX = self.position.x - UPLOAD_WIDTH - GAP_X;
-        const totalH =
-          UPLOAD_HEIGHT * selections.length + GAP_Y * (selections.length - 1);
-        const startY =
-          self.position.y + ((self.height ?? DEFAULT_HEIGHT) - totalH) / 2;
-        const newIds: string[] = [];
-        selections.forEach((sel, idx) => {
-          const y = startY + idx * (UPLOAD_HEIGHT + GAP_Y);
-          const newId = addNode(
-            CANVAS_NODE_TYPES.upload,
-            { x: baseX, y },
-            {
-              imageUrl: sel.imageUrl,
-              previewImageUrl: sel.imageUrl,
-              displayName: sel.name || undefined,
-            },
-          );
-          addEdge(newId, id);
-          newIds.push(newId);
-        });
-        state.autoGroupSpawn(id, newIds, { label: '角色参考组' });
-      },
-      [addEdge, addNode, id],
-    );
-
-    const handleTranslatePrompt = useCallback(async () => {
-      if (isTranslatingPrompt || isGenerating) return;
-      const trimmed = prompt.trim();
-      if (trimmed.length === 0) return;
-      const project = readUrl().project;
-      if (!project) {
-        console.error("[video-node] translate: no project in URL");
-        return;
-      }
-      setIsTranslatingPrompt(true);
-      try {
-        const ref = await submitFreezoneTextTranslate(project, {
-          text: prompt,
-          nodeType: "video",
-          canvasId: readUrl().canvas ?? "default",
-          nodeId: id,
-        });
-        await awaitTaskCompletion(ref.task_key, project);
-        const result = await fetchFreezoneTextTranslateResult(
-          project,
-          ref.job_id,
-        );
-        if (result.translated_text) {
-          updateNodeData(id, { prompt: result.translated_text });
-        }
-      } catch (error) {
-        console.error("[video-node] translate failed", error);
-      } finally {
-        setIsTranslatingPrompt(false);
-      }
-    }, [id, isGenerating, isTranslatingPrompt, prompt, updateNodeData]);
 
     useEffect(() => {
       return canvasEventBus.subscribe("video-node/reupload", ({ nodeId }) => {
@@ -1560,26 +1399,76 @@ export const VideoNode = memo(
     }, [id, processFile]);
 
     // First time an upstream image becomes available, flip the gen mode so the
-    // video actually consumes it. Default to `allReference`（全能参考）—— it
-    // accepts 1-9 images and is the more general entry point; the 首尾帧 keyframe
-    // workflow stays reachable via the explicit empty-state CTA. Only fires while
-    // data.genMode is undefined — once the user picks any tab we respect that.
+    // video actually consumes it. 默认模式按模型能力选（videoUpstreamImageDefaultMode）：
+    // Seedance 2.0 → 全能参考（1-9 图的通用入口，首尾帧仍可经空态 CTA 进入）；
+    // Seedance 1.x → 首帧（1.x 不支持全能参考，默认推成它会让提交必 400）。
+    // 仅在 data.genMode 未定义时兜底——用户一旦选过任何 tab 就尊重其选择。
+    // HappyHorse 走下面的统一状态机，不参与这条默认。
     useEffect(() => {
+      if (isHappyHorseModel) return;
       if (data.genMode != null) return;
       if (referenceImages.length === 0) return;
-      updateNodeData(id, { genMode: isHappyHorseModel ? "imageToVideo" : "allReference" });
-    }, [data.genMode, id, isHappyHorseModel, referenceImages.length, updateNodeData]);
+      const defaultMode = videoUpstreamImageDefaultMode(selectedVideoModel);
+      if (defaultMode) updateNodeData(id, { genMode: defaultMode });
+    }, [
+      data.genMode,
+      id,
+      isHappyHorseModel,
+      referenceImages.length,
+      selectedVideoModel,
+      updateNodeData,
+    ]);
 
+    // HappyHorse 的模式完全由上游节点类型决定（文档的 4 大功能一一对应），这里用
+    // 一条统一状态机替代分散的兜底 effect，避免多个 effect 互相打架：
+    //   - 上游有视频            → 视频编辑 (videoEdit / video_url)
+    //   - 上游图片 >1 张        → 图片参考 (imageReference / reference_images 1-9)
+    //   - 上游图片 == 1 张      → 按目录能力选择单图默认入口，并尊重用户主动选择的
+    //                             首帧 / 图生视频 / 图片参考
+    //   - 无上游                → 文生视频 (textToVideo)
+    // 每次都纠正，确保 genMode 不会卡在与当前上游不匹配的模式（否则 submit 时会被
+    // 静默截断 / 触发上游互斥报错）。
     useEffect(() => {
-      if (!isHappyHorseModel || genMode !== "allReference") return;
-      updateNodeData(id, { genMode: upstreamCounts.images > 0 ? "imageToVideo" : "textToVideo" });
-    }, [genMode, id, isHappyHorseModel, upstreamCounts.images, updateNodeData]);
+      if (!isHappyHorseModel) return;
+      const { images, videos } = upstreamTypeCounts;
+      let target: VideoGenMode;
+      if (videos > 0) {
+        target = "videoEdit";
+      } else if (images > 1) {
+        target = "imageReference";
+      } else if (images === 1) {
+        const currentImageMode = ["firstFrame", "imageToVideo", "imageReference"].includes(
+          genMode,
+        )
+          ? genMode
+          : null;
+        target =
+          currentImageMode && isVideoModeSupportedByModel(currentImageMode, selectedVideoModel)
+            ? currentImageMode
+            : (videoUpstreamImageDefaultMode(selectedVideoModel) ?? "textToVideo");
+      } else {
+        target = "textToVideo";
+      }
+      if (genMode !== target) {
+        updateNodeData(id, { genMode: target });
+      }
+    }, [
+      genMode,
+      id,
+      isHappyHorseModel,
+      selectedVideoModel,
+      upstreamTypeCounts.images,
+      upstreamTypeCounts.videos,
+      updateNodeData,
+    ]);
 
     // Audio refs only carry meaning under the omni-gen (allReference) path —
-    // textToVideo / firstLastFrame / imageToVideo discard them. So when an
+    // textToVideo / firstFrame / firstLastFrame / imageToVideo discard them. So when an
     // audio upstream first appears, force the mode to `allReference`. Tracked
     // through a ref so we only fire on the 0 → ≥1 transition; once the user
     // disconnects all audio and reconnects, it fires again.
+    // 是否可消费音频由媒体目录的 all_reference 能力决定；未声明该能力的模型由
+    // 模型选择器拦截，这里不强推 allReference 以免顶进提交必 400 的模式。
     const prevHasAudioRef = useRef(false);
     const hasAudioUpstream = useMemo(
       () => referenceMedia.some((item) => item.kind === "audio"),
@@ -1588,33 +1477,108 @@ export const VideoNode = memo(
     useEffect(() => {
       const prev = prevHasAudioRef.current;
       prevHasAudioRef.current = hasAudioUpstream;
-      if (!prev && hasAudioUpstream && data.genMode !== "allReference" && !isHappyHorseModel) {
+      if (
+        !prev &&
+        hasAudioUpstream &&
+        data.genMode !== "allReference" &&
+        !isHappyHorseModel &&
+        supportsAllReference
+      ) {
         updateNodeData(id, { genMode: "allReference" });
       }
-    }, [data.genMode, hasAudioUpstream, id, isHappyHorseModel, updateNodeData]);
+    }, [
+      data.genMode,
+      hasAudioUpstream,
+      id,
+      isHappyHorseModel,
+      supportsAllReference,
+      updateNodeData,
+    ]);
+
+    // Seedance 1.x 吃不下视频 / 音频，留在上面只能收获一次必然失败的提交。用户把
+    // 视频或音频节点连上来就是明确意图，直接替他换成 Seedance 2.0 + 全能参考。
+    // 判定走 upstreamTypeCounts（按节点类型）：空的视频节点也算 —— 先连节点、后生成
+    // 是正常顺序，等它出了 URL 再切模型就太迟了（用户中间会看见一个不该出现的 1.x）。
+    // 模型和模式必须一次 patch 写完：分两步会先渲染出「2.0 + 图生视频」的中间态，
+    // 再被下面那条 videos→allReference 的 effect 纠一次，白闪一帧。
+    //
+    // 只在「没有 → 有视频/音频」这一次跳变时触发，**不能每次渲染都无条件纠正**：
+    // updateNodeData 每次都 pushSnapshot 且清空 future（canvasStore），若持续纠正，
+    // 用户 ⌘Z 恢复回 1.x 后边还在，effect 立刻把 2.0 写回去、再压一条 past ——
+    // 撤销看起来毫无反应，redo 栈还被清空，等于把「回到连线之前」这条路堵死。改的
+    // 又是 model 这种用户显式挑过的值，无声覆盖且撤不回来，性质比 genMode 重得多。
+    // 一次性触发也不会被绕过：素材在场期间选择器已经把 1.x 置灰了，切不回去。
+    // 与紧邻上面那条音频 → allReference 的 effect 用的是同一套闩锁。
+    const autoSwitchedForMediaRef = useRef(false);
+    useEffect(() => {
+      // 所有判断（加载态、闩锁、该不该换、换成谁）都在 videoReferenceAutoSwitchAction
+      // 里，这里只负责改 ref 和发 patch —— 那边是纯函数，异步加载时序才测得到。
+      const action = videoReferenceAutoSwitchAction({
+        counts: upstreamTypeCounts,
+        currentModelId: selectedVideoModelId,
+        models: availableVideoModels,
+        modelsLoading: videoModelsLoading,
+        alreadySwitched: autoSwitchedForMediaRef.current,
+      });
+      if (action.kind === "release") {
+        autoSwitchedForMediaRef.current = false;
+        return;
+      }
+      if (action.kind === "none") return;
+      autoSwitchedForMediaRef.current = true;
+      updateNodeData(id, { model: action.modelId, genMode: action.genMode });
+      // 刻意不调 writeLastVideoModel：这是替用户救场，不是他表达的偏好，不该顺手
+      // 把后续新建视频节点继承的默认模型也改掉。
+    }, [
+      availableVideoModels,
+      id,
+      selectedVideoModelId,
+      updateNodeData,
+      upstreamTypeCounts,
+      videoModelsLoading,
+    ]);
 
     // 上游接入视频素材时，只有「全能参考」能消费视频；其它模式（文生 / 图生 /
     // 首尾帧 / 图片参考）都会把视频丢弃。所以只要上游存在视频就强制切到
     // allReference 并锁死——下面的 tab 禁用规则会把其它 tab 一并禁用。
     // 与音频的「0→≥1 transition」不同，这里每次都纠正，确保视频在场期间无法切走。
+    // 是否可消费视频由媒体目录的 all_reference 能力决定；未声明该能力的模型不强推，
+    // 以免顶进提交必 400 的模式。
     useEffect(() => {
       if (upstreamCounts.videos === 0) return;
       if (isHappyHorseModel) return;
+      if (!supportsAllReference) return;
       if (genMode === "allReference") return;
       updateNodeData(id, { genMode: "allReference" });
-    }, [upstreamCounts.videos, genMode, id, isHappyHorseModel, updateNodeData]);
+    }, [
+      upstreamCounts.videos,
+      genMode,
+      id,
+      isHappyHorseModel,
+      supportsAllReference,
+      updateNodeData,
+    ]);
 
     // 文生视频不接受任何素材引用。即便用户先手动选了 textToVideo 再接入
     // 图片/音频（此时上面两个自动切换 effect 都因 genMode 已显式而 bail），
-    // 也要强制切走，否则会停在 textToVideo 把已连素材丢弃。图片/音频统一走
-    // allReference（全能参考），与「首次接入图片」的默认保持一致。
+    // 也要强制切走，否则会停在 textToVideo 把已连素材丢弃。
+    // 有图 → 按模型能力选默认（2.0 全能参考 / 1.x 首帧）；仅音频（只有 Seedance 2.0
+    // 能消费）→ 全能参考；音频对非 2.0 不可用，由模型选择器拦截，这里不强推。
     useEffect(() => {
+      if (isHappyHorseModel) return;
       if (genMode !== "textToVideo") return;
       if (upstreamCounts.images === 0 && upstreamCounts.audios === 0) return;
-      updateNodeData(id, { genMode: isHappyHorseModel ? "imageToVideo" : "allReference" });
+      if (upstreamCounts.images > 0) {
+        const defaultMode = videoUpstreamImageDefaultMode(selectedVideoModel);
+        if (defaultMode) updateNodeData(id, { genMode: defaultMode });
+      } else if (supportsAllReference) {
+        updateNodeData(id, { genMode: "allReference" });
+      }
     }, [
       genMode,
       isHappyHorseModel,
+      supportsAllReference,
+      selectedVideoModel,
       upstreamCounts.images,
       upstreamCounts.audios,
       id,
@@ -1626,10 +1590,42 @@ export const VideoNode = memo(
     // 上游强制切 allReference」是同一类兜底逻辑。每次都纠正，避免用户在 >2
     // 图状态下被卡在 firstLastFrame 触发 submit 时被静默截断成两张。
     useEffect(() => {
+      if (isHappyHorseModel) return;
       if (genMode !== "firstLastFrame") return;
       if (upstreamCounts.images <= 2) return;
-      updateNodeData(id, { genMode: isHappyHorseModel ? "imageToVideo" : "allReference" });
-    }, [genMode, isHappyHorseModel, upstreamCounts.images, id, updateNodeData]);
+      if (!supportsAllReference) return;
+      updateNodeData(id, { genMode: "allReference" });
+    }, [
+      genMode,
+      isHappyHorseModel,
+      supportsAllReference,
+      upstreamCounts.images,
+      id,
+      updateNodeData,
+    ]);
+
+    // 「首帧生成视频」只承载一张图。i2v 端点按图片张数分流（1 张 = 图生视频，
+    // 2-9 张 = 图片参考），接上第二张后做的其实已经是图片参考了，模式却还停在
+    // 首帧上——所以直接把模式导到它真正在做的事情：全能参考 / 图片参考。
+    // 跟上面首尾帧 >2 图那条是同一类兜底，每次都纠正（不做一次性闩锁），
+    // 免得用户在多图状态下停在首帧、提交时被静默截断成一张。
+    // 该切到哪个、哪些情况不该动，全部收在 videoMultiImageAutoSwitchMode 里。
+    useEffect(() => {
+      const target = videoMultiImageAutoSwitchMode(
+        genMode,
+        selectedVideoModel ?? selectedVideoModelId,
+        upstreamCounts.images,
+      );
+      if (!target || target === genMode) return;
+      updateNodeData(id, { genMode: target });
+    }, [
+      genMode,
+      selectedVideoModel,
+      selectedVideoModelId,
+      upstreamCounts.images,
+      id,
+      updateNodeData,
+    ]);
 
     useEffect(
       () => () => {
@@ -1652,6 +1648,20 @@ export const VideoNode = memo(
       if (!videoSource) return null;
       return videoSource.includes("#t=") ? videoSource : `${videoSource}#t=0.1`;
     }, [videoSource]);
+
+    // 低缩放档要用的静态缩略图，走离屏 <video> + CORS 抓帧（见 videoFrameCapture）。
+    // 在节点挂载时就排队，而不是等缩放缩下去才开始：低缩放档下画布上根本不挂
+    // <video>，那时才抓的话用户会先盯着一屏占位块；而且首屏视口若恢复在低缩放档，
+    // 展示用的 <video> 一次都不会挂载，永远等不到抓帧时机。
+    useEffect(() => {
+      requestLodStill(videoSource);
+    }, [videoSource]);
+
+    // 订阅模块级缓存：节点被 onlyRenderVisibleElements 反复 mount/unmount 后缩略图
+    // 仍然在，重挂即用。快照是原始值，抓帧完成前后各渲染一次，不会每帧重渲染。
+    const lodStill = useSyncExternalStore(subscribeLodStills, () =>
+      getLodStill(videoSource)
+    );
 
     useEffect(() => {
       updateNodeInternals(id);
@@ -1720,7 +1730,7 @@ export const VideoNode = memo(
           return;
         }
         // Compose only supports 720p / 1080p — fall back to 720p for 480P sources.
-        const composeResolution = quality === "1080P" ? "1080p" : "720p";
+        const composeResolution = quality.toLowerCase() === "1080p" ? "1080p" : "720p";
         setIsComposingClip(true);
         setClipError(null);
         try {
@@ -1744,7 +1754,9 @@ export const VideoNode = memo(
               },
             ],
           });
-          await awaitTaskCompletion(ref.task_key, projectId);
+          await awaitTaskCompletion(ref.task_key, projectId, {
+            taskType: ref.task_type,
+          });
           const result = await fetchFreezoneJobResult(
             projectId,
             "freezone_video_compose",
@@ -1806,7 +1818,9 @@ export const VideoNode = memo(
           mode: subtitleEraseMode === "box" ? "box" : "smart_subtitle",
           box: subtitleEraseMode === "box" ? subtitleEraseBox : null,
         });
-        await awaitTaskCompletion(ref.task_key, projectId);
+        await awaitTaskCompletion(ref.task_key, projectId, {
+          taskType: ref.task_type,
+        });
         const result = await fetchFreezoneJobResult(
           projectId,
           "freezone_video_erase",
@@ -1835,9 +1849,69 @@ export const VideoNode = memo(
       updateNodeData,
     ]);
 
+    // 提交可用性按模式区分（对齐后端各端点校验）：
+    // - 文生 / 全能参考：后端强校验 prompt，必须有提示词（自写或上游 text）；
+    // - 首帧 / 图生视频 / 图片参考 / 首尾帧 / 视频编辑：后端不校验 prompt，允许空提示词，
+    //   只要素材齐备即可提交（图片类要 ≥1 张上游图；视频编辑要 ≥1 个上游视频）。
+    //   这修掉「删掉默认提示词后传了首帧仍无法直接生成」的问题。
+    const hasPromptText =
+      prompt.trim().length > 0 || upstreamTextJoined.length > 0;
+    const hasRequiredMediaForMode =
+      genMode === "videoEdit"
+        ? upstreamCounts.videos > 0
+        : genMode === "allReference"
+          ? upstreamCounts.images + upstreamCounts.videos + upstreamCounts.audios > 0
+          : upstreamCounts.images > 0;
+    // 提交前守卫：当前模型/模式无法消费已接入素材（视频/音频被静默丢、非 2.0 非
+    // HappyHorse 多图会被后端 400）时给出理由并禁用提交，替代静默丢素材 / 提交 400。
+    const mediaRejectionReason = videoSubmitMediaRejectionReason(
+      genMode,
+      selectedVideoModel,
+      upstreamCounts,
+    );
+    const selectedModelReferenceError = selectedVideoModelReferenceDisabledReason(
+      selectedVideoModel,
+      upstreamCounts,
+      genMode,
+    );
+    // 错误态重试的计费闸门。估价链随操作面板下沉后（选中才挂载、未选中不发请求），
+    // 失败态的 RegenerateButton 成了唯一在未选中时也能提交的入口——若不在主体拦截，
+    // 计费规则未配置时重试会放行一次注定被后端拒绝的请求。这里用一个仅错误态启用
+    // 的估价探针补回拦截：value 传 null 时 hook 不发请求，未选中且无错误的节点仍然
+    // 零估价开销；错误态与面板同时活跃时参数一致、查询同 key，由 react-query 去重。
+    const retryBillingProbe = useGenerationCreditCost(
+      "feature",
+      hasGenerationError && videoBackendForCost && videoInputBilling.ready
+        ? VIDEO_GENERATE_FEATURE_KEY
+        : null,
+      {
+        surface: "canvas",
+        params: {
+          ...(selectedVideoModel?.catalogId
+            ? { catalog_id: selectedVideoModel.catalogId }
+            : {}),
+          video_backend: videoBackendForCost,
+          resolution: qualityToResolution(quality),
+          pricing_quantity: Math.min(Math.max(count, 1), 4) * durationSec,
+          operation: genMode,
+          generate_audio: generateAudio,
+          video_input_present: videoInputBilling.present,
+          input_video_duration_seconds: videoInputBilling.durationSeconds,
+        },
+        quantity: Math.min(Math.max(count, 1), 4),
+      },
+    );
+    const videoBillingRuleMissing =
+      retryBillingProbe.error instanceof BillingRuleNotConfiguredError;
     const submitDisabled =
       isGenerating ||
-      (prompt.trim().length === 0 && upstreamTextJoined.length === 0);
+      videoBillingRuleMissing ||
+      !selectedVideoModel ||
+      selectedModelReferenceError !== null ||
+      mediaRejectionReason != null ||
+      (videoModeRequiresPrompt(genMode)
+        ? !hasPromptText
+        : !hasRequiredMediaForMode);
 
     const handleSubmit = useCallback(async () => {
       if (submitDisabled) return;
@@ -1895,6 +1969,31 @@ export const VideoNode = memo(
           }
           return urls;
         };
+        const collectUpstreamKeyframeUrls = (): {
+          firstFrameUrl: string | null;
+          lastFrameUrl: string | null;
+        } => {
+          const state = useCanvasStore.getState();
+          const candidates: Array<{
+            url: string;
+            slot?: "first" | "last";
+            legacyDisplayName?: string | null;
+          }> = [];
+          for (const node of collectUpstream()) {
+            const url = submittableImageUrl(node);
+            if (!url) continue;
+            const edge = state.edges.find(
+              (candidate) => candidate.source === node.id && candidate.target === id,
+            );
+            candidates.push({
+              url,
+              slot: edge?.data?.keyframeSlot,
+              legacyDisplayName:
+                typeof node.data.displayName === "string" ? node.data.displayName : null,
+            });
+          }
+          return resolveVideoKeyframeUrls(candidates);
+        };
 
         const durationClamped = clampVideoDuration(durationSec, durationBounds);
         const cameraTemplateId = cameraMovementId;
@@ -1905,10 +2004,10 @@ export const VideoNode = memo(
         // 后端不再支持一次出多条，改为按「生成数量」并发调用 N 次接口。先按
         // genMode 组装出一个「调一次接口」的闭包 doSubmit，校验失败则置空提前返回。
         let doSubmit: ((targetId: string) => Promise<FreezoneJobRef>) | null = null;
-        if (genMode === "firstLastFrame") {
-          const imageUrls = collectUpstreamImageUrls();
-          const firstFrameUrl = imageUrls[0] ?? null;
-          const lastFrameUrl = imageUrls[1] ?? null;
+        if (genMode === "firstFrame" || genMode === "firstLastFrame") {
+          const keyframes = collectUpstreamKeyframeUrls();
+          const firstFrameUrl = keyframes.firstFrameUrl;
+          const lastFrameUrl = genMode === "firstLastFrame" ? keyframes.lastFrameUrl : null;
           if (!firstFrameUrl && !lastFrameUrl) {
             console.warn(
               "[video-node] firstLastFrame submit without any frame",
@@ -1923,22 +2022,26 @@ export const VideoNode = memo(
             submitFreezoneVideoKeyframes(projectId, {
               firstFrameUrl,
               lastFrameUrl,
+              genMode,
               prompt: composedPrompt,
               cameraTemplateId,
               aspectRatio: submitAspectRatio,
               resolution: qualityToResolution(quality),
               durationSeconds: durationClamped,
               generateAudio,
-              model: modelId,
-              genMode,
-              humanReview: isSeedance20Model && humanReview,
+              model: selectedVideoModel?.catalogId ?? modelId,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
               sceneOptimize: sceneOptimize ?? null,
               canvasId,
               nodeId: targetId,
             });
         } else if (genMode === "imageToVideo" || genMode === "imageReference") {
           // Unified i2v endpoint: 1 image = 图生视频, 2-9 images = 图片参考视频.
-          const imageUrls = collectUpstreamImageUrls().slice(0, 9);
+          const imageUrls = collectUpstreamImageUrls().slice(
+            0,
+            referenceCaps?.image ?? 9,
+          );
           if (imageUrls.length === 0) {
             console.warn("[video-node] i2v submit without any upstream image");
             updateNodeData(id, {
@@ -1956,17 +2059,64 @@ export const VideoNode = memo(
               resolution: qualityToResolution(quality),
               durationSeconds: durationClamped,
               generateAudio,
-              model: modelId,
+              model: selectedVideoModel?.catalogId ?? modelId,
               genMode,
-              humanReview: isSeedance20Model && humanReview,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
               sceneOptimize: sceneOptimize ?? null,
               canvasId,
               nodeId: targetId,
             });
+        } else if (genMode === "videoEdit") {
+          // 视频编辑：1 个源视频 + 0-5 张参考图 → video_url + reference_images。
+          // 不再是 HappyHorse 专属 —— 目录里声明了 video_edit 的模型都走这条路，
+          // 提交时带的是各自的 catalogId，能力由后端按目录校验。
+          const upstream = collectUpstream();
+          const videoUrl =
+            upstream
+              .map((node) => referenceVideoUrl(node) ?? "")
+              .find((url) => url.length > 0) ?? "";
+          if (!videoUrl) {
+            console.warn("[video-node] videoEdit submit without upstream video");
+            updateNodeData(id, {
+              isGenerating: false,
+              generationStartedAt: null,
+            });
+            return;
+          }
+          const allImageUrls = collectUpstreamImageUrls();
+          const imageLimit = referenceCaps?.image ?? 5;
+          if (allImageUrls.length > imageLimit) {
+            toast.warning(
+              `视频编辑最多支持 ${imageLimit} 张参考图，已使用前 ${imageLimit} 张（忽略其余 ${allImageUrls.length - imageLimit} 张）`,
+            );
+          }
+          const imageUrls = allImageUrls.slice(0, imageLimit);
+          doSubmit = (targetId) =>
+            submitFreezoneVideoEdit(projectId, {
+              videoUrl,
+              imageUrls,
+              prompt: composedPrompt,
+              cameraTemplateId,
+              aspectRatio: submitAspectRatio,
+              resolution: qualityToResolution(quality),
+              durationSeconds: durationClamped,
+              audioSetting: "auto",
+              generateAudio,
+              model: selectedVideoModel?.catalogId ?? modelId,
+              genMode,
+              modelParams: data.modelParams,
+              canvasId,
+              nodeId: targetId,
+            });
         } else if (genMode === "allReference") {
-          if (isHappyHorseModel) {
+          // 全能参考是否可用以媒体目录的 supportedModes 为准。这里前置守卫给出
+          // 可读提示，防止切换模型后残留模式打到不支持的端点。
+          if (!supportsAllReference) {
             void showErrorDialog(
-              "HappyHorse 不支持全能参考模式，请切换为文生视频或图生视频。",
+              isHappyHorseModel
+                ? "HappyHorse 不支持全能参考模式，请切换为文生视频或图生视频。"
+                : "当前模型不支持全能参考，请切换模型或改用其它生成模式。",
               t("common.error"),
             );
             updateNodeData(id, {
@@ -1976,23 +2126,43 @@ export const VideoNode = memo(
             return;
           }
           // Omni-gen: classify each upstream node by its media type.
-          // backend caps: image≤9, video≤3, audio≤3, total≤12.
+          const caps = referenceCaps ?? { image: 9, video: 3, audio: 3 };
+          const totalReferenceLimit = hasConfiguredReferenceCaps(selectedVideoModel)
+            ? caps.image + caps.video + caps.audio
+            : 12;
           const upstream = collectUpstream();
           const references: FreezoneVideoReferenceItem[] = [];
-          // 与 references 里 type==="audio" 的项一一对应，用于提交前校验音频总时长。
-          const audioRefs: { url: string; durationMs: number | null }[] = [];
+          // 与 references 里 type==="audio" 的项一一对应，用于提交前逐条校验音频时长。
+          const audioRefs: {
+            url: string;
+            label: string;
+            durationMs: number | null;
+          }[] = [];
+          const videoRefs: {
+            url: string;
+            label: string;
+            durationMs: number | null;
+          }[] = [];
           let imageCount = 0;
           let videoCount = 0;
           let audioCount = 0;
           for (const node of upstream) {
-            if (references.length >= 12) break;
-            if (isVideoNode(node)) {
-              const url =
-                typeof node.data.videoUrl === "string"
-                  ? node.data.videoUrl
-                  : "";
-              if (url && videoCount < 3) {
-                references.push({ type: "video", url });
+            if (references.length >= totalReferenceLimit) break;
+            const videoRefUrl = referenceVideoUrl(node);
+            if (videoRefUrl) {
+              // 视频节点或携带 videoUrl 的 upload 节点（资产库视频）统一收集。
+              if (videoCount < caps.video) {
+                references.push({ type: "video", url: videoRefUrl });
+                videoRefs.push({
+                  url: videoRefUrl,
+                  label: t("node.videoNode.referenceDuration.videoFallbackLabel", {
+                    index: videoCount + 1,
+                  }),
+                  durationMs:
+                    typeof node.data.durationMs === "number"
+                      ? node.data.durationMs
+                      : null,
+                });
                 videoCount += 1;
               }
             } else if (isAudioNode(node)) {
@@ -2000,7 +2170,7 @@ export const VideoNode = memo(
                 typeof node.data.audioUrl === "string"
                   ? node.data.audioUrl
                   : "";
-              if (url && audioCount < 3) {
+              if (url && audioCount < caps.audio) {
                 // 音频引用默认走「配乐参考」语义；label 用 sourceFileName /
                 // displayName 之一，方便后端日志和后续 UI 展示对得上。
                 const rawLabel =
@@ -2018,6 +2188,15 @@ export const VideoNode = memo(
                 });
                 audioRefs.push({
                   url,
+                  // 时长超限时要指名道姓是哪条，所以这里连标签一起留着；没有文件名
+                  // 的（TTS 直出等）退回「音频N」。序号按音频自身 1-based 计，与后端
+                  // pipeline.py 的 enumerate(audio_paths, start=1) 同口径；标签本身
+                  // 只进提示文案、不随 references 发给后端，所以跟随界面语言。
+                  label:
+                    rawLabel ||
+                    t("node.videoNode.audio.clipFallbackLabel", {
+                      index: audioCount + 1,
+                    }),
                   durationMs:
                     typeof node.data.durationMs === "number"
                       ? node.data.durationMs
@@ -2027,7 +2206,7 @@ export const VideoNode = memo(
               }
             } else {
               const url = submittableImageUrl(node);
-              if (url && imageCount < 9) {
+              if (url && imageCount < caps.image) {
                 references.push({ type: "image", url });
                 imageCount += 1;
               }
@@ -2041,33 +2220,99 @@ export const VideoNode = memo(
             });
             return;
           }
-          // Seedance 2.0 后端限制音频总时长 ≤ 15.2s，超了会以 InvalidParameter
-          // 报错。提交前先本地校验：durationMs 缺失时用 <audio> 探测兜底，超限就
-          // 弹窗拦下，避免白跑一趟后端。仅对 seedance2 生效（其它模型上限可能不同）。
-          if (isSeedance20Model && audioRefs.length > 0) {
+          const validateReferenceDurations = async (
+            media: "audio" | "video",
+            refs: typeof audioRefs,
+          ): Promise<boolean> => {
+            const configured = referenceDurationLimitsMs(selectedVideoModel, media);
+            const limits = {
+              minMs:
+                configured.minMs ??
+                (media === "audio" && isSeedance20Model
+                  ? MIN_AUDIO_REFERENCE_DURATION_MS
+                  : undefined),
+              maxMs:
+                configured.maxMs ??
+                (media === "audio" && isSeedance20Model
+                  ? MAX_AUDIO_REFERENCE_DURATION_MS
+                  : undefined),
+              totalMinMs: configured.totalMinMs,
+              totalMaxMs:
+                configured.totalMaxMs ??
+                (media === "audio" && isSeedance20Model
+                  ? MAX_AUDIO_REFERENCE_TOTAL_DURATION_MS
+                  : undefined),
+            };
+            if (refs.length === 0 || Object.values(limits).every((value) => value == null)) {
+              return true;
+            }
             const resolvedDurations = await Promise.all(
-              audioRefs.map((ref) =>
+              refs.map((ref) =>
                 typeof ref.durationMs === "number" && ref.durationMs > 0
                   ? Promise.resolve(ref.durationMs)
-                  : probeAudioDurationMs(ref.url),
+                  : media === "audio"
+                    ? probeAudioDurationMs(ref.url)
+                    : probeVideoDurationMs(ref.url),
               ),
             );
-            const totalAudioMs = resolvedDurations.reduce<number>(
-              (sum, ms) => sum + (ms ?? 0),
-              0,
+            const rejection = audioReferenceDurationRejection(
+              refs.map((ref, index) => ({
+                label: ref.label,
+                durationMs: resolvedDurations[index] ?? null,
+              })),
+              {
+                minMs: limits.minMs ?? null,
+                maxMs: limits.maxMs ?? null,
+                totalMinMs: limits.totalMinMs,
+                totalLimitMs: limits.totalMaxMs ?? null,
+                perClipLimits: limits.minMs != null || limits.maxMs != null,
+              },
             );
-            if (totalAudioMs > MAX_AUDIO_TOTAL_DURATION_MS) {
-              void showErrorDialog(
-                t("node.videoNode.audio.durationExceeded", { max: 15 }),
-                t("common.error"),
+            if (rejection) {
+              const clips = formatAudioDurationClips(rejection.clips, (key, vars) =>
+                t(key, vars),
               );
+              const prefix =
+                media === "audio" ? "node.videoNode.audio" : "node.videoNode.referenceDuration";
+              const message =
+                rejection.kind === "tooShort"
+                  ? t(`${prefix}.${media === "audio" ? "durationTooShort" : "videoTooShort"}`, {
+                      min: formatAudioDurationSeconds(limits.minMs ?? 0),
+                      clips,
+                    })
+                  : rejection.kind === "tooLong"
+                    ? t(`${prefix}.${media === "audio" ? "durationTooLong" : "videoTooLong"}`, {
+                        max: formatAudioDurationSeconds(limits.maxMs ?? 0),
+                        clips,
+                      })
+                    : rejection.kind === "totalTooShort"
+                      ? t(
+                          `${prefix}.${media === "audio" ? "durationTotalTooShort" : "videoTotalTooShort"}`,
+                          {
+                            min: formatAudioDurationSeconds(rejection.limitMs),
+                            total: formatAudioDurationSeconds(rejection.totalMs),
+                            clips,
+                          },
+                        )
+                      : t(
+                          `${prefix}.${media === "audio" ? "durationTotalTooLong" : "videoTotalTooLong"}`,
+                          {
+                            max: formatAudioDurationSeconds(rejection.limitMs),
+                            total: formatAudioDurationSeconds(rejection.totalMs),
+                            clips,
+                          },
+                        );
+              toast.error(message, { duration: 5_000 });
               updateNodeData(id, {
                 isGenerating: false,
                 generationStartedAt: null,
               });
-              return;
+              return false;
             }
-          }
+            return true;
+          };
+          if (!(await validateReferenceDurations("audio", audioRefs))) return;
+          if (!(await validateReferenceDurations("video", videoRefs))) return;
           doSubmit = (targetId) =>
             submitFreezoneVideoOmniGen(projectId, {
               prompt: composedPrompt,
@@ -2077,9 +2322,10 @@ export const VideoNode = memo(
               resolution: qualityToResolution(quality),
               durationSeconds: durationClamped,
               generateAudio,
-              model: modelId,
+              model: selectedVideoModel?.catalogId ?? modelId,
               genMode,
-              humanReview: isSeedance20Model && humanReview,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
               sceneOptimize: sceneOptimize ?? null,
               canvasId,
               nodeId: targetId,
@@ -2094,9 +2340,10 @@ export const VideoNode = memo(
               resolution: qualityToResolution(quality),
               durationSeconds: durationClamped,
               generateAudio,
-              model: modelId,
+              model: selectedVideoModel?.catalogId ?? modelId,
               genMode,
-              humanReview: isSeedance20Model && humanReview,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
               sceneOptimize: sceneOptimize ?? null,
               canvasId,
               nodeId: targetId,
@@ -2127,7 +2374,9 @@ export const VideoNode = memo(
             if (runIndex === 0) {
               updateNodeData(id, generationTaskDescriptor(ref));
             }
-            const completed = await awaitTaskCompletion(ref.task_key, projectId);
+            const completed = await awaitTaskCompletion(ref.task_key, projectId, {
+              taskType: ref.task_type,
+            });
             // Prefer the dedicated result endpoint — SSE `task.result` may only
             // carry metadata (same pattern as reverse_prompt + video_erase).
             let url = resolveOutputUrl(completed.result);
@@ -2179,6 +2428,13 @@ export const VideoNode = memo(
               }
             }
           } catch (error) {
+            if (isTaskCancelledError(error)) {
+              // 用户已在终止确认里知情：不进 runErrors、不弹错误框、不落错误横幅。
+              if (runIndex === 0 && completedUrls.length === 0) {
+                updateNodeData(id, { isGenerating: false, generationStartedAt: null });
+              }
+              return;
+            }
             console.error("[video-node] video gen failed", error);
             // 先记下错误再决定是否早退 —— settle 后的聚合分支靠 runErrors 判断
             // 「部分失败」并弹 toast；早退前不记会把首个成功之后的失败彻底吞掉。
@@ -2186,8 +2442,13 @@ export const VideoNode = memo(
             // 已有同批其它视频完成（主视频已落）时不覆盖成功态为错误——
             // 部分失败只影响画册条数。
             if (completedUrls.length > 0) return;
+            // 轮询超时 ≠ 生成失败：后端还在跑。保留 isGenerating 与任务句柄，
+            // 刷新页面时 resumeNodeGeneration 会重新接上并回填结果；这里写错误
+            // 横幅只会把一个还活着的任务标成失败、并清掉可续接的句柄。
+            if (isTaskPollTimeoutError(error)) return;
             const resolved = resolveErrorContent(error, "视频生成失败");
             const displayErrorMessage = backendErrorToastMessage(error, t);
+            const diagnostics = resolveGenerationErrorDiagnostics(error, resolved.details);
             // Persist the failure on the node so the 重新生成 entry survives after
             // the user dismisses the dialog (previously the error was dialog-only).
             // 只有 run 0 失败才终结 loading：非首 run 失败时 run 0 可能还在跑，
@@ -2197,9 +2458,8 @@ export const VideoNode = memo(
                 ? { isGenerating: false, generationStartedAt: null }
                 : {}),
               generationError: displayErrorMessage,
-              generationErrorDetails: resolved.details ?? null,
-              generationErrorRequestId:
-                extractRequestId(displayErrorMessage) ?? extractRequestId(resolved.details),
+              generationErrorDetails: diagnostics.details,
+              generationErrorRequestId: diagnostics.requestId,
             });
           }
         };
@@ -2219,9 +2479,17 @@ export const VideoNode = memo(
         // 「先弹上限报错、节点却又冒出加载动画」的矛盾观感。
         if (completedUrls.length === 0 && runErrors.length > 0) {
           const firstError = runErrors[0];
+          // 整批都只是「前端不等了」时走中性提示：后端仍在生成，节点保持生成中
+          // 状态等待刷新续接，不该按报错呈现。真有失败混在里面则仍按失败处理。
+          if (runErrors.every((error) => isTaskPollTimeoutError(error))) {
+            notifyTaskStillRunning(t);
+            void refreshHistory();
+            return;
+          }
           const resolved = resolveErrorContent(firstError, "视频生成失败");
           const displayErrorMessage = backendErrorToastMessage(firstError, t);
-          const haystack = `${displayErrorMessage}\n${resolved.details ?? ""}`;
+          const diagnostics = resolveGenerationErrorDiagnostics(firstError, resolved.details);
+          const haystack = `${displayErrorMessage}\n${diagnostics.details ?? ""}`;
           if (
             haystack.includes(
               "InputImageSensitiveContentDetected.PrivateInformation",
@@ -2231,10 +2499,14 @@ export const VideoNode = memo(
             void showErrorDialog(
               "素材包含真实人脸，已被内容安全策略拦截。请在下方打开「真人素材审核」开关后重试（可能增加审核时间，不保证通过）。",
               "素材被拦截",
-              resolved.details,
+              diagnostics.details ?? undefined,
             );
           } else {
-            void showErrorDialog(displayErrorMessage, t("common.error"), resolved.details);
+            void showErrorDialog(
+              displayErrorMessage,
+              t("common.error"),
+              diagnostics.details ?? undefined,
+            );
           }
         } else if (runErrors.length > 0) {
           toast.error(
@@ -2268,12 +2540,15 @@ export const VideoNode = memo(
       humanReview,
       id,
       isSeedance20Model,
+      supportsAllReference,
+      supportsHumanReview,
       modelId,
       prompt,
       quality,
       refreshHistory,
       sceneOptimize,
       submitDisabled,
+      t,
       updateNodeData,
       upstreamTextJoined,
     ]);
@@ -2510,13 +2785,47 @@ export const VideoNode = memo(
           {/* 生成/上传中优先显示 loading：原地重新生成时 videoUrl 仍是上一条结果，
               若不加这层 guard，旧视频会一直占位、isGenerating 分支永远到不了。
               失败时 isGenerating 归 false，旧视频自动复现（videoUrl 未被清空）。 */}
-          {!isGenerating && !isUploading && videoSource ? (
+          {/* 低缩放档：<video> 换成静态图/占位块。每个 <video> 都是一个独立
+              合成层，数量随可见节点数线性增长——实测 69 节点 / zoom 0.1 下，
+              只有连同视频层一起降级才能把 p90 帧时从 26ms 拉回 14ms。 */}
+          {!isGenerating &&
+          !isUploading &&
+          videoSource &&
+          lowDetailZoom &&
+          !isVideoPlayingRef.current ? (
+            lodStill ? (
+              <img
+                src={lodStill}
+                alt=""
+                className="h-full w-full object-contain"
+                draggable={false}
+                onClick={() => setSelectedNode(id)}
+              />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center bg-black/40"
+                onClick={() => setSelectedNode(id)}
+              >
+                <VideoIcon className="h-1/4 max-h-10 w-1/4 max-w-10 text-white/25" />
+              </div>
+            )
+          ) : !isGenerating && !isUploading && videoSource ? (
             <video
               ref={setVideoRef}
               src={videoPosterSource ?? undefined}
               className="h-full w-full object-contain"
               playsInline
               preload="metadata"
+              onPlay={() => {
+                isVideoPlayingRef.current = true;
+                // shell 决策在组件外层（withLodShell），读不到组件内 ref，
+                // 播放态同步进模块级注册表：播放中的节点低缩放档不降级。
+                setNodeMediaActive(id, true);
+              }}
+              onPause={() => {
+                isVideoPlayingRef.current = false;
+                setNodeMediaActive(id, false);
+              }}
               onClick={() => {
                 // 点击视频本体只负责选中节点 —— 播放/暂停统一交给左下角按钮。
                 setSelectedNode(id);
@@ -2642,37 +2951,30 @@ export const VideoNode = memo(
             </div>
           ) : (
             <div className="flex h-full w-full items-center px-8">
-              {/* 上游含视频时只能走全能参考，首尾帧/首帧这两个 CTA 会引导到被禁用的
-                  firstLastFrame 模式，所以此时隐藏。 */}
-              {upstreamCounts.videos === 0 && (
-                <div className="flex min-h-0 flex-col justify-center gap-2 py-4">
-                  <div className="text-xs text-[var(--canvas-node-input-helper)]">试试：</div>
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        spawnFrameUploads("firstLastFrame");
-                      }}
-                      className="nodrag -mx-2 inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-text-dark transition-colors hover:bg-white/[0.08]"
-                    >
-                      <Layers className="h-4 w-4 text-text-muted/90" />
-                      <span>首尾帧生成视频</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        spawnFrameUploads("firstFrame");
-                      }}
-                      className="nodrag -mx-2 inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-text-dark transition-colors hover:bg-white/[0.08]"
-                    >
-                      <Sparkles className="h-4 w-4 text-text-muted/90" />
-                      <span>首帧生成视频</span>
-                    </button>
-                  </div>
+              {/* 空态（无入边）才走到这里。CTA 完全按媒体模型目录的 supportedModes
+                  决定；目录尚未加载时才使用模型族兜底，避免展示后端会拒绝的入口。 */}
+              <div className="flex min-h-0 flex-col justify-center gap-2 py-4">
+                <div className="text-xs text-[var(--canvas-node-input-helper)]">试试：</div>
+                <div className="flex flex-col gap-0.5">
+                  {videoEmptyStateCtaModes(selectedVideoModel).map((mode) => {
+                    const { Icon, label } = VIDEO_EMPTY_STATE_CTA_META[mode];
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          spawnFrameUploads(mode);
+                        }}
+                        className="nodrag -mx-2 inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-text-dark transition-colors hover:bg-white/[0.08]"
+                      >
+                        <Icon className="h-4 w-4 text-text-muted/90" />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
               <Play className="ml-auto mr-20 h-9 w-9 text-text-muted/46" />
             </div>
           )}
@@ -2884,221 +3186,48 @@ export const VideoNode = memo(
         )}
 
         {showVideoOpsPanel && (
-            <OperationPanelShell
-              expanded={panelExpanded}
-              onCollapse={() => setPanelExpanded(false)}
-              inlineClassName={`nodrag absolute z-30 flex flex-col rounded-[var(--node-radius)] ${CANVAS_NODE_OPS_PANEL_CLASS}`}
-              inlineStyle={{
-                top: `calc(100% + ${OPERATIONS_PANEL_GAP}px)`,
-                left: -panelOverhang,
-                right: -panelOverhang,
-                height: panelHeight,
-              }}
-              modalStyle={{
-                width: `min(${OPERATIONS_PANEL_EXPANDED_WIDTH}px, 92vw)`,
-                height: `min(${OPERATIONS_PANEL_EXPANDED_HEIGHT}px, 86vh)`,
-              }}
-            >
-              <PanelExpandButton
-                expanded={panelExpanded}
-                onToggle={() => setPanelExpanded((v) => !v)}
-                className="absolute right-2 top-2 z-20"
-              />
-              <div className="flex shrink-0 items-center overflow-x-auto px-3 pb-2 pr-10 pt-3">
-                <div className="flex shrink-0 items-center gap-2">
-                  <CameraMovementChip
-                    templates={cameraTemplates}
-                    isLoading={cameraTemplatesLoading}
-                    selectedId={cameraMovementId}
-                    onChange={(nextId) =>
-                      updateNodeData(id, { cameraMovement: nextId })
-                    }
-                  />
-                  <CharacterLibraryChip
-                    onOpen={() => setIsCharacterLibraryOpen(true)}
-                  />
-                </div>
-                <div className="ml-3 flex shrink-0 items-center gap-3">
-                  <GenModeSelect
-                    value={genMode}
-                    modelId={selectedVideoModel?.apiModel ?? selectedVideoModel?.id ?? modelId}
-                    upstreamCounts={upstreamCounts}
-                    onChange={(nextMode) => updateNodeData(id, { genMode: nextMode })}
-                  />
-                  <NodeContextPromptPaletteButton
-                    nodeId={id}
-                    onInsert={insertContextPaletteEntry}
-                  />
-                  {upstreamTextContents.map((content) => (
-                    <ReferenceTextChip
-                      key={`upstream-text-${content.nodeId}`}
-                      nodeId={content.nodeId}
-                      text={content.text ?? ""}
-                      sourceLabel={content.displayName ?? content.nodeType}
-                      onDetach={handleDetachUpstream}
-                    />
-                  ))}
-                </div>
-                {referenceMedia.length > 0 && (
-                  <ReferenceMediaRow
-                    items={referenceMediaCapInfo}
-                    enforceCap={REFERENCE_CAPS_BY_MODE[genMode] != null}
-                    genMode={genMode}
-                    onFocus={(nodeId) => setSelectedNode(nodeId)}
-                    onDetach={handleDetachUpstream}
-                    onReorder={(ids) =>
-                      updateNodeData(id, { referenceOrder: ids })
-                    }
-                  />
-                )}
-              </div>
-
-              <PromptMentionEditor
-                ref={promptEditorRef}
-                value={promptDraft}
-                onChange={(next) => {
-                  setPromptDraft(next);
-                  if (!isComposingRef.current) {
-                    updateNodeData(id, { prompt: next });
-                  }
-                }}
-                onCompositionStart={() => {
-                  isComposingRef.current = true;
-                }}
-                onCompositionEnd={(next) => {
-                  isComposingRef.current = false;
-                  setPromptDraft(next);
-                  updateNodeData(id, { prompt: next });
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
-                candidates={mentionCandidates}
-                placeholder={
-                  upstreamTextJoined.length > 0
-                    ? "上游内容已自动接入，可继续补充提示词…"
-                    : t("node.videoNode.placeholder")
-                }
-                className={`nodrag nowheel min-h-0 w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent px-3 py-2 text-sm leading-6 text-text-dark outline-none ${CANVAS_NODE_INPUT_PLACEHOLDER_CLASS}`}
-              />
-
-              <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <ProviderModelPicker
-                    selectedModelId={modelId}
-                    onChange={(nextModelId) => {
-                      updateNodeData(id, { model: nextModelId });
-                      // 记住这次选择，后续新建的视频节点将继承它。
-                      writeLastVideoModel(nextModelId);
-                    }}
-                    domain="video"
-                    popoverPlacement="top"
-                    getOptionDisabledReason={(model) =>
-                      videoModelReferenceDisabledReason(model.apiModel ?? model.id, upstreamCounts)
-                    }
-                  />
-                  <VideoConfigChip
-                    aspectRatio={aspectRatio}
-                    quality={quality}
-                    qualityOptions={qualityOptions}
-                    durationSec={durationSec}
-                    durationBounds={durationBounds}
-                    sceneOptimize={sceneOptimize}
-                    sceneOptimizeOptions={sceneOptimizeOptions}
-                    generateAudio={generateAudio}
-                    onChange={(patch) => updateNodeData(id, patch)}
-                  />
-                  {isSeedance20Model && (
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={humanReview}
-                      title="素材含真实人脸时开启，可能增加审核时间，不保证通过。"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        updateNodeData(id, { humanReview: !humanReview });
-                      }}
-                      className={`nodrag inline-flex h-7 items-center gap-1.5 rounded px-1 text-xs font-medium transition-colors ${
-                        humanReview
-                          ? "text-text-dark"
-                          : "text-text-dark/72 hover:text-text-dark"
-                      }`}
-                    >
-                      <span>真人验证</span>
-                      <span
-                        className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors ${
-                          humanReview
-                            ? "bg-[rgb(var(--accent-rgb))]"
-                            : "bg-white/15"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${
-                            humanReview ? "translate-x-3" : "translate-x-0.5"
-                          }`}
-                        />
-                      </span>
-                    </button>
-                  )}
-                  <CountPicker
-                    value={count}
-                    onChange={(nextCount) =>
-                      updateNodeData(id, { count: nextCount })
-                    }
-                  />
-                  <button
-                    type="button"
-                    title="翻译提示词（中英文互译）"
-                    disabled={
-                      isTranslatingPrompt ||
-                      isGenerating ||
-                      prompt.trim().length === 0
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleTranslatePrompt();
-                    }}
-                    className={`${NODE_INLINE_ICON_BUTTON_CLASS} ${
-                      isTranslatingPrompt
-                        ? NODE_INLINE_ICON_BUTTON_ACTIVE_CLASS
-                        : ""
-                    }`}
-                  >
-                    {isTranslatingPrompt ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Languages className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <CreditCostPill
-                    display={totalCreditCostDisplay}
-                    disabled={submitDisabled}
-                    className={NODE_CREDIT_PILL_FLAT_CLASS}
-                  />
-                  <button
-                    type="button"
-                    disabled={submitDisabled}
-                    title={
-                      isGenerating
-                        ? t("node.videoNode.submitBusy")
-                        : t("node.videoNode.submit")
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleSubmit();
-                    }}
-                    className={`${NODE_GENERATE_BUTTON_BASE_CLASS} ${
-                      submitDisabled
-                        ? NODE_GENERATE_BUTTON_DISABLED_CLASS
-                        : NODE_GENERATE_BUTTON_ENABLED_CLASS
-                    }`}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </OperationPanelShell>
-          )}
+          <VideoOperationsPanel
+            id={id}
+            data={data}
+            genMode={genMode}
+            modelId={modelId}
+            selectedVideoModel={selectedVideoModel}
+            availableVideoModels={availableVideoModels}
+            isHappyHorseModel={isHappyHorseModel}
+            upstreamCounts={upstreamCounts}
+            upstreamTypeCounts={upstreamTypeCounts}
+            upstreamContents={upstreamContents}
+            upstreamTextJoined={upstreamTextJoined}
+            referenceMedia={referenceMedia}
+            referenceCaps={referenceCaps}
+            cameraTemplates={cameraTemplates}
+            cameraTemplatesLoading={cameraTemplatesLoading}
+            configuredAspectRatios={configuredAspectRatios}
+            aspectRatio={aspectRatio}
+            quality={quality}
+            qualityOptions={qualityOptions}
+            durationSec={durationSec}
+            durationBounds={durationBounds}
+            sceneOptimize={sceneOptimize}
+            sceneOptimizeOptions={sceneOptimizeOptions}
+            generateAudio={generateAudio}
+            supportsHumanReview={supportsHumanReview}
+            humanReview={humanReview}
+            count={count}
+            prompt={prompt}
+            isGenerating={isGenerating}
+            videoBackendForCost={videoBackendForCost}
+            videoInputPresent={videoInputBilling.present}
+            videoInputBillingReady={videoInputBilling.ready}
+            inputVideoDurationSeconds={videoInputBilling.durationSeconds}
+            submitDisabled={submitDisabled}
+            selectedModelReferenceError={selectedModelReferenceError}
+            mediaRejectionReason={mediaRejectionReason}
+            expanded={panelExpanded}
+            onExpandedChange={setPanelExpanded}
+            onSubmit={handleSubmit}
+          />
+        )}
 
         {selected &&
           !isBoxSelecting &&
@@ -3158,15 +3287,6 @@ export const VideoNode = memo(
           className="hidden"
           onChange={handleFileChange}
         />
-
-        <CharacterLibraryModal
-          open={isCharacterLibraryOpen}
-          project={readUrl().project ?? null}
-          onClose={() => setIsCharacterLibraryOpen(false)}
-          onConfirm={(selections) =>
-            spawnCharacterLibraryReferences(selections)
-          }
-        />
       </div>
     );
   },
@@ -3174,560 +3294,7 @@ export const VideoNode = memo(
 
 VideoNode.displayName = "VideoNode";
 
-interface GenModeSelectProps {
-  value: VideoGenMode;
-  modelId: string | null | undefined;
-  upstreamCounts: { videos: number; images: number; audios: number };
-  onChange: (next: VideoGenMode) => void;
-}
-
-function videoModeDisabledReason(
-  mode: VideoGenMode,
-  modelId: string | null | undefined,
-  upstreamCounts: { videos: number; images: number; audios: number },
-): string | null {
-  if (mode === "allReference" && isHappyHorseVideoModel(modelId)) {
-    return "HappyHorse 不支持全能参考模式";
-  }
-  if (upstreamCounts.videos > 0 && mode !== "allReference") {
-    return "上游含视频素材时只能用「全能参考」";
-  }
-  if (
-    mode === "textToVideo" &&
-    (upstreamCounts.images > 0 || upstreamCounts.audios > 0)
-  ) {
-    return "已引用图片/音频素材时不可用";
-  }
-  if (mode === "imageToVideo" && upstreamCounts.videos >= 2) {
-    return "上游有多个视频时不可用";
-  }
-  if (mode === "firstLastFrame" && upstreamCounts.images > 2) {
-    return "上游图片超过 2 张时不可用";
-  }
-  return null;
-}
-
-function GenModeSelect({ value, modelId, upstreamCounts, onChange }: GenModeSelectProps) {
-  const { t } = useTranslation();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [popoverPosition, setPopoverPosition] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
-  const activeTab = MODE_TABS.find((tab) => tab.key === value) ?? MODE_TABS[0];
-
-  const syncPopoverPosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const margin = 8;
-    setPopoverPosition({
-      left: Math.min(Math.max(margin, rect.left), window.innerWidth - 132 - margin),
-      top: rect.bottom + 8,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    syncPopoverPosition();
-    const onPointerDown = (event: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(event.target as Node) ||
-        popoverRef.current?.contains(event.target as Node)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    };
-    const onViewportChange = () => syncPopoverPosition();
-    document.addEventListener("mousedown", onPointerDown, true);
-    window.addEventListener("resize", onViewportChange);
-    window.addEventListener("scroll", onViewportChange, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown, true);
-      window.removeEventListener("resize", onViewportChange);
-      window.removeEventListener("scroll", onViewportChange, true);
-    };
-  }, [isOpen, syncPopoverPosition]);
-
-  return (
-    <div className="relative shrink-0">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((prev) => !prev);
-        }}
-        className={NODE_CONTEXT_CONTROL_TRIGGER_CLASS}
-      >
-        <span>{t(activeTab.labelKey)}</span>
-        <ChevronDown className="h-3 w-3 text-text-muted/90" />
-      </button>
-      {isOpen && popoverPosition && createPortal(
-        <div
-          ref={popoverRef}
-          className={VIDEO_MODE_POPOVER_CLASS}
-          style={{
-            left: popoverPosition.left,
-            top: popoverPosition.top,
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {MODE_TABS.map((tab) => {
-            const isActive = tab.key === value;
-            const disabledReason = videoModeDisabledReason(tab.key, modelId, upstreamCounts);
-            const isDisabled = disabledReason != null && !isActive;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                disabled={isDisabled}
-                title={disabledReason ?? undefined}
-                onClick={() => {
-                  if (isDisabled) return;
-                  onChange(tab.key);
-                  setIsOpen(false);
-                }}
-                className={`block w-full rounded-[6px] px-3 py-1.5 text-left text-xs transition-colors ${
-                  isActive
-                    ? VIDEO_PARAM_ACTIVE_BUTTON_CLASS
-                    : isDisabled
-                      ? "cursor-not-allowed text-text-muted/40"
-                      : "text-text-muted/95 hover:bg-white/[0.11] hover:text-text-dark"
-                }`}
-              >
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
-
-interface VideoConfigChipProps {
-  aspectRatio: FreezoneVideoAspectRatio;
-  quality: VideoGenQuality;
-  qualityOptions: readonly VideoGenQuality[];
-  durationSec: number;
-  durationBounds: { min: number; max: number };
-  sceneOptimize?: Seedance2SceneOptimize;
-  sceneOptimizeOptions: readonly Seedance2SceneOptimize[];
-  generateAudio: boolean;
-  onChange: (patch: Partial<VideoNodeData>) => void;
-}
-
-function VideoConfigChip({
-  aspectRatio,
-  quality,
-  qualityOptions,
-  durationSec,
-  durationBounds,
-  sceneOptimize,
-  sceneOptimizeOptions,
-  generateAudio,
-  onChange,
-}: VideoConfigChipProps) {
-  const { t } = useTranslation();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(event.target as Node) ||
-        popoverRef.current?.contains(event.target as Node)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown, true);
-    return () => document.removeEventListener("mousedown", onPointerDown, true);
-  }, [isOpen]);
-
-  return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((prev) => !prev);
-        }}
-        className={NODE_TEXT_CONTROL_TRIGGER_CLASS}
-      >
-        <span>
-          {aspectRatio === "auto"
-            ? t("node.videoNode.aspect.auto")
-            : aspectRatio}
-        </span>
-        <span className="text-text-muted/80">·</span>
-        <span>{quality}</span>
-        <span className="text-text-muted/80">·</span>
-        <span>{durationSec}s</span>
-        {generateAudio ? (
-          <Volume2 className="ml-0.5 h-3.5 w-3.5 text-text-muted/90" />
-        ) : (
-          <VolumeX className="ml-0.5 h-3.5 w-3.5 text-text-muted/90" />
-        )}
-        <ChevronDown className="h-3 w-3 text-text-muted/90" />
-      </button>
-      {isOpen && (
-        <div
-          ref={popoverRef}
-          className={VIDEO_PARAM_POPOVER_CLASS}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className={VIDEO_PARAM_LABEL_CLASS}>
-            {t("node.videoNode.aspect.title")}
-          </div>
-          <div className={`grid grid-cols-5 ${VIDEO_PARAM_ROW_CLASS}`}>
-            {ASPECT_RATIOS.map((ratio) => {
-              const isActive = aspectRatio === ratio;
-              return (
-                <button
-                  key={ratio}
-                  type="button"
-                  onClick={() => onChange({ aspectRatio: ratio })}
-                  className={`${VIDEO_PARAM_BUTTON_BASE_CLASS} ${
-                    isActive
-                      ? VIDEO_PARAM_ACTIVE_BUTTON_CLASS
-                      : VIDEO_PARAM_IDLE_BUTTON_CLASS
-                  }`}
-                >
-                  {ratio === "auto" ? t("node.videoNode.aspect.auto") : ratio}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className={VIDEO_PARAM_LABEL_CLASS}>
-            {t("node.videoNode.quality.title")}
-          </div>
-          <div className={`grid grid-cols-3 ${VIDEO_PARAM_ROW_CLASS}`}>
-            {qualityOptions.map((q) => {
-              const isActive = quality === q;
-              return (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => onChange({ quality: q })}
-                  className={`${VIDEO_PARAM_BUTTON_BASE_CLASS} ${
-                    isActive
-                      ? VIDEO_PARAM_ACTIVE_BUTTON_CLASS
-                      : VIDEO_PARAM_IDLE_BUTTON_CLASS
-                  }`}
-                >
-                  {q}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-text-dark/72">
-            <span>{t("node.videoNode.duration.title")}</span>
-            <span className="normal-case text-text-dark">{durationSec}s</span>
-          </div>
-          <input
-            type="range"
-            min={durationBounds.min}
-            max={durationBounds.max}
-            step={1}
-            value={durationSec}
-            onChange={(event) =>
-              onChange({
-                durationSec: clampVideoDuration(Number(event.target.value), durationBounds),
-              })
-            }
-            className="video-duration-slider mb-4 w-full"
-          />
-
-          {sceneOptimizeOptions.length > 0 && (
-            <>
-              <div className={VIDEO_PARAM_LABEL_CLASS}>
-                {t("node.videoNode.sceneOptimize.title")}
-              </div>
-              <div className={`grid grid-cols-2 ${VIDEO_PARAM_ROW_CLASS}`}>
-                {sceneOptimizeOptions.map((option) => {
-                  const isActive = sceneOptimize === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => onChange({ sceneOptimize: option })}
-                      className={`${VIDEO_PARAM_BUTTON_BASE_CLASS} ${
-                        isActive
-                          ? VIDEO_PARAM_ACTIVE_BUTTON_CLASS
-                          : VIDEO_PARAM_IDLE_BUTTON_CLASS
-                      }`}
-                    >
-                      {t(`node.videoNode.sceneOptimize.options.${option}`)}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          <div className={VIDEO_PARAM_LABEL_CLASS}>
-            {t("node.videoNode.audio.title")}
-          </div>
-          <div className="flex items-center justify-between rounded-[8px] bg-white/[0.045] px-2.5 py-1.5">
-            <span className="text-xs font-medium text-text-dark/88">
-              {generateAudio
-                ? t("node.videoNode.audio.on")
-                : t("node.videoNode.audio.off")}
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={generateAudio}
-              aria-label={t("node.videoNode.audio.title")}
-              onClick={() => onChange({ generateAudio: !generateAudio })}
-              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-                generateAudio
-                  ? "border-white/24 bg-white/[0.18]"
-                  : "border-white/10 bg-white/[0.08]"
-              }`}
-            >
-              <span
-                className={`h-4 w-4 rounded-full bg-text-dark shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition-transform ${
-                  generateAudio ? "translate-x-[18px]" : "translate-x-0.5"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface CameraMovementChipProps {
-  templates: ReadonlyArray<CameraMovementPreset>;
-  isLoading: boolean;
-  selectedId: string | null;
-  onChange: (next: string | null) => void;
-}
-
-const CAMERA_MOVEMENT_POPOVER_WIDTH = 640;
-const CAMERA_MOVEMENT_POPOVER_MAX_HEIGHT = 560;
-const CAMERA_MOVEMENT_POPOVER_GAP = 8;
-
-function CameraMovementChip({
-  templates,
-  isLoading,
-  selectedId,
-  onChange,
-}: CameraMovementChipProps) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(
-    null,
-  );
-
-  // Position above the chip whenever it opens or the viewport changes. We
-  // render the popover into <body> via portal so it can sit above the
-  // react-flow NodeToolbar (z-[120]) — without portal it lives inside the
-  // video node's transformed stacking context and gets covered.
-  useEffect(() => {
-    if (!isOpen) return;
-    const updateAnchor = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const popHeight = Math.min(
-        CAMERA_MOVEMENT_POPOVER_MAX_HEIGHT,
-        rect.top - CAMERA_MOVEMENT_POPOVER_GAP - 8,
-      );
-      const wantTop = rect.top - popHeight - CAMERA_MOVEMENT_POPOVER_GAP;
-      // If we can't fit above, fall back to below.
-      const top =
-        wantTop < 8 ? rect.bottom + CAMERA_MOVEMENT_POPOVER_GAP : wantTop;
-      const wantLeft = rect.left;
-      const left = Math.max(
-        8,
-        Math.min(
-          wantLeft,
-          window.innerWidth - CAMERA_MOVEMENT_POPOVER_WIDTH - 8,
-        ),
-      );
-      setAnchor({ left, top });
-    };
-    updateAnchor();
-    window.addEventListener("resize", updateAnchor);
-    window.addEventListener("scroll", updateAnchor, true);
-    return () => {
-      window.removeEventListener("resize", updateAnchor);
-      window.removeEventListener("scroll", updateAnchor, true);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(event.target as Node) ||
-        popoverRef.current?.contains(event.target as Node)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown, true);
-    return () => document.removeEventListener("mousedown", onPointerDown, true);
-  }, [isOpen]);
-
-  const selectedPreset = findCameraMovementPreset(templates, selectedId);
-  const label = selectedPreset?.label ?? "运镜";
-  const isActive = Boolean(selectedPreset);
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((prev) => !prev);
-        }}
-        className={`${NODE_TEXT_CONTROL_TRIGGER_CLASS} group/camera px-1.5 ${isActive ? "text-text-dark" : ""}`}
-      >
-        <Film className={`${NODE_TEXT_CONTROL_ICON_CLASS} group-hover/camera:text-text-dark`} />
-        <span>{label}</span>
-      </button>
-      {isOpen &&
-        anchor &&
-        createPortal(
-          <div
-            ref={popoverRef}
-            className="fixed z-[10000]"
-            style={{ left: anchor.left, top: anchor.top }}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <CameraMovementPickerPopover
-              templates={templates}
-              isLoading={isLoading}
-              selectedId={selectedId}
-              onConfirm={(nextId) => {
-                onChange(nextId);
-                setIsOpen(false);
-              }}
-              onClose={() => setIsOpen(false)}
-            />
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
-interface CharacterLibraryChipProps {
-  onOpen: () => void;
-}
-
-function CharacterLibraryChip({ onOpen }: CharacterLibraryChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onOpen();
-      }}
-      className={`${NODE_TEXT_CONTROL_TRIGGER_CLASS} group/character px-1.5`}
-    >
-      <Users className={`${NODE_TEXT_CONTROL_ICON_CLASS} group-hover/character:text-text-dark`} />
-      <span>角色库</span>
-    </button>
-  );
-}
-
-interface CountPickerProps {
-  value: VideoGenCount;
-  onChange: (next: VideoGenCount) => void;
-}
-
-function CountPicker({ value, onChange }: CountPickerProps) {
-  const { t } = useTranslation();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(event.target as Node) ||
-        popoverRef.current?.contains(event.target as Node)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown, true);
-    return () => document.removeEventListener("mousedown", onPointerDown, true);
-  }, [isOpen]);
-
-  return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((prev) => !prev);
-        }}
-        className={NODE_TEXT_CONTROL_TRIGGER_CLASS}
-      >
-        <span>{t("node.videoNode.count.format", { count: value })}</span>
-        <ChevronUp className="h-3 w-3 text-text-muted/90" />
-      </button>
-      {isOpen && (
-        <div
-          ref={popoverRef}
-          className={NODE_COUNT_POPOVER_CLASS}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {COUNT_OPTIONS.map((option) => {
-            const isActive = option === value;
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}
-                className={`${VIDEO_COUNT_OPTION_BASE_CLASS} ${
-                  isActive
-                    ? VIDEO_PARAM_ACTIVE_BUTTON_CLASS
-                    : "text-text-muted/95 hover:bg-white/[0.11] hover:text-text-dark"
-                }`}
-              >
-                {t("node.videoNode.count.format", { count: option })}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-type ReferenceMediaItem =
+export type ReferenceMediaItem =
   | {
       kind: "image";
       nodeId: string;
@@ -3747,474 +3314,6 @@ type ReferenceMediaItem =
       audioUrl: string;
       displayName?: string | null;
     };
-
-interface ReferenceMediaCapEntry {
-  item: ReferenceMediaItem;
-  /** 1-based 同类型序号（图片/视频/音频 各自累加），与 chip 角标 + @ 提及对齐。 */
-  typeIndex: number;
-  /** 是否在当前模式的引用上限内；表里没有的模式默认 true。 */
-  withinCap: boolean;
-}
-
-interface ReferenceMediaRowProps {
-  items: ReadonlyArray<ReferenceMediaCapEntry>;
-  /** 当前 genMode 是否在 REFERENCE_CAPS_BY_MODE 表里 —— 只有有 cap 的模式
-   *  才把超额 chip 标灰。 */
-  enforceCap: boolean;
-  /** 当前 genMode；用来决定 firstLastFrame 模式下给前两张图片打 首帧/尾帧 角标。 */
-  genMode: VideoGenMode;
-  onFocus: (nodeId: string) => void;
-  onDetach: (nodeId: string) => void;
-  // 拖动 chip 换位后，回传新的「按可视顺序排列的上游节点 id 列表」。
-  onReorder: (orderedNodeIds: string[]) => void;
-}
-
-function ReferenceMediaRow({
-  items,
-  enforceCap,
-  genMode,
-  onFocus,
-  onDetach,
-  onReorder,
-}: ReferenceMediaRowProps) {
-  // 同时管理整行音频的「当前播放节点」—— 同一时间只允许一个 audio chip 在
-  // 播放。点击另一个会切换；再点同一个会暂停。
-  const [playingAudioNodeId, setPlayingAudioNodeId] = useState<string | null>(
-    null,
-  );
-  // 拖拽换位的临时状态：正在被拖的 chip / 当前悬停落点 chip。
-  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
-  const [overNodeId, setOverNodeId] = useState<string | null>(null);
-
-  const clearDrag = useCallback(() => {
-    setDragNodeId(null);
-    setOverNodeId(null);
-  }, []);
-
-  const handleDrop = useCallback(
-    (targetNodeId: string) => {
-      const sourceId = dragNodeId;
-      clearDrag();
-      if (!sourceId || sourceId === targetNodeId) return;
-      const ids = items.map((entry) => entry.item.nodeId);
-      const from = ids.indexOf(sourceId);
-      const to = ids.indexOf(targetNodeId);
-      if (from === -1 || to === -1) return;
-      ids.splice(from, 1);
-      ids.splice(to, 0, sourceId);
-      onReorder(ids);
-    },
-    [dragNodeId, items, onReorder, clearDrag],
-  );
-
-  return (
-    <div className="ml-4 flex shrink-0 items-center gap-1.5">
-      {items.map((entry) => {
-        const { item, typeIndex, withinCap } = entry;
-        // 「超出当前模式上限」只在 REFERENCE_CAPS_BY_MODE 里登记过的模式生效
-        // （目前是 allReference / firstLastFrame）；其它模式即便挂了 12 张图，
-        // imageReference / firstLastFrame 自己有 slice 兜底，不在 chip 行额
-        // 外标记。
-        const overCap = enforceCap && !withinCap;
-        const modeCap = REFERENCE_CAPS_BY_MODE[genMode]?.[item.kind] ?? 0;
-        const modeLabel =
-          genMode === "firstLastFrame" ? "首尾帧" : "全能参考";
-        const overCapTitle = overCap
-          ? `${
-              item.kind === "image"
-                ? "图片"
-                : item.kind === "video"
-                  ? "视频"
-                  : "音频"
-            }引用超出${modeLabel}上限（${modeCap}${
-              item.kind === "image" ? "张" : "段"
-            }），本次生成不会使用该素材`
-          : undefined;
-        // 首尾帧模式下，前两张图片打 首帧/尾帧 角标；超出 cap 的图片就回退到
-        // 数字角标，让用户看到「这张图被忽略」的同时仍能在 prompt 里通过原序号
-        // 对照——不过那种状态主要靠自动切换到 allReference 兜底，正常不会发生。
-        const slotLabel =
-          genMode === "firstLastFrame" &&
-          item.kind === "image" &&
-          withinCap
-            ? typeIndex === 1
-              ? "首帧"
-              : typeIndex === 2
-                ? "尾帧"
-                : undefined
-            : undefined;
-        let chip: ReactNode;
-        if (item.kind === "image") {
-          chip = (
-            <ReferenceImageChip
-              item={item}
-              index={typeIndex - 1}
-              slotLabel={slotLabel}
-              onFocus={onFocus}
-              onDetach={onDetach}
-            />
-          );
-        } else if (item.kind === "video") {
-          chip = (
-            <ReferenceVideoChip
-              item={item}
-              index={typeIndex - 1}
-              onFocus={onFocus}
-              onDetach={onDetach}
-            />
-          );
-        } else {
-          chip = (
-            <ReferenceAudioChip
-              item={item}
-              index={typeIndex - 1}
-              isPlaying={playingAudioNodeId === item.nodeId}
-              onToggle={(playing) =>
-                setPlayingAudioNodeId(playing ? item.nodeId : null)
-              }
-              onFocus={onFocus}
-              onDetach={onDetach}
-            />
-          );
-        }
-
-        const isDragging = dragNodeId === item.nodeId;
-        const isDropTarget =
-          overNodeId === item.nodeId && dragNodeId !== null && !isDragging;
-
-        return (
-          <div
-            key={item.nodeId}
-            title={overCapTitle}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", item.nodeId);
-              setDragNodeId(item.nodeId);
-            }}
-            onDragOver={(event) => {
-              if (!dragNodeId) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              if (overNodeId !== item.nodeId) setOverNodeId(item.nodeId);
-            }}
-            onDragLeave={() => {
-              setOverNodeId((cur) => (cur === item.nodeId ? null : cur));
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleDrop(item.nodeId);
-            }}
-            onDragEnd={clearDrag}
-            className={`nodrag relative cursor-grab rounded-md transition active:cursor-grabbing ${
-              isDragging ? "opacity-40" : ""
-            } ${
-              isDropTarget
-                ? "ring-2 ring-accent ring-offset-1 ring-offset-surface-dark"
-                : ""
-            } ${
-              // omni 上限外的 chip：去饱和 + 半透明 + 琥珀色描边；hover 时通过
-              // 父层 title 显示「超出上限不会使用」。配 detach 按钮提示用户主动
-              // 移除超额素材。
-              overCap
-                ? "opacity-50 grayscale ring-1 ring-amber-400/45 ring-offset-1 ring-offset-surface-dark"
-                : ""
-            }`}
-          >
-            {chip}
-            {overCap && (
-              <span className="pointer-events-none absolute -bottom-1 -left-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500/90 text-[10px] font-bold leading-none text-surface-dark shadow ring-1 ring-surface-dark">
-                !
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function useHoverPreviewPos(
-  buttonRef: React.RefObject<HTMLElement | null>,
-  width: number,
-) {
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  const PREVIEW_OFFSET = 10;
-  const show = useCallback(() => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const left = Math.max(
-      8,
-      Math.min(
-        window.innerWidth - width - 8,
-        rect.left + rect.width / 2 - width / 2,
-      ),
-    );
-    const top = rect.top - PREVIEW_OFFSET;
-    setPos({ left, top });
-  }, [buttonRef, width]);
-  const hide = useCallback(() => setPos(null), []);
-  return { pos, show, hide };
-}
-
-interface ReferenceImageChipProps {
-  item: Extract<ReferenceMediaItem, { kind: "image" }>;
-  index: number;
-  /** 给角标显示自定义文案（如「首帧」「尾帧」）。未设置时使用数字角标。 */
-  slotLabel?: string;
-  onFocus: (nodeId: string) => void;
-  onDetach: (nodeId: string) => void;
-}
-
-function ReferenceImageChip({
-  item,
-  index,
-  slotLabel,
-  onFocus,
-  onDetach,
-}: ReferenceImageChipProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const PREVIEW_W = 140;
-  const { pos, show, hide } = useHoverPreviewPos(buttonRef, PREVIEW_W);
-  const label =
-    item.displayName?.trim() || slotLabel || `引用 ${index + 1}`;
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onFocus(item.nodeId);
-        }}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        className={`nodrag ${NODE_REFERENCE_MEDIA_CHIP_CLASS}`}
-        title={label}
-      >
-        <img
-          src={resolveImageDisplayUrl(item.imageUrl)}
-          alt={label}
-          className="h-full w-full object-cover"
-          draggable={false}
-        />
-        {slotLabel ? (
-          // 首尾帧角标：结构信息（不是序号），保留。前端按产品要求不再显示
-          // 「图片N」的数字角标——引用统一呈现为「图片」，序号只存在于提交给
-          // 后端的 prompt（@图片N）里，不在引用缩略图上暴露。
-          <span
-            className="pointer-events-none absolute bottom-1 left-1 z-10 text-[9px] font-medium leading-none text-white"
-            style={{ textShadow: "0 0 2px rgba(0,0,0,0.65), 0 1px 1px rgba(0,0,0,0.55)" }}
-          >
-            {slotLabel}
-          </span>
-        ) : null}
-        <ReferenceDetachButton
-          nodeId={item.nodeId}
-          onDetach={onDetach}
-          className={NODE_REFERENCE_MEDIA_DETACH_CLASS}
-        />
-      </button>
-      {pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-[400] -translate-y-full"
-            style={{ left: pos.left, top: pos.top, width: PREVIEW_W }}
-          >
-            <div className="overflow-hidden rounded-xl border border-white/15 bg-surface-dark/95 shadow-2xl backdrop-blur-sm">
-              <img
-                src={resolveImageDisplayUrl(item.imageUrl)}
-                alt={label}
-                className="block h-auto w-full object-contain"
-                draggable={false}
-              />
-            </div>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
-interface ReferenceVideoChipProps {
-  item: Extract<ReferenceMediaItem, { kind: "video" }>;
-  index: number;
-  onFocus: (nodeId: string) => void;
-  onDetach: (nodeId: string) => void;
-}
-
-function ReferenceVideoChip({ item, index, onFocus, onDetach }: ReferenceVideoChipProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const PREVIEW_W = 140;
-  const { pos, show, hide } = useHoverPreviewPos(buttonRef, PREVIEW_W);
-  const label = item.displayName?.trim() || `视频引用 ${index + 1}`;
-
-  // chip 缩略图：有 previewImageUrl 用静态图；否则用一个 muted 静止 <video>
-  // 显示首帧。preload=metadata 让 Safari/Chrome 自动定位到首帧。
-  const thumb = item.thumbUrl ? (
-    <img
-      src={resolveImageDisplayUrl(item.thumbUrl)}
-      alt={label}
-      className="h-full w-full object-cover"
-      draggable={false}
-    />
-  ) : (
-    <video
-      src={resolveImageDisplayUrl(item.videoUrl)}
-      className="h-full w-full object-cover"
-      muted
-      playsInline
-      preload="metadata"
-      draggable={false}
-    />
-  );
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onFocus(item.nodeId);
-        }}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        className={`nodrag ${NODE_REFERENCE_MEDIA_CHIP_CLASS}`}
-        title={label}
-      >
-        {thumb}
-        <ReferenceDetachButton
-          nodeId={item.nodeId}
-          onDetach={onDetach}
-          className={NODE_REFERENCE_MEDIA_DETACH_CLASS}
-        />
-      </button>
-      {pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-[400] -translate-y-full"
-            style={{ left: pos.left, top: pos.top, width: PREVIEW_W }}
-          >
-            <div className="overflow-hidden rounded-xl border border-white/15 bg-surface-dark/95 shadow-2xl backdrop-blur-sm">
-              {/* hover 时 autoplay + loop + muted —— 不弹声音不打扰其它正在
-                  播放的 audio chip。 */}
-              <video
-                src={resolveImageDisplayUrl(item.videoUrl)}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="block h-auto w-full object-contain"
-              />
-            </div>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
-interface ReferenceAudioChipProps {
-  item: Extract<ReferenceMediaItem, { kind: "audio" }>;
-  index: number;
-  isPlaying: boolean;
-  onToggle: (playing: boolean) => void;
-  onFocus: (nodeId: string) => void;
-  onDetach: (nodeId: string) => void;
-}
-
-function ReferenceAudioChip({
-  item,
-  index,
-  isPlaying,
-  onToggle,
-  onFocus,
-  onDetach,
-}: ReferenceAudioChipProps) {
-  // 用 ref 持有一个 HTMLAudioElement —— 比挂在 DOM 上的 <audio> 简单：可以
-  // 直接 .play()/.pause()，也方便处理同时只放一个的逻辑（父层告诉这个
-  // chip 它不再是当前正在播的）。
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  if (audioRef.current === null && typeof Audio !== "undefined") {
-    audioRef.current = new Audio();
-  }
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const src = resolveImageDisplayUrl(item.audioUrl);
-    if (audio.src !== src) {
-      audio.src = src;
-    }
-  }, [item.audioUrl]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      void audio.play().catch(() => {
-        // 自动播放被浏览器拦或资源加载失败 —— 回滚父层状态。
-        onToggle(false);
-      });
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying, onToggle]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const handleEnded = () => onToggle(false);
-    audio.addEventListener("ended", handleEnded);
-    return () => audio.removeEventListener("ended", handleEnded);
-  }, [onToggle]);
-
-  // 卸载时停掉播放，避免脏状态留在浏览器。
-  useEffect(() => {
-    return () => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.pause();
-      audio.src = "";
-    };
-  }, []);
-
-  const label = item.displayName?.trim() || `音频引用 ${index + 1}`;
-
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        // 单击：切换播放；同时把焦点切到上游节点（方便用户跳过去看）。
-        onFocus(item.nodeId);
-        onToggle(!isPlaying);
-      }}
-      className={`group/refmedia nodrag relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border transition-colors ${
-        isPlaying
-          ? "border-accent/60 bg-[rgb(var(--accent-rgb)/0.15)]"
-          : "border-white/10 bg-white/[0.04] hover:border-white/30"
-      }`}
-      title={label}
-    >
-      {isPlaying ? (
-        <Pause className="h-4 w-4 text-accent" />
-      ) : (
-        <Music className="h-4 w-4 text-text-dark/90" />
-      )}
-      <ReferenceDetachButton
-        nodeId={item.nodeId}
-        onDetach={onDetach}
-        className={NODE_REFERENCE_MEDIA_DETACH_CLASS}
-      />
-    </button>
-  );
-}
 
 // --- custom video player controls ------------------------------------------ //
 //

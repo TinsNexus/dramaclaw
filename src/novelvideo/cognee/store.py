@@ -11,10 +11,14 @@ import os
 from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Optional, Any, Iterable
 import json
-from importlib import import_module
+from datetime import date, datetime
+from uuid import UUID
 
 # 重要：必须先导入 config，在 cognee 被导入之前设置环境变量
-from .config import apply_cognee_project_storage_context, init_cognee  # noqa: F401
+from .config import init_cognee  # noqa: F401
+from novelvideo.config import get_newapi_structured_output_litellm_kwargs
+from .concurrency import cognee_pipeline_concurrency
+from .ladybug_access import cognee_project_context, ladybug_graph_access
 
 from novelvideo.shared.env_guard import preserve_st_env
 
@@ -23,10 +27,27 @@ with preserve_st_env():
     from cognee.api.v1.search import SearchType
     from cognee.modules.engine.operations.setup import setup
 from rich.console import Console
-from novelvideo.config import get_newapi_reasoning_kwargs
+from novelvideo.embedding_models import (
+    embedding_model_for_legacy_project,
+    embedding_model_scope as project_embedding_model_scope,
+)
+from novelvideo.graph_preview import (
+    delete_graph_preview,
+    write_graph_preview,
+)
 from novelvideo.official_defaults import DEFAULT_COGNEE_LLM_MODEL
+from novelvideo.novel_source import require_imported_novel
+from novelvideo.project_config import ensure_cognee_embedding_binding_in_state_dir
 from novelvideo.sqlite_store import SQLiteStore
 from novelvideo.utils.document_parsers import load_novel_text
+
+# 路径计算工具函数 — canonical implementation lives in utils.path_resolver.
+from novelvideo.utils.path_resolver import (  # noqa: F401
+    compute_portrait_path,
+    compute_identity_path,
+    compute_scene_reference_path,
+    compute_prop_reference_path,
+)
 
 from novelvideo.models import (
     CharacterIdentity,
@@ -45,24 +66,27 @@ from novelvideo.models import (
     normalize_detected_props,
     sync_beat_asset_refs,
 )
-from .config import init_cognee
 
 console = Console()
+
+INGEST_PROGRESS_MILESTONES = {
+    "read": 0.02,
+    "prune": 0.06,
+    "parse": 0.10,
+    "parsed": 0.25,
+    "graph": 0.30,
+    "graph_validated": 0.65,
+    "index": 0.70,
+    "indexed": 0.85,
+    "preview": 0.90,
+    "preview_saved": 0.95,
+    "save": 0.98,
+    "complete": 1.0,
+}
 
 
 def _json_list_payload(values: list[str]) -> str:
     return json.dumps(list(values or []), ensure_ascii=False)
-
-
-# ============================================================
-# 路径计算工具函数 — canonical implementation lives in utils.path_resolver.
-# ============================================================
-from novelvideo.utils.path_resolver import (  # noqa: F401
-    compute_portrait_path,
-    compute_identity_path,
-    compute_scene_reference_path,
-    compute_prop_reference_path,
-)
 
 
 class CogneeStore:
@@ -155,9 +179,8 @@ class CogneeStore:
             state_dir=self.state_dir,
         )
         self._share_sqlite_caches()
-
-        # 立即设置 Cognee 上下文
-        self._set_cognee_context()
+        self.cognee_embedding_model: str | None = None
+        self.cognee_embedding_dimensions: int | None = None
 
     def __getattr__(self, name: str):
         """Lazily restore SQLiteStore for legacy/test objects built via __new__."""
@@ -267,28 +290,24 @@ class CogneeStore:
         """统一别名查找键，降低空格/大小写差异导致的失配。"""
         return " ".join((value or "").replace("\u3000", " ").strip().lower().split())
 
-    def _set_cognee_context(self, verbose: bool = False) -> None:
-        """设置 Cognee 的数据库上下文为当前项目。
-
-        切换 Cognee system/data 路径，
-        确保多项目切换时 search() 和 cognify() 都指向正确的项目。
-        """
-        cognee_system_dir, cognee_data_dir = apply_cognee_project_storage_context(
-            self.state_dir,
-            cognee,
-        )
-        if verbose:
-            print(
-                f"[cognee_context] project={self.project_name} "
-                f"project_dir={self.project_dir} "
-                f"system_root_directory={cognee_system_dir} "
-                f"data_root_directory={cognee_data_dir}",
-                flush=True,
-            )
+    def embedding_model_scope(self):
+        model = getattr(self, "cognee_embedding_model", None)
+        dimensions = getattr(self, "cognee_embedding_dimensions", None)
+        if not model or dimensions is None:
+            state_dir = getattr(self, "state_dir", None)
+            if state_dir:
+                binding = ensure_cognee_embedding_binding_in_state_dir(state_dir)
+                model = binding.internal_model
+                dimensions = binding.dimensions
+            else:
+                model = embedding_model_for_legacy_project()
+            self.cognee_embedding_model = model
+            self.cognee_embedding_dimensions = dimensions
+        return project_embedding_model_scope(model, dimensions=dimensions)
 
     @staticmethod
     def _ensure_pipeline_run_succeeded(result, stage_name: str) -> None:
-        """Treat Cognee pipeline Errored/Failed results as task failures."""
+        """Require every Cognee pipeline run to report a completed status."""
 
         def truncate(value: Any, limit: int = 400) -> str:
             detail = str(value or "").strip() or "unknown error"
@@ -301,25 +320,44 @@ class CogneeStore:
                 return value.get(field_name, default)
             return getattr(value, field_name, default)
 
-        def nested_pipeline_errors(run: Any) -> List[str]:
-            nested_errors: List[str] = []
+        def pipeline_status_text(status: Any) -> str:
+            return str(getattr(status, "value", status) or "").strip()
+
+        def is_completed_status(status: Any) -> bool:
+            normalized = "".join(
+                character
+                for character in pipeline_status_text(status).lower()
+                if character.isalnum()
+            )
+            return normalized in {
+                "completed",
+                "alreadycompleted",
+                "pipelineruncompleted",
+                "pipelinerunalreadycompleted",
+                "datasetprocessingcompleted",
+            }
+
+        def nested_pipeline_failures(run: Any) -> List[str]:
+            nested_failures: List[str] = []
             data_ingestion_info = read_field(run, "data_ingestion_info") or []
             if not isinstance(data_ingestion_info, Iterable) or isinstance(
                 data_ingestion_info, (str, bytes)
             ):
-                return nested_errors
+                return nested_failures
 
             for item in data_ingestion_info:
                 run_info = read_field(item, "run_info")
                 if run_info is None:
                     continue
                 status = read_field(run_info, "status")
-                status_text = str(getattr(status, "value", status) or "")
-                if "error" not in status_text.lower() and "fail" not in status_text.lower():
+                if is_completed_status(status):
                     continue
+                status_text = pipeline_status_text(status) or "unknown status"
                 payload = read_field(run_info, "payload")
-                nested_errors.append(truncate(payload, limit=600))
-            return nested_errors
+                nested_failures.append(
+                    f"{status_text}: {truncate(payload, limit=600)}"
+                )
+            return nested_failures
 
         if isinstance(result, dict):
             runs = list(result.values())
@@ -328,21 +366,29 @@ class CogneeStore:
         else:
             runs = [result]
 
+        if not runs:
+            raise RuntimeError(f"{stage_name}失败: Cognee 返回空结果")
+
         errors: List[str] = []
         for run in runs:
             if run is None:
-                errors.append(f"{stage_name} 返回空结果")
+                errors.append(f"{stage_name}失败: Cognee 返回空结果")
                 continue
 
-            status = getattr(run, "status", None)
-            payload = getattr(run, "payload", None)
-            status_text = str(getattr(status, "value", status) or "")
-            if "error" in status_text.lower() or "fail" in status_text.lower():
+            status = read_field(run, "status")
+            payload = read_field(run, "payload")
+            status_text = pipeline_status_text(status)
+            nested = nested_pipeline_failures(run)
+            if nested:
                 detail = truncate(payload)
-                nested = nested_pipeline_errors(run)
-                if nested:
-                    detail = f"{detail}; data item errors: " + " | ".join(nested[:3])
+                detail = f"{detail}; data item failures: " + " | ".join(nested[:3])
                 errors.append(f"{stage_name}失败({status_text}): {detail}")
+                continue
+            if not is_completed_status(status):
+                detail = truncate(payload)
+                errors.append(
+                    f"{stage_name}失败({status_text or 'unknown status'}): {detail}"
+                )
 
         if errors:
             raise RuntimeError("；".join(errors))
@@ -357,9 +403,10 @@ class CogneeStore:
         """Run a Cognee pipeline stage once, retrying one transient failure."""
         last_error: Exception | None = None
         for attempt in range(2):
-            self._set_cognee_context()
             try:
-                result = await operation()
+                async with cognee_pipeline_concurrency():
+                    with self.embedding_model_scope():
+                        result = await operation()
                 self._ensure_pipeline_run_succeeded(result, stage_name)
                 return result
             except Exception as exc:
@@ -385,103 +432,53 @@ class CogneeStore:
 
     async def initialize(self):
         """初始化 SQLite 数据库和 Cognee 配置。"""
+        embedding_binding = ensure_cognee_embedding_binding_in_state_dir(self.state_dir)
+        self.cognee_embedding_model = embedding_binding.internal_model
+        self.cognee_embedding_dimensions = embedding_binding.dimensions
         init_cognee()
 
         # 初始化项目 SQLite；Cognee 图谱上下文独立设置。
         await self._ensure_db()
 
-        # 设置 Cognee 上下文（包含 project-local system/data 路径）
-        self._set_cognee_context(verbose=True)
+        # Cognee's graph/vector contexts are task-local, while DramaClaw adds
+        # the missing project-local base/relational contexts for Cognee 1.0.5.
+        # Different projects can therefore initialize safely in Celery threads.
+        with cognee_project_context(self.state_dir):
+            try:
+                with self.embedding_model_scope():
+                    await setup()
+            except Exception as e:
+                # cognee 0.5.3 bug: 重复初始化时 CREATE TABLE data 报 already exists
+                if "already exists" in str(e):
+                    pass
+                else:
+                    raise
 
-        try:
-            await setup()
-        except Exception as e:
-            # cognee 0.5.3 bug: 重复初始化时 CREATE TABLE data 报 already exists
-            if "already exists" in str(e):
-                pass
-            else:
-                raise
+            # 确保当前用户拥有该 dataset
+            with preserve_st_env():
+                from cognee.modules.pipelines.layers.resolve_authorized_user_datasets import (
+                    resolve_authorized_user_datasets,
+                )
 
-        # 确保当前用户拥有该 dataset
-        with preserve_st_env():
-            from cognee.modules.pipelines.layers.resolve_authorized_user_datasets import (
-                resolve_authorized_user_datasets,
-            )
-
-        try:
-            await resolve_authorized_user_datasets(datasets=self.dataset_name)
-        except Exception as e:
-            if "UNIQUE constraint failed: datasets.id" in str(e):
-                pass
-            else:
-                console.print(f"[yellow]⚠️ dataset 权限注册失败（非致命）: {e}[/yellow]")
+            try:
+                with self.embedding_model_scope():
+                    await resolve_authorized_user_datasets(datasets=self.dataset_name)
+            except Exception as e:
+                if "UNIQUE constraint failed: datasets.id" in str(e):
+                    pass
+                else:
+                    console.print(
+                        f"[yellow]⚠️ dataset 权限注册失败（非致命）: {e}[/yellow]"
+                    )
 
         console.print(
             f"[dim]存储层已初始化 (dataset: {self.dataset_name}, db: {self.db_path})[/dim]"
         )
 
     async def close(self) -> None:
-        """Release project-scoped SQLite and Cognee graph resources."""
+        """Release the project-scoped SQLite resource."""
         if self.__dict__.get("_owns_sqlite_store", True):
             await self._ensure_sqlite_store().close()
-        self._release_cognee_graph_engine()
-
-    @staticmethod
-    def _release_cognee_graph_engine() -> None:
-        """Close Cognee's cached graph engine so worker processes release file locks."""
-        try:
-            graph_config_module = import_module("cognee.infrastructure.databases.graph.config")
-            graph_engine_module = import_module(
-                "cognee.infrastructure.databases.graph.get_graph_engine"
-            )
-        except Exception:
-            return
-
-        cached_factory = getattr(graph_engine_module, "_create_graph_engine", None)
-        cache_info = getattr(cached_factory, "cache_info", None)
-        has_cached_engine = True
-        if callable(cache_info):
-            try:
-                has_cached_engine = cache_info().currsize > 0
-            except Exception:
-                has_cached_engine = True
-
-        graph_engine = None
-        if has_cached_engine:
-            try:
-                config = graph_config_module.get_graph_context_config()
-                graph_engine = graph_engine_module.create_graph_engine(**config)
-            except Exception:
-                graph_engine = None
-
-        if graph_engine is not None:
-            for attr_name in ("connection", "db"):
-                handle = getattr(graph_engine, attr_name, None)
-                close = getattr(handle, "close", None)
-                if callable(close):
-                    try:
-                        close()
-                    except Exception:
-                        pass
-            close_engine = getattr(graph_engine, "close", None)
-            if callable(close_engine):
-                try:
-                    close_engine()
-                except Exception:
-                    pass
-            executor = getattr(graph_engine, "executor", None)
-            shutdown = getattr(executor, "shutdown", None)
-            if callable(shutdown):
-                try:
-                    shutdown(wait=False, cancel_futures=True)
-                except TypeError:
-                    shutdown(wait=False)
-                except Exception:
-                    pass
-
-        cache_clear = getattr(cached_factory, "cache_clear", None)
-        if callable(cache_clear):
-            cache_clear()
 
     # ============================================================
     # 内容存储（替代 Redis）
@@ -521,10 +518,29 @@ class CogneeStore:
         self,
         novel_path: str,
         rebuild: bool = False,
+        spine_template: str | None = None,
         on_progress: Optional[Callable[[float, str], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,
     ) -> dict:
-        """快速导入：只构建 Cognee 图谱，不提取角色/剧集。"""
+        """快速导入，并独占当前项目的 Cognee/Ladybug 图谱。"""
+        async with ladybug_graph_access(self.state_dir, read_only=False):
+            return await self._ingest_novel_fast_locked(
+                novel_path,
+                rebuild=rebuild,
+                spine_template=spine_template,
+                on_progress=on_progress,
+                on_log=on_log,
+            )
+
+    async def _ingest_novel_fast_locked(
+        self,
+        novel_path: str,
+        rebuild: bool = False,
+        spine_template: str | None = None,
+        on_progress: Optional[Callable[[float, str], None]] = None,
+        on_log: Optional[Callable[[str], None]] = None,
+    ) -> dict:
+        """在项目图谱锁内构建 Cognee 图谱，不提取角色/剧集。"""
 
         def report(progress: float, task: str):
             if on_progress:
@@ -538,21 +554,23 @@ class CogneeStore:
         if not Path(novel_path).exists():
             raise FileNotFoundError(f"文件不存在: {novel_path}")
 
-        if rebuild:
-            report(0.05, "重建图谱...")
-            log("清除 cognee 图谱数据...")
-            await self._prune_cognee_only()
-
         from .config import init_cognee
 
-        init_cognee()
-
+        report(INGEST_PROGRESS_MILESTONES["read"], "读取并校验原文...")
         log(f"读取文件: {novel_path}")
         content = load_novel_text(novel_path)
         if not content.strip():
             raise ValueError("小说内容为空，无法导入")
         log(f"文件读取完成: {len(content)} 字符")
         self._novel_content = content
+
+        if str(spine_template or "").strip() == "drama":
+            from novelvideo.utils.screenplay_quality import (
+                assess_screenplay_scene_headers,
+            )
+
+            if assess_screenplay_scene_headers(content).status == "missing":
+                raise ValueError("精品剧必须包含场景头，请补充后重新导入")
 
         os.environ["COGNEE_TELEMETRY_ENABLED"] = "false"
 
@@ -561,16 +579,33 @@ class CogneeStore:
                 "LLM API key 未设置。请在 .env 文件中添加:\n" "  OPENAI_API_KEY=your_key_here"
             )
 
+        if rebuild:
+            report(INGEST_PROGRESS_MILESTONES["prune"], "清理旧图谱...")
+            # novel.txt 是前端和后续流水线判断“已导入”的持久标志。旧图谱已经
+            # 清除前必须先让旧标志失效：即使清理中途失败，也不能继续显示成功。
+            imported_novel_path = Path(self.project_dir) / "novel.txt"
+            imported_novel_path.unlink(missing_ok=True)
+            delete_graph_preview(self.state_dir)
+            log("清除 cognee 图谱数据...")
+            await self._prune_cognee_only()
+
+        # 重建时必须先清理旧存储，再初始化 Cognee 的数据库连接。
+        init_cognee()
+
         # Step 1: 添加原文到 Cognee
-        report(0.1, "解析原文...")
-        log("Step 1/2: 导入原文到 Cognee...")
-        self._set_cognee_context()
-        await cognee.add(content, dataset_name=self.dataset_name)
+        report(INGEST_PROGRESS_MILESTONES["parse"], "解析原文...")
+        log("Step 1/3: 导入原文到 Cognee...")
+        await self._run_cognee_pipeline_with_retry(
+            stage_name="原文导入",
+            operation=lambda: cognee.add(content, dataset_name=self.dataset_name),
+            log=log,
+        )
         log("原文导入完成")
+        report(INGEST_PROGRESS_MILESTONES["parsed"], "原文解析完成")
         await asyncio.sleep(0)
 
         # Step 2: 构建知识图谱
-        report(0.3, "构建知识图谱...")
+        report(INGEST_PROGRESS_MILESTONES["graph"], "构建知识图谱...")
         log("Step 2/3: 构建知识图谱（这可能需要几分钟）...")
         await self._run_cognee_pipeline_with_retry(
             stage_name="知识图谱构建",
@@ -579,8 +614,13 @@ class CogneeStore:
         )
         log("知识图谱构建完成")
 
+        if not await self._dataset_graph_has_nodes():
+            raise RuntimeError("知识图谱构建失败：未生成任何图谱节点")
+        log("知识图谱校验完成")
+        report(INGEST_PROGRESS_MILESTONES["graph_validated"], "知识图谱校验完成")
+
         # Step 3: 创建向量索引（memify）
-        report(0.7, "创建向量索引...")
+        report(INGEST_PROGRESS_MILESTONES["index"], "创建向量索引...")
         log("Step 3/3: 创建向量索引（用于三元组检索）...")
         await self._run_cognee_pipeline_with_retry(
             stage_name="向量索引创建",
@@ -588,20 +628,282 @@ class CogneeStore:
             log=log,
         )
         log("向量索引创建完成")
+        report(INGEST_PROGRESS_MILESTONES["indexed"], "向量索引创建完成")
+
+        # API workers render this bounded sidecar and never open Ladybug merely
+        # for graph visualization.  Persist it before novel.txt, because the
+        # latter is the public "import succeeded" marker.
+        report(INGEST_PROGRESS_MILESTONES["preview"], "生成图谱预览...")
+        await self.materialize_graph_preview()
+        log("知识图谱预览已保存")
+        report(INGEST_PROGRESS_MILESTONES["preview_saved"], "图谱预览已保存")
 
         # 原文落库放在图谱构建成功之后：失败时不留下"已导入"的痕迹。
         # /chapters 仅凭已存原文判定"导入完成"，若提前落库，cognify/memify 失败
         # 仍会让界面误报导入成功且锁死重新上传入口。
+        report(INGEST_PROGRESS_MILESTONES["save"], "保存导入结果...")
         self.save_novel_content(content)
         log("原文已保存到文件")
 
-        report(1.0, "导入完成")
+        report(INGEST_PROGRESS_MILESTONES["complete"], "导入完成")
 
         return {
             "char_count": len(content),
             "dataset": self.dataset_name,
             "status": "graph_ready",
         }
+
+    async def materialize_graph_preview(self, max_nodes: int = 48) -> dict:
+        async with ladybug_graph_access(self.state_dir, read_only=True):
+            snapshot = await self.get_graph_snapshot(max_nodes=max_nodes)
+            if not snapshot.get("nodes"):
+                raise RuntimeError("知识图谱预览生成失败：未读取到任何图谱节点")
+            write_graph_preview(self.state_dir, snapshot)
+            return snapshot
+
+    async def get_graph_snapshot(self, max_nodes: int = 48) -> dict:
+        """Return a bounded, JSON-safe snapshot for the project graph viewer.
+
+        Cognee's graph may contain large chunk payloads and embedding metadata. The
+        viewer needs topology and concise human-readable properties, not the raw
+        storage representation, so this method ranks connected nodes and strips
+        oversized or vector-shaped values before returning them to the browser.
+        """
+
+        max_nodes = max(20, min(int(max_nodes), 80))
+        max_edges = min(max_nodes * 3, 160)
+        raw_nodes, raw_edges = await self._get_dataset_graph_data(
+            max_nodes=max_nodes,
+            max_edges=max_edges,
+        )
+        degree: Dict[str, int] = {}
+        for source, target, _relation, _properties in raw_edges:
+            source_id = str(source)
+            target_id = str(target)
+            degree[source_id] = degree.get(source_id, 0) + 1
+            degree[target_id] = degree.get(target_id, 0) + 1
+
+        type_priority = {
+            "Entity": 6,
+            "EntityType": 5,
+            "TextSummary": 4,
+            "Document": 3,
+            "DocumentChunk": 1,
+        }
+
+        ranked_nodes = sorted(
+            raw_nodes,
+            key=lambda item: (
+                degree.get(str(item[0]), 0) * 10
+                + type_priority.get(str((item[1] or {}).get("type") or ""), 2) * 3
+                + int(bool((item[1] or {}).get("name")))
+            ),
+            reverse=True,
+        )[:max_nodes]
+        selected_ids = {str(node_id) for node_id, _properties in ranked_nodes}
+
+        def compact(value: Any, *, depth: int = 0) -> Any:
+            if value is None or isinstance(value, (bool, int, float)):
+                return value
+            if isinstance(value, (UUID, date, datetime)):
+                return str(value)
+            if isinstance(value, str):
+                return value if len(value) <= 500 else value[:497] + "..."
+            if depth >= 2:
+                return str(value)[:500]
+            if isinstance(value, (list, tuple, set)):
+                return [compact(item, depth=depth + 1) for item in list(value)[:12]]
+            if isinstance(value, dict):
+                result = {}
+                for key, item in list(value.items())[:16]:
+                    key_text = str(key)
+                    if any(token in key_text.lower() for token in ("embedding", "vector")):
+                        continue
+                    result[key_text] = compact(item, depth=depth + 1)
+                return result
+            return str(value)[:500]
+
+        nodes = []
+        for node_id, properties in ranked_nodes:
+            props = dict(properties or {})
+            node_type = str(props.pop("type", "Unknown") or "Unknown")
+            label = str(props.pop("name", "") or node_id)
+            nodes.append(
+                {
+                    "id": str(node_id),
+                    "label": label[:160],
+                    "type": node_type[:80],
+                    "degree": degree.get(str(node_id), 0),
+                    "properties": compact(props),
+                }
+            )
+
+        edges = []
+        for index, (source, target, relation, properties) in enumerate(raw_edges):
+            source_id = str(source)
+            target_id = str(target)
+            if source_id not in selected_ids or target_id not in selected_ids:
+                continue
+            edges.append(
+                {
+                    "id": f"{source_id}:{target_id}:{index}",
+                    "source": source_id,
+                    "target": target_id,
+                    "relation": str(relation or "related_to")[:120],
+                    "properties": compact(properties or {}),
+                }
+            )
+            if len(edges) >= max_edges:
+                break
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "total_nodes": len(raw_nodes),
+            "total_edges": len(raw_edges),
+            "truncated": len(raw_nodes) >= max_nodes or len(raw_edges) >= max_edges,
+        }
+
+    async def _get_dataset_graph_data(
+        self,
+        *,
+        max_nodes: int = 48,
+        max_edges: int = 144,
+    ) -> tuple[list, list]:
+        """Read a bounded preview through Cognee's project dataset context.
+
+        With backend access control enabled, Cognee stores each dataset in its
+        own graph database. Calling ``get_graph_engine()`` without first setting
+        that dataset context opens the empty global graph instead of the graph
+        populated by ``cognify()``. The ingest UI is only a visual preview, so
+        querying the complete graph here would make large novels unnecessarily
+        expensive and could block the API worker.
+        """
+
+        with preserve_st_env():
+            from cognee.context_global_variables import (
+                set_database_global_context_variables,
+            )
+            from cognee.infrastructure.databases.graph import get_graph_engine
+            from cognee.modules.data.methods import get_datasets_by_name
+            from cognee.modules.users.methods import get_default_user
+
+        user = await get_default_user()
+        datasets = await get_datasets_by_name(self.dataset_name, user.id)
+        if not datasets:
+            return [], []
+
+        dataset = datasets[0]
+        async with set_database_global_context_variables(dataset.id, dataset.owner_id):
+            graph_engine = await get_graph_engine()
+            query = getattr(graph_engine, "query", None)
+            if not callable(query):
+                # Compatibility fallback for graph adapters that only expose
+                # Cognee's all-graph interface.
+                nodes, edges = await graph_engine.get_graph_data()
+                return nodes[:max_nodes], edges[:max_edges]
+
+            max_nodes = max(1, min(int(max_nodes), 80))
+            max_edges = max(1, min(int(max_edges), 160))
+            edge_rows = await query(
+                f"""
+                    MATCH (n:Node)-[r]->(m:Node)
+                    WHERE n.type <> 'DocumentChunk' AND m.type <> 'DocumentChunk'
+                    RETURN n.id, n.name, n.type, n.properties,
+                           m.id, m.name, m.type, m.properties,
+                           r.relationship_name, r.properties
+                    LIMIT {max_edges}
+                """
+            )
+            node_rows = await query(
+                f"""
+                    MATCH (n:Node)
+                    WHERE n.type <> 'DocumentChunk'
+                    RETURN n.id, n.name, n.type, n.properties
+                    LIMIT {max_nodes}
+                """
+            )
+
+            def parse_properties(raw: Any) -> dict:
+                if not raw:
+                    return {}
+                if isinstance(raw, dict):
+                    return dict(raw)
+                if isinstance(raw, str):
+                    try:
+                        parsed = json.loads(raw)
+                        return parsed if isinstance(parsed, dict) else {}
+                    except (TypeError, json.JSONDecodeError):
+                        return {}
+                return {}
+
+            nodes_by_id: dict[str, dict] = {}
+
+            def add_node(row: Any, offset: int = 0) -> None:
+                if (
+                    not row
+                    or len(row) < offset + 4
+                    or not row[offset]
+                    or len(nodes_by_id) >= max_nodes
+                ):
+                    return
+                node_id = str(row[offset])
+                nodes_by_id.setdefault(
+                    node_id,
+                    {
+                        "name": row[offset + 1],
+                        "type": row[offset + 2],
+                        **parse_properties(row[offset + 3]),
+                    },
+                )
+
+            # Take connected endpoints first so the preview remains a useful
+            # subgraph instead of a collection of unrelated nodes.
+            for row in edge_rows:
+                add_node(row)
+                add_node(row, 4)
+            for row in node_rows:
+                add_node(row)
+
+            selected_ids = set(nodes_by_id)
+            edges = []
+            for row in edge_rows:
+                if not row or len(row) < 10:
+                    continue
+                source_id = str(row[0])
+                target_id = str(row[4])
+                if source_id not in selected_ids or target_id not in selected_ids:
+                    continue
+                edges.append(
+                    (
+                        source_id,
+                        target_id,
+                        str(row[8] or "related_to"),
+                        parse_properties(row[9]),
+                    )
+                )
+            nodes = list(nodes_by_id.items())
+            return nodes, edges
+
+    async def _dataset_graph_has_nodes(self) -> bool:
+        """Check graph existence without loading every node and edge."""
+        with preserve_st_env():
+            from cognee.context_global_variables import (
+                set_database_global_context_variables,
+            )
+            from cognee.infrastructure.databases.graph import get_graph_engine
+            from cognee.modules.data.methods import get_datasets_by_name
+            from cognee.modules.users.methods import get_default_user
+
+        user = await get_default_user()
+        datasets = await get_datasets_by_name(self.dataset_name, user.id)
+        if not datasets:
+            return False
+
+        dataset = datasets[0]
+        async with set_database_global_context_variables(dataset.id, dataset.owner_id):
+            graph_engine = await get_graph_engine()
+            return not await graph_engine.is_empty()
 
     async def build_characters_from_graph(
         self,
@@ -624,17 +926,18 @@ class CogneeStore:
                 on_log(message)
             console.print(f"[dim]{message}[/dim]")
 
+        novel_text = require_imported_novel(self.project_dir)
         report(0.1, "从图谱提取人物节点...")
         log("从图谱提取角色候选...")
-        self._set_cognee_context()
-        novel_text = self.load_novel_content()
-        characters = await extract_characters_from_graph(
-            dataset_name=self.dataset_name,
-            project_name=self.project_name,
-            project_dir=str(self.project_dir),
-            novel_text=novel_text,
-            on_progress=lambda p, t: report(0.1 + p * 0.6, t),
-        )
+        with self.embedding_model_scope():
+            characters = await extract_characters_from_graph(
+                dataset_name=self.dataset_name,
+                project_name=self.project_name,
+                project_dir=str(self.project_dir),
+                state_dir=self.state_dir,
+                novel_text=novel_text,
+                on_progress=lambda p, t: report(0.1 + p * 0.6, t),
+            )
 
         if not characters:
             log("⚠️ 图谱提取无结果，保留现有角色数据")
@@ -665,11 +968,6 @@ class CogneeStore:
         await self._ensure_db()
         return await self.sqlite_store.delete_all_characters()
 
-    async def _delete_old_episodes(self) -> int:
-        """删除所有剧集。"""
-        await self._ensure_db()
-        return await self.sqlite_store.delete_all_episodes()
-
     async def build_episodes(
         self,
         target_episodes: int = 10,
@@ -690,11 +988,8 @@ class CogneeStore:
 
         # 获取原文内容
         log("从文件加载原文...")
-        novel_content = self.load_novel_content()
-        if novel_content:
-            log(f"原文加载完成: {len(novel_content)} 字符")
-        else:
-            raise ValueError("请先导入小说（调用 ingest_novel_fast）")
+        novel_content = require_imported_novel(self.project_dir)
+        log(f"原文加载完成: {len(novel_content)} 字符")
 
         # 获取已确认的角色列表
         character_names = list(self._characters.keys())
@@ -714,21 +1009,13 @@ class CogneeStore:
 
         log(f"LLM 返回 {len(episodes)} 集")
 
-        # P2: 删除旧剧集
-        report(0.8, "清理旧剧集数据...")
-        log("清理旧剧集数据...")
-        deleted = await self._delete_old_episodes()
-        log(f"已删除 {deleted} 个旧剧集")
-        self._episodes.clear()
-
-        # P3: 保存新剧集
+        # P2: 原子替换旧规划。删除和写入必须在同一事务中完成，避免任务
+        # 取消或 Worker 退出后只剩一张空 episodes 表。
+        old_episode_count = len(self._episodes)
         report(0.85, "保存新剧集...")
         log("保存新剧集到数据库...")
-        await self.add_episodes(episodes)
-
-        # P4: 更新内存缓存
-        for ep in episodes:
-            self._episodes[ep.number] = ep
+        await self.replace_episodes(episodes)
+        log(f"已原子替换 {old_episode_count} 个旧剧集")
 
         if len(self._episodes) != len(episodes):
             log(f"⚠️ 警告：内存缓存 ({len(self._episodes)}) 与返回结果 ({len(episodes)}) 不一致")
@@ -760,9 +1047,7 @@ class CogneeStore:
         # 获取小说原文
         if novel_text is None:
             log("从文件加载原文...")
-            novel_text = self.load_novel_content()
-            if not novel_text:
-                raise ValueError("请先导入小说（调用 ingest_novel_fast）")
+            novel_text = require_imported_novel(self.project_dir)
             log(f"原文加载完成: {len(novel_text)} 字符")
 
         # 清理剧集内容
@@ -878,9 +1163,7 @@ class CogneeStore:
 
         # 1. 加载原文并检测章节
         log("从文件加载原文...")
-        novel_text = self.load_novel_content()
-        if not novel_text:
-            raise ValueError("请先导入小说（调用 ingest_novel_fast）")
+        novel_text = require_imported_novel(self.project_dir)
 
         log(f"原文加载完成: {len(novel_text)} 字符")
 
@@ -926,7 +1209,6 @@ class CogneeStore:
 
         # 创建 NovelEpisode 并合并原文
         episodes = []
-        episode_contents = {}  # 收集内容，最后统一写入
         for ep_num, event_ids in episode_assignments.items():
             progress = 0.7 + 0.1 * (ep_num / target_episodes)
             report(progress, f"创建第 {ep_num} 集...")
@@ -938,7 +1220,6 @@ class CogneeStore:
                 continue
 
             combined_content = "\n\n---\n\n".join(e.content for e in ep_events if e.content)
-            episode_contents[ep_num] = combined_content
 
             key_events = [e.description for e in ep_events]
             characters = list(set(c for e in ep_events for c in e.characters))
@@ -952,6 +1233,7 @@ class CogneeStore:
                 title=f"第{ep_num}集",
                 chapter_start=chapter_start,
                 chapter_end=chapter_end,
+                raw_content=combined_content,
                 event_ids=event_ids,
                 content_summary=(
                     combined_content[:2000] + "..."
@@ -964,23 +1246,11 @@ class CogneeStore:
             )
             episodes.append(episode)
 
-        # P2: 删除旧剧集
-        report(0.82, "清理旧剧集数据...")
-        deleted = await self._delete_old_episodes()
-        log(f"已删除 {deleted} 个旧剧集")
-        self._episodes.clear()
-
-        # P3: 保存新数据
+        # P2: 剧集与对应原文一起原子替换。
+        old_episode_count = len(self._episodes)
         report(0.88, "保存到数据库...")
-        await self.add_episodes(episodes)
-
-        # P3.5: 保存剧集原文内容
-        for ep_num, content in episode_contents.items():
-            await self.save_episode_content(ep_num, content)
-
-        # P4: 更新内存缓存
-        for ep in episodes:
-            self._episodes[ep.number] = ep
+        await self.replace_episodes(episodes)
+        log(f"已原子替换 {old_episode_count} 个旧剧集")
 
         report(1.0, "事件级规划完成")
         log(f"事件级规划完成: {len(episodes)} 集")
@@ -1042,10 +1312,7 @@ class CogneeStore:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 response_format={"type": "json_object"},
-                **get_newapi_reasoning_kwargs(
-                    thinking_env="COGNEE_LLM_THINKING_LEVEL",
-                    default_thinking_level="high",
-                ),
+                **get_newapi_structured_output_litellm_kwargs(),
             )
 
             result = json.loads(response.choices[0].message.content)
@@ -1095,10 +1362,7 @@ class CogneeStore:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 response_format={"type": "json_object"},
-                **get_newapi_reasoning_kwargs(
-                    thinking_env="COGNEE_LLM_THINKING_LEVEL",
-                    default_thinking_level="high",
-                ),
+                **get_newapi_structured_output_litellm_kwargs(),
             )
 
             import json
@@ -1122,6 +1386,11 @@ class CogneeStore:
         await self.sqlite_store.add_episodes(episodes)
         self._sync_sqlite_caches()
 
+    async def replace_episodes(self, episodes: List[NovelEpisode]) -> None:
+        """Replace planned episodes in SQLite without writing them to Cognee."""
+        await self.sqlite_store.replace_episodes(episodes)
+        self._sync_sqlite_caches()
+
     async def ingest_novel(
         self,
         novel_path: str,
@@ -1138,7 +1407,7 @@ class CogneeStore:
         if not Path(novel_path).exists():
             raise FileNotFoundError(f"文件不存在: {novel_path}")
 
-        console.print("[bold]Step 1/4: 导入原文并构建 Cognee 图谱...[/bold]")
+        console.print("[bold]Step 1/3: 导入原文并构建 Cognee 图谱...[/bold]")
         fast_result = await self.ingest_novel_fast(
             novel_path,
             rebuild=rebuild,
@@ -1146,22 +1415,17 @@ class CogneeStore:
         )
 
         report(0.3, "提取角色...")
-        console.print("[bold]Step 2/4: 从图谱提取角色...[/bold]")
+        console.print("[bold]Step 2/3: 从图谱提取角色...[/bold]")
         characters = await self.build_characters_from_graph(
             on_progress=lambda p, t: report(0.3 + p * 0.3, t),
         )
 
         report(0.6, "规划剧集...")
-        console.print("[bold]Step 3/4: 规划剧集...[/bold]")
+        console.print("[bold]Step 3/3: 规划剧集...[/bold]")
         episodes = await self.build_episodes(
             target_episodes=target_episodes,
-            on_progress=lambda p, t: report(0.6 + p * 0.2, t),
+            on_progress=lambda p, t: report(0.6 + p * 0.4, t),
         )
-
-        report(0.8, "提取风格...")
-        console.print("[bold]Step 4/4: 提取风格...[/bold]")
-        content = self.load_novel_content() or load_novel_text(novel_path)
-        await self._extract_and_save_style(content)
 
         report(1.0, "导入完成")
 
@@ -1171,29 +1435,6 @@ class CogneeStore:
             "characters": len(characters),
             "episodes": len(episodes),
         }
-
-    async def _extract_and_save_style(self, content: str) -> None:
-        """从小说原文提取风格并保存。"""
-        from pathlib import Path
-        from novelvideo.claymore import (
-            extract_style_from_novel,
-            format_style_as_markdown,
-        )
-
-        try:
-            style = await extract_style_from_novel(content)
-            claymore_dir = Path(self.project_dir) / "claymore"
-            claymore_dir.mkdir(parents=True, exist_ok=True)
-            style_path = claymore_dir / "project_style.md"
-            style_content = format_style_as_markdown(style)
-            style_path.write_text(style_content, encoding="utf-8")
-
-            console.print(f"[green]  ✅ 风格已提取并保存[/green]")
-            console.print(f"[dim]    - 人称: {style.narrative_person}[/dim]")
-            console.print(f"[dim]    - 语调: {style.tone}[/dim]")
-            console.print(f"[dim]    - 画面: {style.visual_style}[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]  ⚠️ 风格提取失败: {e}，将使用默认风格[/yellow]")
 
     # ============================================================
     # 查询
@@ -1306,31 +1547,31 @@ class CogneeStore:
 
     async def search(self, query: str, mode: str = "graph", top_k: int = 10) -> str:
         """语义检索。"""
-        self._set_cognee_context()
+        async with ladybug_graph_access(self.state_dir, read_only=True):
+            with preserve_st_env():
+                from cognee.modules.data.exceptions.exceptions import DatasetNotFoundError
 
-        with preserve_st_env():
-            from cognee.modules.data.exceptions.exceptions import DatasetNotFoundError
+            mode_map = {
+                "graph": SearchType.GRAPH_COMPLETION,
+                "chunks": SearchType.CHUNKS,
+                "triplet": SearchType.TRIPLET_COMPLETION,
+                "context_ext": SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION,
+                "summaries": SearchType.SUMMARIES,
+                "graph_cot": SearchType.GRAPH_COMPLETION_COT,
+            }
+            search_type = mode_map.get(mode, SearchType.GRAPH_COMPLETION)
 
-        mode_map = {
-            "graph": SearchType.GRAPH_COMPLETION,
-            "chunks": SearchType.CHUNKS,
-            "triplet": SearchType.TRIPLET_COMPLETION,
-            "context_ext": SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION,
-            "summaries": SearchType.SUMMARIES,
-            "graph_cot": SearchType.GRAPH_COMPLETION_COT,
-        }
-        search_type = mode_map.get(mode, SearchType.GRAPH_COMPLETION)
-
-        try:
-            result = await cognee.search(
-                query_type=search_type,
-                query_text=query,
-                top_k=top_k,
-            )
-        except DatasetNotFoundError:
-            return "暂无相关数据，请先运行 cognee-ingest 导入小说"
-        except Exception as e:
-            return f"搜索出错: {str(e)}"
+            try:
+                with self.embedding_model_scope():
+                    result = await cognee.search(
+                        query_type=search_type,
+                        query_text=query,
+                        top_k=top_k,
+                    )
+            except DatasetNotFoundError:
+                return "暂无相关数据，请先运行 cognee-ingest 导入小说"
+            except Exception as e:
+                return f"搜索出错: {str(e)}"
 
         if isinstance(result, list):
             parts = []
@@ -1365,7 +1606,7 @@ class CogneeStore:
 
     async def load_graph_state(self) -> None:
         """从 SQLite 加载角色和剧集到内存缓存。"""
-        print(f"[load_graph_state] 从 SQLite 加载...")
+        print("[load_graph_state] 从 SQLite 加载...")
         try:
             await self.sqlite_store.load_graph_state()
             self._sync_sqlite_caches()
@@ -1524,99 +1765,6 @@ class CogneeStore:
             return None
         return char.identities[0]
 
-    async def select_identity_for_beat(
-        self,
-        character_ref: str,
-        episode_number: int,
-        visual_description: str = "",
-    ) -> Optional[CharacterIdentity]:
-        """为 beat 选择角色应该使用的身份。"""
-        char = self.get_character(character_ref)
-        if not char or not char.identities:
-            return None
-
-        episode = self.get_episode(episode_number)
-        ep_identity_ids = set(episode.identity_ids) if episode and episode.identity_ids else set()
-
-        valid_identities = [id_ for id_ in char.identities if id_.identity_id in ep_identity_ids]
-
-        if len(valid_identities) == 1:
-            return valid_identities[0]
-
-        if not valid_identities:
-            return None
-
-        if visual_description and len(valid_identities) > 1:
-            selected = await self._ai_select_identity(
-                character_name=char.name,
-                character_ref=character_ref,
-                visual_description=visual_description,
-                identities=valid_identities,
-            )
-            if selected:
-                return selected
-
-        return valid_identities[0] if valid_identities else None
-
-    async def _ai_select_identity(
-        self,
-        character_name: str,
-        character_ref: str,
-        visual_description: str,
-        identities: List[CharacterIdentity],
-    ) -> Optional[CharacterIdentity]:
-        """使用 AI 根据画面描述选择最合适的身份。"""
-        try:
-            import litellm
-
-            identity_options = []
-            for i, identity in enumerate(identities):
-                desc = f"{i+1}. {identity.identity_name}"
-                if identity.appearance_details:
-                    desc += f" - {identity.appearance_details}"
-                identity_options.append(desc)
-
-            prompt = f"""根据画面描述，判断角色"{character_name}"在这个场景中应该使用哪个身份形象。
-
-画面描述：{visual_description}
-
-脚本中的角色称呼：{character_ref}
-
-可选身份：
-{chr(10).join(identity_options)}
-
-请直接回复身份编号（如 1、2、3），不要有其他内容。"""
-
-            response = await litellm.acompletion(
-                model=os.environ.get("LLM_MODEL", "").strip()
-                or DEFAULT_COGNEE_LLM_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=10,
-                **get_newapi_reasoning_kwargs(
-                    thinking_env="COGNEE_LLM_THINKING_LEVEL",
-                    default_thinking_level="high",
-                ),
-            )
-
-            answer = response.choices[0].message.content.strip()
-
-            for char in answer:
-                if char.isdigit():
-                    idx = int(char) - 1
-                    if 0 <= idx < len(identities):
-                        selected = identities[idx]
-                        console.print(
-                            f"[dim]AI 身份选择: {character_name} → {selected.identity_name}[/dim]"
-                        )
-                        return selected
-                    break
-
-        except Exception as e:
-            console.print(f"[yellow]AI 身份选择失败: {e}[/yellow]")
-
-        return None
-
     async def add_episode(self, episode: NovelEpisode):
         """添加单个剧集。"""
         await self.add_episodes([episode])
@@ -1724,12 +1872,12 @@ class CogneeStore:
         on_progress: Optional[Callable[[float, str], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,
     ) -> List[NovelScene]:
-        """从剧本补充基础场景（程序解析 + LLM enrichment）。
+        """从 Cognee 图谱补充基础场景。
 
         这里只补缺失的基础场景；已有基础场景和派生 plate 都是资产事实，
-        不能被一次重新解析清空或覆盖。
+        不能被一次图谱重扫清空或覆盖。
         """
-        from .pipeline import extract_scenes_from_script
+        from .pipeline import extract_scenes_from_graph
 
         def report(progress: float, task: str):
             if on_progress:
@@ -1740,25 +1888,25 @@ class CogneeStore:
                 on_log(message)
             console.print(f"[dim]{message}[/dim]")
 
-        report(0.1, "解析剧本提取场景...")
-        novel_text = self.load_novel_content()
-        if not novel_text:
-            log("⚠️ 未找到剧本原文（novel.txt），无法提取场景")
-            report(1.0, "提取失败：无原文")
-            return []
-
-        log(f"加载剧本原文: {len(novel_text)} 字符")
-        scenes = await extract_scenes_from_script(
-            novel_text=novel_text,
-            on_progress=lambda p, t: report(0.1 + p * 0.6, t),
-        )
+        require_imported_novel(self.project_dir)
+        report(0.1, "从图谱提取场景节点...")
+        log("从图谱提取基础场景候选...")
+        with self.embedding_model_scope():
+            scenes = await extract_scenes_from_graph(
+                dataset_name=self.dataset_name,
+                project_name=self.project_name,
+                project_dir=str(self.project_dir),
+                state_dir=self.state_dir,
+                on_progress=lambda p, t: report(0.1 + p * 0.6, t),
+                on_log=on_log,
+            )
 
         if not scenes:
-            log("⚠️ 剧本解析无结果，保留现有场景数据")
+            log("⚠️ 图谱提取无结果，保留现有场景数据")
             report(1.0, "提取无结果")
             return []
 
-        log(f"从剧本提取了 {len(scenes)} 个场景")
+        log(f"从图谱提取了 {len(scenes)} 个场景")
         report(0.8, "保存新增场景...")
         log("保存新增场景到数据库...")
         added: list[NovelScene] = []
@@ -1830,17 +1978,18 @@ class CogneeStore:
         # P1: 提取新道具
         report(0.1, "从图谱提取道具节点...")
         log("从图谱提取道具候选...")
-        self._set_cognee_context()
         novel_text = self.load_novel_content()
         if novel_text:
             log(f"已加载原文全文用于辅助道具提取: {len(novel_text)} 字符")
-        props = await extract_props_from_graph(
-            dataset_name=self.dataset_name,
-            project_name=self.project_name,
-            project_dir=self.project_dir,
-            novel_text=novel_text,
-            on_progress=lambda p, t: report(0.1 + p * 0.6, t),
-        )
+        with self.embedding_model_scope():
+            props = await extract_props_from_graph(
+                dataset_name=self.dataset_name,
+                project_name=self.project_name,
+                project_dir=self.project_dir,
+                state_dir=self.state_dir,
+                novel_text=novel_text,
+                on_progress=lambda p, t: report(0.1 + p * 0.6, t),
+            )
 
         if not props:
             log("⚠️ 图谱提取无结果，保留现有道具数据")
@@ -2250,9 +2399,9 @@ class CogneeStore:
         if character.face_prompt:
             lines.append(f"- 面部 Prompt: {character.face_prompt}")
         if character.identities:
-            lines.append(f"- 可用身份:")
+            lines.append("- 可用身份:")
             lines.append(f"  - character_name 填: {character.name}")
-            lines.append(f"  - 可选 identity_id:")
+            lines.append("  - 可选 identity_id:")
             for identity in character.identities:
                 desc = ""
                 if identity.appearance_details:

@@ -1,8 +1,10 @@
 """风格管理端点。"""
 
 import logging
+from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import FileResponse
 
 logger = logging.getLogger("novelvideo.api.styles")
@@ -11,7 +13,44 @@ from novelvideo.api.auth import get_api_user
 from novelvideo.api.deps import resolve_project_scope
 from novelvideo.api.schemas import StylePreviewRequest
 
+
+def _custom_preview_url(project: str | None, preview_path: str | None) -> str | None:
+    if not project or not preview_path:
+        return None
+    from urllib.parse import quote
+
+    return f"/api/v1/projects/{quote(project, safe='')}/media/{quote(preview_path, safe='/')}"
+
 router = APIRouter()
+
+STYLE_ANALYSIS_FEATURE_KEY = "mainline.style_analysis"
+STYLE_ANALYSIS_TASK_TYPE = "style_analysis"
+MODEL_CALL_CREDIT_POLICY_FEATURE_INCLUDED = "feature_included"
+
+
+def _requester_user_id_for_billing(resolved: Any, user: dict) -> str:
+    ctx = getattr(resolved, "ctx", None)
+    return str(
+        getattr(ctx, "requester_user_id", "")
+        or user.get("id")
+        or user.get("user_id")
+        or user.get("username")
+        or ""
+    )
+
+
+def style_analysis_billing_params() -> dict[str, Any]:
+    from novelvideo.config import get_newapi_text_model_name
+
+    return {
+        "pricing_kind": "text",
+        "pricing_model": get_newapi_text_model_name(
+            "STYLE_ANALYZER_MODEL",
+            "gemini-3.5-flash",
+        ),
+        "pricing_params": {},
+        "pricing_quantity": 1,
+    }
 
 
 @router.get("/styles")
@@ -29,6 +68,12 @@ async def list_styles(
         username = resolved.username
         project_name = resolved.project_name
     styles = StyleService.list_all_styles(username=username, project=project_name)
+    for style in styles:
+        if style.get("type") == "custom":
+            style["preview_url"] = _custom_preview_url(
+                project,
+                style.get("preview_path"),
+            )
     return {"ok": True, "data": styles}
 
 
@@ -51,7 +96,10 @@ async def get_style(
     if style is None:
         return {"ok": False, "error": f"Style '{style_id}' not found"}
 
-    return {"ok": True, "data": style.model_dump() if hasattr(style, "model_dump") else style.__dict__}
+    payload = style.model_dump() if hasattr(style, "model_dump") else style.__dict__
+    if not payload.get("is_preset"):
+        payload["preview_url"] = _custom_preview_url(project, payload.get("preview_path"))
+    return {"ok": True, "data": payload}
 
 
 @router.get("/styles/{style_id}/preview")
@@ -71,12 +119,18 @@ async def get_style_preview(
         project_name = resolved.project_name
 
     if not StyleService.get_preset(style_id):
-        if StyleService.get_style(
+        style = StyleService.get_style(
             style_id,
             username=username,
             project=project_name,
-        ):
-            return {"ok": False, "error": "自定义风格暂不支持预览"}
+        )
+        if style:
+            if not project or not getattr(style, "preview_path", None):
+                return {"ok": False, "error": "自定义风格暂无参考图"}
+            preview_path = (resolved.project_dir / style.preview_path).resolve()
+            if not preview_path.is_relative_to(resolved.project_dir.resolve()) or not preview_path.exists():
+                return {"ok": False, "error": "自定义风格参考图不存在"}
+            return FileResponse(path=str(preview_path), media_type="image/*")
         return {"ok": False, "error": f"Style '{style_id}' not found"}
 
     preview_path = StyleService.PRESETS_DIR / f"{style_id}.png"
@@ -110,9 +164,21 @@ async def create_style(body: dict, user: dict = Depends(get_api_user)):
 
     try:
         config_payload = dict(body.get("config", {}) or {})
+        preview_path = body.get("preview_path")
         config_payload["id"] = style_id
         config_payload["name"] = body.get("name") or config_payload.get("name") or style_id
         config = StyleConfig(**config_payload)
+        if preview_path:
+            config.preview_path = StyleService.validate_style_preview_path(
+                resolved.project_dir,
+                style_id,
+                str(preview_path),
+            )
+        else:
+            config.preview_path = StyleService.find_style_preview(
+                resolved.project_dir,
+                style_id,
+            )
         success = StyleService.save_custom_style(
             style_id,
             config,
@@ -121,6 +187,8 @@ async def create_style(body: dict, user: dict = Depends(get_api_user)):
         )
         if not success:
             return {"ok": False, "error": "保存自定义风格失败"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -210,10 +278,12 @@ async def preview_style(
 async def analyze_style(
     project: str,
     file: UploadFile = File(...),
+    style_id: str = Form(""),
     user: dict = Depends(get_api_user),
 ):
     """上传参考图片，AI 分析并提取风格参数。"""
     resolved = await resolve_project_scope(project, user, required_role="editor")
+    from novelvideo.services.style_service import StyleService
     from novelvideo.generators.style_analyzer import StyleAnalyzer
     from novelvideo.ports import get_usage_meter
 
@@ -223,30 +293,148 @@ async def analyze_style(
 
     mime_type = file.content_type or "image/jpeg"
 
+    preview_token = None
+    if style_id.strip():
+        extension = Path(file.filename or "").suffix.lower() or ".png"
+        preview_token = StyleService.stage_style_preview(
+            resolved.project_dir,
+            content,
+            extension,
+        )
+
+    usage_meter = get_usage_meter()
+    ctx = getattr(resolved, "ctx", None)
+    project_id = str(getattr(ctx, "project_id", "") or "")
+    billing_user_id = _requester_user_id_for_billing(resolved, user)
+    reservation = await usage_meter.reserve_feature_start_credits(
+        user_id=billing_user_id,
+        feature_key=STYLE_ANALYSIS_FEATURE_KEY,
+        product_surface="mainline",
+        project_id=project_id,
+        resource_kind="script",
+        task_type=STYLE_ANALYSIS_TASK_TYPE,
+        metadata={
+            "source": "sync_api",
+            "endpoint": "analyze_style",
+            "mime_type": mime_type,
+        },
+        params=style_analysis_billing_params(),
+        require_price_rule=True,
+        require_positive_cost=True,
+    )
+    reservation_id = str(reservation.get("id") or "")
+    billing_metadata: dict[str, Any] = {
+        "model_call_credit_policy": MODEL_CALL_CREDIT_POLICY_FEATURE_INCLUDED,
+        "feature_key": STYLE_ANALYSIS_FEATURE_KEY,
+        "source": "sync_api",
+    }
+    if reservation_id:
+        billing_metadata.update(
+            {
+                "feature_credit_reservation_id": reservation_id,
+                "feature_credit_charge_id": reservation_id,
+                "feature_credit_cost": str(reservation.get("cost") or 0),
+            }
+        )
+
     try:
-        if resolved.ctx is not None:
-            billing_user_id = (
-                str(getattr(resolved.ctx, "requester_user_id", "") or "").strip()
-                or str(getattr(resolved.ctx, "owner_id", "") or "").strip()
-            )
-            get_usage_meter().set_llm_usage_context(
-                billing_user_id,
-                project_id=resolved.ctx.project_id,
-                resource_kind="script",
-                billing_metadata={
-                    "billing_user_id": billing_user_id,
-                    "requester_user_id": str(
-                        getattr(resolved.ctx, "requester_user_id", "") or ""
-                    ).strip(),
-                    "project_owner_id": str(getattr(resolved.ctx, "owner_id", "") or "").strip(),
-                    "source": "style_analyzer",
-                },
-            )
+        usage_meter.set_llm_usage_context(
+            billing_user_id,
+            project_id=project_id,
+            resource_kind="script",
+            billing_metadata=billing_metadata,
+        )
         analyzer = StyleAnalyzer()
         result = await analyzer.analyze(content, mime_type=mime_type)
     except Exception as e:
+        if reservation_id:
+            try:
+                await usage_meter.settle_cancelled_feature_credit_reservation(
+                    reservation_id,
+                    metadata={
+                        "source": "sync_api",
+                        "endpoint": "analyze_style",
+                        "mime_type": mime_type,
+                        "error": str(e),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to settle interrupted style analysis feature credit reservation"
+                )
         return {"ok": False, "error": f"Style analysis failed: {e}"}
     finally:
-        get_usage_meter().clear_llm_usage_context()
+        usage_meter.clear_llm_usage_context()
 
-    return {"ok": True, "data": result}
+    if reservation_id:
+        try:
+            await usage_meter.settle_feature_credit_reservation(
+                reservation_id,
+                action="confirm",
+                metadata={
+                    "source": "sync_api",
+                    "endpoint": "analyze_style",
+                    "mime_type": mime_type,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Style analysis succeeded but credit confirmation remains pending"
+            )
+
+    data = dict(result)
+    if preview_token:
+        data["preview_token"] = preview_token
+    return {"ok": True, "data": data}
+
+
+@router.post("/projects/{project}/styles/preview-upload")
+async def upload_style_preview(
+    project: str,
+    file: UploadFile = File(...),
+    style_id: str = Form(...),
+    user: dict = Depends(get_api_user),
+):
+    """立即保存自定义风格参考图，不等待 AI 风格分析。"""
+    resolved = await resolve_project_scope(project, user, required_role="editor")
+    from novelvideo.services.style_service import StyleService
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="No preview image uploaded")
+
+    extension = Path(file.filename or "").suffix.lower() or ".png"
+    allowed_mime_types = {
+        ".png": {"image/png"},
+        ".jpg": {"image/jpeg"},
+        ".jpeg": {"image/jpeg"},
+        ".webp": {"image/webp"},
+        ".gif": {"image/gif"},
+    }
+    if (
+        extension not in allowed_mime_types
+        or (file.content_type or "").lower() not in allowed_mime_types[extension]
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported style preview image type",
+        )
+
+    try:
+        staged_token = StyleService.stage_style_preview(
+            resolved.project_dir,
+            content,
+            extension,
+        )
+        preview_token = StyleService.finalize_style_preview(
+            resolved.project_dir,
+            style_id,
+            staged_token,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except OSError as e:
+        logger.exception("Failed to persist style preview for %s", style_id)
+        raise HTTPException(status_code=500, detail="Failed to persist style preview") from e
+
+    return {"ok": True, "data": {"preview_path": preview_token}}

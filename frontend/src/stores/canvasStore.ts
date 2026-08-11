@@ -48,6 +48,11 @@ import {
 } from '@/features/canvas/domain/nodeRegistry';
 import { EXPORT_RESULT_DISPLAY_NAME } from '@/features/canvas/domain/nodeDisplay';
 import {
+  overflowingVideoReferenceEdgeIds,
+  videoReferenceConnectionRejection,
+} from '@/features/canvas/domain/videoReferenceLimits';
+import { videoReferenceEnvelopeForNode } from '@/features/canvas/application/videoReferenceEnvelope';
+import {
   type ViewportBookmark,
   type ViewportBookmarks,
   BOOKMARK_SLOT_COUNT,
@@ -276,10 +281,12 @@ interface CanvasState {
     options?: { lockManualSize?: boolean; data?: Partial<CanvasNodeData> },
   ) => void;
   /**
-   * Swap a node's `type` in place while keeping its `id`, position, and any
-   * already-attached edges. Used when an UploadNode's user picks a video file
-   * and the node needs to morph into a VideoNode so the header / toolbar /
-   * connectivity match the new resource type.
+   * Swap a node's `type` in place while keeping its `id` and position. Used
+   * when an UploadNode's user picks a video file and the node needs to morph
+   * into a VideoNode so the header / toolbar / connectivity match the new
+   * resource type. Attached edges survive the swap **unless** the new type
+   * makes them illegal (same rules the load-time normalizer applies), in which
+   * case they are dropped along with it — one undo restores both.
    */
   convertNodeType: (
     nodeId: string,
@@ -1398,6 +1405,19 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       ) {
         return {};
       }
+      // 视频节点素材上限收口：素材已满到能力包络（图 9 / 视频 3 / 音频 3 /
+      // 总数 12）时拒绝新连接。手动拖线在 isValidConnection 就变灰了，这里兜住
+      // 拖到空白生成节点等其它建边路径。
+      if (
+        videoReferenceConnectionRejection(
+          state.nodes,
+          state.edges,
+          connection,
+          videoReferenceEnvelopeForNode,
+        ) != null
+      ) {
+        return {};
+      }
       return {
         edges: addEdge<CanvasEdge>(
           { ...connection, sourceHandle, targetHandle, type: 'disconnectableEdge' },
@@ -1650,33 +1670,48 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const source = state.nodes.find((n) => n.id === sourceNodeId);
       if (!source) continue;
 
+      // 复制一整个组时成员也在 nodeIds 里。成员坐标是相对父组的，跟着父组的克隆
+      // 走即可；只有「根」(父不在这次复制里) 才需要往下让开一个身位。
+      const parentIsCloned = Boolean(source.parentId && sourceSet.has(source.parentId));
       const sourceHeight =
         source.measured?.height ??
         (typeof source.height === 'number' ? source.height : 360);
-      const position = {
-        x: source.position.x,
-        y: source.position.y + sourceHeight + 24,
-      };
+      const position = parentIsCloned
+        ? { x: source.position.x, y: source.position.y }
+        : {
+            x: source.position.x,
+            y: source.position.y + sourceHeight + 24,
+          };
 
       // Append a "- 副本" suffix to whichever name fields the node carries so
       // the clone is visually distinguishable (matches the reference design).
+      // 组内成员不加后缀——只有被直接复制的那个对象需要区分。
       const sourceData = source.data as Record<string, unknown>;
       const nameOverrides: Record<string, unknown> = {};
-      if (typeof sourceData.displayName === 'string' && sourceData.displayName) {
-        nameOverrides.displayName = `${sourceData.displayName} - 副本`;
-      }
-      if (typeof sourceData.label === 'string' && sourceData.label) {
-        nameOverrides.label = `${sourceData.label} - 副本`;
+      if (!parentIsCloned) {
+        if (typeof sourceData.displayName === 'string' && sourceData.displayName) {
+          nameOverrides.displayName = `${sourceData.displayName} - 副本`;
+        }
+        if (typeof sourceData.label === 'string' && sourceData.label) {
+          nameOverrides.label = `${sourceData.label} - 副本`;
+        }
       }
 
       const newNode = canvasNodeFactory.createNode(source.type, position, {
         ...(source.data as Partial<CanvasNodeData>),
         ...(nameOverrides as Partial<CanvasNodeData>),
       });
+      // 组框的尺寸是节点级字段，createNode 不会带过来，得手动搬。
+      if (isGroupNode(source)) {
+        newNode.width = source.width;
+        newNode.height = source.height;
+        newNode.style = source.style ? { ...source.style } : undefined;
+      }
       // Keep the clone inside the same group (if any) so its position stays
-      // anchored to the original's coordinate space.
+      // anchored to the original's coordinate space. 父组本身也在复制里时，
+      // 指向父组的克隆，否则成员会被塞回原来那个组。
       if (source.parentId) {
-        newNode.parentId = source.parentId;
+        newNode.parentId = idMap.get(source.parentId) ?? source.parentId;
         newNode.extent = source.extent;
       }
 
@@ -1942,6 +1977,19 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (!isUpstreamConnectionAllowed(sourceNode.type, targetNode.type)) {
       return null;
     }
+    // 素材上限同样要收口在这里：资产库选参考、外部文件导入
+    // （spawnExternalAssetNodes）都是往一个**已存在**的视频节点上接素材，走的正是
+    // addEdge。只在 onConnect 拦等于这条上限只在手动拖线时成立。
+    if (
+      videoReferenceConnectionRejection(
+        state.nodes,
+        state.edges,
+        { source, target },
+        videoReferenceEnvelopeForNode,
+      ) != null
+    ) {
+      return null;
+    }
 
     const edgeId = `e-${source}-${target}`;
     // Check if edge already exists
@@ -1978,6 +2026,19 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }
     // 上游类型规则收口（如音频←非文本）。
     if (!isUpstreamConnectionAllowed(sourceNode.type, targetNode.type)) {
+      return null;
+    }
+    // 与 addEdge 同一把尺子：目前这条路径的 target 都是刚建出来的新节点（技能输出、
+    // 背景候选），够不到上限；放在这里是为了「所有公开建边入口口径一致」，将来谁把
+    // 带数据的边接到已有视频节点上也不会漏。
+    if (
+      videoReferenceConnectionRejection(
+        state.nodes,
+        state.edges,
+        { source, target },
+        videoReferenceEnvelopeForNode,
+      ) != null
+    ) {
       return null;
     }
 
@@ -2336,8 +2397,50 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           } as CanvasNode)
         : node
     );
+    // 换了类型，原本合法的关联边可能不再合法：空 Upload 先连到图片节点，之后
+    // 上传音频转成 Audio —— audio → 图片就不再放行了。不在这里清掉，那条边会一直
+    // 留在画布上（还能提交生成），直到下次加载被规范化静默删除。口径与加载规范化
+    // 那道过滤保持一致：handle 有无 + 建边类型规则。
+    const nextNodeTypeById = new Map(nextNodes.map((node) => [node.id, node.type]));
+    const nextEdges = state.edges.filter((edge) => {
+      if (edge.source !== nodeId && edge.target !== nodeId) {
+        return true;
+      }
+      const sourceType = nextNodeTypeById.get(edge.source);
+      const targetType = nextNodeTypeById.get(edge.target);
+      if (!sourceType || !targetType) {
+        return true;
+      }
+      if (!nodeHasSourceHandle(sourceType) || !nodeHasTargetHandle(targetType)) {
+        return false;
+      }
+      return isUpstreamConnectionAllowed(sourceType, targetType);
+    });
+
+    // 类型变了，素材归类也跟着变：空 Upload 建边时按图片算，转成 video/audio 之后
+    // 可能把下游视频节点顶出视频/音频上限（外部文件导入正是「先连边、后按 MIME
+    // 转换」）。建边时的校验管不到这一刻，只能在类型确定之后重算一遍。
+    const affectedVideoTargets = new Set(
+      nextEdges.filter((edge) => edge.source === nodeId).map((edge) => edge.target),
+    );
+    const overflowEdgeIds = new Set<string>();
+    for (const videoTargetId of affectedVideoTargets) {
+      for (const edgeId of overflowingVideoReferenceEdgeIds(
+        nextNodes,
+        nextEdges,
+        videoTargetId,
+        videoReferenceEnvelopeForNode,
+      )) {
+        overflowEdgeIds.add(edgeId);
+      }
+    }
+    const finalEdges = overflowEdgeIds.size
+      ? nextEdges.filter((edge) => !overflowEdgeIds.has(edge.id))
+      : nextEdges;
+
     set({
       nodes: nextNodes,
+      edges: finalEdges,
       history: {
         past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
         future: [],
@@ -2888,9 +2991,50 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     // 在谓词检查前先取 id（isStoryboardGroupNode 等共享 isGroupNode 的类型谓词，
     // 检查后 enclosing 会被 TS 收窄成 never，同 fitGroupToChildren 的注释）。
     const groupId = enclosing.id;
-    // 分镜组按宫格自排版、投影组受保护——都不往里塞成员。
+    // 分镜组按宫格自排版、投影组受保护——都不往里塞成员，也不能把被保护的源节点
+    // 挪出来一起编组。但也不能就地放弃：派生节点是在「源节点坐标系」下摆放的
+    // （调用方按 source.position 算落位），源在组内时该坐标系是组内相对坐标，而这些
+    // 新节点留在根层（无 parentId）会被当成绝对坐标——不修正就会落到画布原点附近 /
+    // 视野外（见 spawnExternalAssets / spawnCharacterLibraryReferences 均依赖本函数
+    // 收编）。分两步收尾：① 先把它们平移回真正的绝对坐标，让素材出现在源节点身边；
+    // ② 再把这些已在正确坐标上的素材单独编成一个根层素材组（源节点不入组，仍留在它
+    // 的投影 / 分镜组里），与其它调用路径「自动编成素材组」的承诺保持一致。
     if (isStoryboardGroupNode(enclosing) || isProtectedProjectionGroupNode(enclosing)) {
-      return null;
+      // 偏移 = 源的绝对坐标 − 源的原始 position，即源所有祖先的累计位移，对任意嵌套
+      // 深度都成立。组恰好落在画布原点时 offset 为 0，派生坐标本就是绝对坐标，跳过平移。
+      const sourceAbsolute = resolveAbsolutePosition(source, nodeMap);
+      const offsetX = sourceAbsolute.x - source.position.x;
+      const offsetY = sourceAbsolute.y - source.position.y;
+      if (offsetX !== 0 || offsetY !== 0) {
+        const orphanSet = new Set(spawned.map((node) => node.id));
+        const shiftedNodes = state.nodes.map((node) =>
+          orphanSet.has(node.id)
+            ? {
+                ...node,
+                position: {
+                  x: node.position.x + offsetX,
+                  y: node.position.y + offsetY,
+                },
+              }
+            : node,
+        );
+        set({
+          nodes: shiftedNodes,
+          history: {
+            past: pushSnapshot(state.history.past, createSnapshot(state.nodes, state.edges)),
+            future: [],
+          },
+          dragHistorySnapshot: null,
+          ...trackEdit(state),
+        });
+      }
+      // groupNodes 读取最新 store（已平移的绝对坐标），把素材编成根层组并返回组 id。
+      // 它要求 ≥2 个成员：单个素材成不了组、保持独立根节点（已在正确坐标上）即可，
+      // 此时返回 null——与调用方「忽略返回值、素材已连边」的既有约定一致。
+      return get().groupNodes(
+        spawned.map((node) => node.id),
+        { label: opts?.label, extraPadding: 20 },
+      );
     }
 
     // 派生位置全部基于源节点的「原始 position」计算（findNodePosition 与各节点的

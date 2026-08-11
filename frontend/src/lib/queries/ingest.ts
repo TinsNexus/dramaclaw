@@ -21,6 +21,7 @@ export interface FormatCheck {
   summary: string;
   issues?: FormatCheckIssue[];
   metrics?: Record<string, number>;
+  scene_header_status?: "standard" | "repairable" | "missing";
 }
 
 export interface UploadResult {
@@ -38,14 +39,48 @@ interface ChaptersResult {
   total_chars: number;
   billable_chars?: number;
   count?: number;
+  source_filename?: string;
+  /** Client-only marker: upload parsing succeeded, but Cognee ingest has not completed. */
+  preview_only?: boolean;
+}
+
+export interface KnowledgeGraphNode {
+  id: string;
+  label: string;
+  type: string;
+  degree: number;
+  properties: Record<string, unknown>;
+}
+
+export interface KnowledgeGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation: string;
+  properties: Record<string, unknown>;
+}
+
+export interface KnowledgeGraphSnapshot {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  total_nodes: number;
+  total_edges: number;
+  truncated: boolean;
 }
 
 export function useUploadNovel(project: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({
+      file,
+      spineTemplate,
+    }: {
+      file: File;
+      spineTemplate: SpineTemplate;
+    }) => {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("spine_template", spineTemplate);
       const response = await jsonWithBackendError<OkResponse<UploadResult> | ErrorResponse>(
         api.post(p`api/v1/projects/${project}/ingest/upload`, { body: formData }),
       );
@@ -54,14 +89,14 @@ export function useUploadNovel(project: string) {
       }
       return response;
     },
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
       const preview = response.data;
       if (
         Array.isArray(preview.chapters) &&
         typeof preview.total_chars === "number"
       ) {
         queryClient.setQueryData<OkResponse<ChaptersResult>>(
-          queryKeys.chapters(project),
+          queryKeys.chapterPreview(project, variables.spineTemplate),
           {
             ok: true,
             data: {
@@ -69,6 +104,8 @@ export function useUploadNovel(project: string) {
               total_chars: preview.total_chars,
               billable_chars: preview.billable_chars,
               count: preview.count,
+              source_filename: preview.filename,
+              preview_only: true,
             },
           },
         );
@@ -80,14 +117,36 @@ export function useUploadNovel(project: string) {
   });
 }
 
-export function useChapters(project: string, enabled = true) {
+export function useChapters(
+  project: string,
+  spineTemplate: SpineTemplate,
+  enabled = true,
+) {
   return useQuery({
-    queryKey: queryKeys.chapters(project),
+    queryKey: queryKeys.chapterPreview(project, spineTemplate),
     queryFn: ({ signal }) =>
       api
-        .get(p`api/v1/projects/${project}/chapters`, { signal })
+        .get(p`api/v1/projects/${project}/chapters`, {
+          signal,
+          searchParams: { spine_template: spineTemplate },
+        })
         .json<OkResponse<ChaptersResult>>(),
     enabled: !!project && enabled,
+  });
+}
+
+export function useKnowledgeGraph(project: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.knowledgeGraph(project),
+    // Ladybug graph reads run in a backend executor thread and cannot be stopped
+    // safely midway. Do not consume React Query's unmount signal: let the request
+    // finish and populate the cache when users briefly switch pages.
+    queryFn: () =>
+      api
+        .get(p`api/v1/projects/${project}/ingest/graph`)
+        .json<OkResponse<KnowledgeGraphSnapshot>>(),
+    enabled: !!project && enabled,
+    staleTime: 30_000,
   });
 }
 

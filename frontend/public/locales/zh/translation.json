@@ -18,11 +18,14 @@
       "description": "请刷新页面后重试。"
     },
     "versionUpdate": {
-      "title": "新功能已上线",
+      "title": "🎉 新功能已上线",
       "confirm": "我知道了",
       "empty": "当前版本暂无更新说明"
     },
     "logoHomeTooltip": "点击返回项目管理中心"
+  },
+  "loginCinematic": {
+    "moreInfo": "更多信息"
   },
   "header": {
     "partyFounding105": "庆祝建党105周年",
@@ -281,11 +284,12 @@
       "title": "剧本格式检查",
       "close": "关闭",
       "viewDetails": "查看详情",
-      "recommended": "推荐：1-1、地点 时间 内/外，每句台词一行 角色：台词",
+      "recommended": "标准剧本示例：\n第一集\n1-1 城市咖啡馆 日 内\n人物：林夏、陈默\n△ 午后的阳光透过落地窗，林夏把一封信放在桌上。\n林夏：你要的答案，就在这里。",
       "lineLabel": "第 {{line}} 行",
       "noIssues": "未发现具体问题"
     },
     "title": "虾导",
+    "upgrading": "虾导升级中，请敬请期待！",
     "description": "在当前创作页面旁打开虾导。",
     "toggle": "展开或收起虾导",
     "close": "收起虾导",
@@ -314,27 +318,14 @@
     "waiting": "等待聊天服务连接...",
     "waitingResponse": "等待虾导回复",
     "waitingResponses": [
-      "虾导正在看分镜",
-      "虾导正在捋剧情",
-      "虾导正在检查节奏",
-      "虾导正在对齐设定",
-      "虾导正在整理灵感",
-      "虾导正在翻看任务",
-      "虾导正在推敲镜头",
-      "虾导正在盘角色动机",
-      "虾导正在补齐上下文",
-      "虾导正在找关键线索",
-      "虾导正在压缩废话",
-      "虾导正在校准创作方向",
-      "虾导正在拆解你的需求",
-      "虾导正在组织回答",
-      "虾导正在确认项目状态",
-      "虾导正在处理创作现场",
-      "虾导正在把想法落地",
-      "虾导正在看这场戏怎么走",
-      "虾导正在挑重点",
-      "虾导正在接住这段灵感"
+      "正在理解你想推进的内容",
+      "正在核对当前对话上下文",
+      "正在提取这次需求的重点",
+      "正在梳理相关信息",
+      "正在组织更清楚的回答"
     ],
+    "waitingLongResponse": "这次处理比平时久，仍在继续",
+    "waitingVeryLongResponse": "仍在等待响应，你可以继续等待或停止",
     "send": "发送",
     "queueMessage": "加入发送队列",
     "queuedCount": "待发送 {{count}} 条",
@@ -467,6 +458,35 @@
         "days": "{{count}} 天前"
       }
     },
+    "canvasOutline": {
+      "title": "画布元素",
+      "groupMembers": "{{count}} 个节点",
+      "empty": "当前画布还没有节点",
+      "duplicate": "复制",
+      "rename": "重命名",
+      "download": "下载",
+      "locate": "定位到节点",
+      "moreActions": "更多操作",
+      "matched": "匹配 {{count}} 个",
+      "expandAll": "展开全部分组",
+      "collapseAll": "收起全部分组",
+      "search": "搜索节点",
+      "closeSearch": "关闭搜索",
+      "filter": "按类型筛选",
+      "noMatch": "没有匹配的节点",
+      "types": {
+        "all": "全部",
+        "text": "文本",
+        "image": "图片",
+        "video": "视频",
+        "storyboard": "分镜",
+        "beat": "镜头上下文",
+        "audio": "音频",
+        "script": "脚本",
+        "world": "3D / 全景",
+        "skill": "技能"
+      }
+    },
     "projections": {
       "staleCount": "{{count}} 个主线投影有更新",
       "activeCount": "{{count}} 个主线投影",
@@ -507,7 +527,69 @@
   },
   "credits": {
     "balance": "当前积分余额",
-    "short": "积分"
+    "short": "积分",
+    "openPanel": "打开积分面板",
+    "personalAccount": "个人积分账户",
+    "details": "查看明细",
+    "earned": "已获得",
+    "spent": "已消费",
+    "refunded": "已退款",
+    "promotions": "可用促销",
+    "promotionCount": "当前有 {{count}} 项可能适用的优惠",
+    "viewTransactions": "查看积分明细",
+    "back": "返回",
+    "centerTitle": "积分中心",
+    "centerDescription": "查看统一积分余额、消费结算、退款和当前可用促销。",
+    "pendingAmount": "{{amount}} 积分正在预扣结算",
+    "availablePromotions": "当前可用促销",
+    "promotionDisclaimer": "最终优惠以具体功能、模型和业务区域的实时报价为准。",
+    "endsAt": "{{time}} 结束",
+    "longTerm": "长期有效",
+    "startDate": "开始日期",
+    "endDate": "结束日期",
+    "projectFilter": "项目筛选",
+    "allProjects": "全部项目",
+    "featureFilter": "功能筛选",
+    "allFeatures": "全部功能",
+    "modelFilter": "模型筛选",
+    "allModels": "全部模型",
+    "adjustment": "积分调整",
+    "promotionalPrice": "促销价",
+    "empty": "暂无积分记录",
+    "summaryLoadFailed": "积分汇总暂时无法加载",
+    "transactionsLoadFailed": "积分明细暂时无法加载",
+    "retry": "重试",
+    "filtering": "正在筛选…",
+    "filteredRecords": "筛选结果 {{count}} 条",
+    "totalRecords": "共 {{count}} 条记录",
+    "previousPage": "上一页",
+    "nextPage": "下一页",
+    "pageOf": "第 {{page}} / {{total}} 页",
+    "category": {
+      "all": "全部",
+      "earned": "已获得",
+      "spent": "已消费",
+      "refunded": "已退款"
+    },
+    "status": {
+      "pending": "预扣中",
+      "confirmed": "扣费成功",
+      "refunded": "已退款",
+      "completed": "已完成"
+    },
+    "domain": {
+      "mainline": "主线",
+      "freezone": "Freezone",
+      "all": "主线与 Freezone"
+    },
+    "columns": {
+      "time": "时间",
+      "feature": "功能 / 模型",
+      "project": "项目",
+      "status": "状态",
+      "change": "积分变动",
+      "balance": "变动后余额"
+    }
   },
   "nav": {
     "home": "首页",
@@ -516,11 +598,12 @@
     "switchProject": "切换项目",
     "allProjects": "所有项目",
     "collapse": "收起",
-    "collapseSidebar": "收起侧边栏",
-    "expandSidebar": "展开侧边栏",
     "creation": "创作",
     "production": "制作",
     "tools": "工具",
+    "creationMode": "创作方式",
+    "xiaji": "虾集",
+    "xiajiMenu": "虾集菜单",
     "ingest": "虾料",
     "assets": "虾塘",
     "characters": "角色",
@@ -584,7 +667,15 @@
       "total": "角色数",
       "withPortraits": "已有肖像",
       "identities": "身份造型",
-      "attempts": "生成请求"
+      "attempts": "生成请求",
+      "strip": {
+        "total": "总角色",
+        "mainCharacter": "解说主角",
+        "portrait": "头像",
+        "identity": "身份",
+        "voice": "声线",
+        "ariaLabel": "角色统计"
+      }
     },
     "tabs": {
       "basics": "基本",
@@ -947,6 +1038,14 @@
       "unmute": "取消静音",
       "fullscreen": "全屏",
       "exitFullscreen": "退出全屏"
+    },
+    "download": {
+      "label": "桌面端",
+      "primary": {
+        "mac": "macOS",
+        "windows": "Windows"
+      },
+      "aria": "下载桌面端"
     }
   },
   "project": {
@@ -963,6 +1062,7 @@
     "nameExistsDeleted": "回收站中已有同名项目，请永久删除后再创建",
     "noProjects": "还没有项目，点击创建",
     "dashboardTitle": "项目管理中心",
+    "dashboardReturn": "返回项目管理中心",
     "dashboardSubtitle": "管理你的短剧项目和脚本",
     "emptyTitle": "开启你的第一个故事",
     "emptyDescription": "创建项目以开始撰写剧本、生成分镜、制作视频",
@@ -1079,7 +1179,39 @@
     "sortDesc": "降序",
     "nodes": "节点数",
     "empty": "暂无项目",
-    "emptyHint": "点击上方按钮创建新项目"
+    "emptyHint": "点击上方按钮创建新项目",
+    "notFound": "项目不存在",
+    "notFoundDescriptionPrefix": "当前账号下找不到项目",
+    "notFoundDescriptionSuffix": "。",
+    "backToProjects": "返回项目",
+    "shareDialog": {
+      "title": "共享项目",
+      "descriptionWithOwner": "{{name}} · {{owner}}",
+      "descriptionFallback": "管理项目成员",
+      "currentUserFallback": "当前用户",
+      "addMember": "添加成员",
+      "addMemberHint": "输入用户名，选择权限后加入项目。",
+      "copyLink": "复制链接",
+      "searchPlaceholder": "搜索用户名",
+      "alreadyInProject": "已在项目中",
+      "add": "添加",
+      "members": "成员",
+      "owner": "所有者",
+      "projectOwner": "项目所有者",
+      "loadingMembers": "加载成员",
+      "removeMember": "移除成员",
+      "roleViewer": "只读查看",
+      "roleEditor": "可编辑与运行任务",
+      "roleAdmin": "可管理共享成员",
+      "toastMemberUpdated": "已更新共享成员",
+      "toastShareFailed": "共享失败，请确认用户存在且你有权限",
+      "toastLinkCopied": "项目链接已复制",
+      "toastCopyFailed": "复制失败",
+      "toastPermissionUpdated": "权限已更新",
+      "toastPermissionUpdateFailed": "更新权限失败",
+      "toastMemberRemoved": "已移除共享成员",
+      "toastRemoveFailed": "移除失败"
+    }
   },
   "assets": {
     "common": {
@@ -1123,6 +1255,11 @@
       "derivedFrom": "派生自 {{base}}",
       "emptyTitle": "暂无场景数据",
       "emptyDescription": "新建场景，或从图谱自动提取项目场景。",
+      "building": "构建场景中...",
+      "buildingEmpty": {
+        "title": "正在构建场景",
+        "description": "系统正在从图谱中提取场景，完成后会显示在这里。"
+      },
       "confirmDelete": "删除场景「{{name}}」？",
       "deleted": "场景已删除",
       "master": "源图",
@@ -1174,7 +1311,8 @@
         "environmentPrompt": "环境描述 提示词",
         "variantPrompt": "变体增量提示词",
         "variantPromptPlaceholder": "只写和基础场景不同的部分，例如积水反光、焦黑墙面、节日装饰。",
-        "description": "叙述性描述"
+        "description": "叙述性描述",
+        "variantPlaceholder": "漏水"
       },
       "environment": {
         "front": "正面描述",
@@ -1189,8 +1327,6 @@
     "props": {
       "title": "道具管理",
       "count": "{{count}} 个道具",
-      "batchGenerate": "批量生成参考图",
-      "batchStatusTitle": "批量参考图生成",
       "newProp": "新建道具",
       "newPropHint": "AI自动提取道具需要在虾镜中按集数分集提取",
       "editProp": "编辑道具",
@@ -1245,6 +1381,7 @@
     "loading": "加载中...",
     "back": "返回",
     "error": "出错了",
+    "novelImportRequired": "请先导入小说",
     "insufficientCredits": "积分不足，请联系管理员充值",
     "billingRuleNotConfigured": "计费规则未配置，请联系管理员设置积分规则",
     "billingRuleNotConfiguredShort": "需配置",
@@ -1272,6 +1409,7 @@
     "stop": "停止",
     "reupload": "重新上传",
     "regenerate": "重新生成",
+    "generateNew": "生成新图",
     "regenerateSelected": "重新生成选中",
     "preview": "试听",
     "cutToPool": "切割入池",
@@ -1285,6 +1423,7 @@
     "use": "使用",
     "confirmExecute": "确认执行",
     "refresh": "刷新",
+    "refreshDone": "已刷新",
     "preparing": "准备中...",
     "removed": "（已移除）",
     "new": "新",
@@ -1303,7 +1442,9 @@
     "title": "虾料",
     "subtitle": "上传剧本，开启你的创意之旅",
     "dropzoneHint": "点击或拖拽上传小说文件",
-    "supportedFormats": "支持 .txt / .md / .docx，建议不超过 10MB",
+    "supportedFormats": "支持 .txt / .md / .docx · 文件不超过 512KB · 正文不超过 10 万字",
+    "uploadingTitle": "正在上传小说…",
+    "uploadingHint": "上传完成前请勿离开本页面，网络较慢时可能需要多等一会儿。",
     "inputMode": {
       "upload": "上传小说",
       "paste": "粘贴文本"
@@ -1318,6 +1459,7 @@
     "settingsSaved": "项目设置已保存",
     "settingsSaveFailed": "项目设置保存失败",
     "processing": "处理中...",
+    "elapsed": "已耗时 {{time}}",
     "projectSettings": "项目设置",
     "advancedSettings": "高级设置",
     "visualStyle": "视觉风格",
@@ -1340,9 +1482,25 @@
       "failed": "导入失败"
     },
     "previewHeading": "小说结构预览",
+    "knowledgeGraph": {
+      "title": "知识图谱",
+      "stats": "{{nodes}} 个节点 · {{edges}} 条关系",
+      "connections": "{{count}} 条关联",
+      "relationships": "关联关系",
+      "interactionHint": "拖动画布 · 滚轮缩放 · 点击节点查看详情",
+      "truncated": "正在展示核心关系",
+      "zoomIn": "放大图谱",
+      "zoomOut": "缩小图谱",
+      "resetView": "重置视图",
+      "expand": "展开图谱",
+      "loadFailed": "知识图谱暂时无法显示",
+      "loadFailedHint": "图谱数据仍然保留，可以稍后重试。"
+    },
     "scriptDetails": "剧本配置",
     "previewGenerating": "正在生成结构预览...",
     "restoredFilename": "已导入小说",
+    "reimport": "重新导入",
+    "reimportSourceMissing": "原始上传文件已不存在，请重新上传后再导入。",
     "statFilename": "文件名",
     "statTotalChars": "总字数",
     "statBillableChars": "计费字数",
@@ -1354,7 +1512,6 @@
     "tableTitle": "标题",
     "tableCharCount": "字数",
     "moreChapters": "… 还有 {{count}} 个章节",
-    "reimportWarning": "重新导入将清空图谱并重建",
     "reuploadConfirm": {
       "title": "确认重新导入",
       "description": "重新导入会重建图谱，可能影响后续角色、剧集、脚本、视频等流水线结果，是否确认重新导入小说/剧本？",
@@ -1366,6 +1523,53 @@
     "buildHint": "构建语义图谱，然后在角色 / 剧集页面分别构建",
     "emptyPreview": "上传文件后，这里会显示小说结构预览",
     "chapterTitleFallback": "第 {{n}} 章",
+    "novelFormat": {
+      "button": "精品剧格式规范",
+      "title": "精品剧格式",
+      "intro": "精品剧需要明确的分集和分场边界。系统会按场景头切分剧本，再逐行生成画面、对白和音频；不会为完全没有场景头的正文猜测分场。",
+      "standardStatus": "标准 · 可直接导入",
+      "standardStatusHint": "系统支持多种行业写法；只要地点、时间和内外景完整，就可以稳定解析。",
+      "warningStatus": "可规范化 · 允许导入",
+      "warningStatusHint": "能确定场景边界，但地点、时间或内外景不完整；后续会逐场补齐和规范化。",
+      "blockingStatus": "无法可靠分场 · 阻止导入",
+      "blockingStatusHint": "仅在缺少有效章节，或精品剧完全没有可识别场景头、无法确定分场边界时阻止导入。",
+      "specLabel": "支持的完整场景头",
+      "repairableLabel": "可自动补齐的格式",
+      "repairableHint": "下面的场景边界可以识别，但缺少时间；允许导入并显示提示，原文不会被改写。",
+      "rulesLabel": "编写规则",
+      "ruleEpisode": "每集以“第N集”开始；多集剧本按集依次排列。",
+      "ruleScene": "每个场景必须有独立场景头；支持“1-1 地点 日 内”“1.1 地点 内 日”、分字段写法以及 INT./EXT. 格式。",
+      "ruleCharacters": "“人物：”建议只列出本场实际出场角色名，多个角色用顿号分隔；身份和表演说明不要写在人物行。",
+      "ruleBody": "动作和画面描述建议一行一个画面，“△”和“▲”都可以；不要把多个镜头和多段对白挤在同一行。",
+      "ruleDialogue": "对白使用“角色：台词”；必要时可写“角色（简短表演提示）：台词”，不要每句堆叠括号说明；内心独白可写“角色 OS：内容”。",
+      "ruleLocationChange": "物理地点发生变化时应新建场景头；“地点 时间 内/外”和“地点 内/外 时间”两种顺序都支持。",
+      "exampleLabel": "示例片段"
+    },
+    "sceneHeaders": {
+      "missing": "没有识别到场景头，系统无法判断每个场景从哪里开始。",
+      "missingFix": "请按上方示例编写：每集先写“第N集”，每个场景再单独写“场号 地点 时间 内/外”，然后依次填写人物、动作和对白。",
+      "repairable": "场景边界已识别，但有些场景头缺少时间、地点或内外景。仍可导入，系统会在场景规划时补齐。",
+      "repairableFix": "请对照上方示例补齐场景头中的地点、时间或内外景；如果暂不修改，也可以继续导入。",
+      "open": "查看 {{chapter}} 的分场正文",
+      "rowCount_one": "{{count}} 场",
+      "rowCount_other": "{{count}} 场",
+      "count_one": "共 {{count}} 场",
+      "count_other": "共 {{count}} 场",
+      "scene": "场景 {{number}}",
+      "characters": "出场人物",
+      "characterSeparator": "、",
+      "unknownLocation": "未识别场景地点",
+      "empty": "该章节暂无可显示的分场正文",
+      "unparsedBody": "未归入场景的原文"
+    },
+    "chapterDetails": {
+      "open": "查看 {{chapter}} 的正文",
+      "description": "章节正文预览",
+      "sceneHeaders": "分场正文",
+      "body": "正文",
+      "empty": "该章节暂无可显示的正文",
+      "emptyScene": "该场景暂无正文"
+    },
     "projectType": "项目类型",
     "projectTypeLocked": "项目类型已锁定，如需切换请重新导入",
     "projectTypes": {
@@ -1472,7 +1676,14 @@
       "single_video": "单镜视频",
       "global_optimize_video": "全局优化",
       "selected_regen": "选中重生成",
-      "compose_episode": "视频合成"
+      "compose_episode": "视频合成",
+      "freezone_image_reverse_prompt": "图片反推提示词"
+    },
+    "cancelRunning": {
+      "title": "终止任务",
+      "fallbackMessage": "任务已开始执行。现在终止不会退还积分，是否确认终止？",
+      "confirm": "确认终止",
+      "keepRunning": "继续执行"
     }
   },
   "taskCenter": {
@@ -1510,6 +1721,8 @@
       "justNow": "刚刚"
     },
     "detail": {
+      "currentStatus": "当前状态",
+      "debugInfo": "调试信息",
       "tabs": {
         "overview": "概览",
         "logs": "日志"
@@ -1567,12 +1780,15 @@
   "pikoMiniGame": {
     "statusEntry": "Piko一下",
     "statusTooltip": "陪 Piko 玩 1 分钟小游戏",
+    "libraryTitle": "Piko一下",
+    "librarySubtitle": "选择一个小游戏",
     "title": "Piko一下，找回灵感",
     "idleHint": "按空格键发射子弹",
     "countdownHint": "准备开始咯～",
     "start": "开始补给",
     "playAgain": "再来一局",
     "backToWork": "回到创作",
+    "backToLibrary": "返回游戏列表",
     "audioOn": "开启 Piko 小游戏音效",
     "audioOff": "关闭 Piko 小游戏音效",
     "score": "灵感值 {{score}}",
@@ -1621,6 +1837,70 @@
         "jelly": "时间果冻放慢节奏"
       },
       "ultimate": "灵感爆发"
+    },
+    "memory": {
+      "title": "记忆翻牌",
+      "hint": "翻开相同图案完成配对",
+      "moves": "步数",
+      "cardHidden": "未翻开的卡片",
+      "cardVisible": "卡片 {{value}}",
+      "completed": "全部配对完成",
+      "resultMeta": "共用了 {{moves}} 步"
+    },
+    "breakout": {
+      "title": "打砖块",
+      "canvasLabel": "打砖块游戏区域",
+      "hint": "移动鼠标或触摸控制挡板，也可使用方向键或 A、D 键",
+      "start": "开始游戏",
+      "ready": "击碎所有砖块",
+      "lifeLost": "还有机会，继续！",
+      "won": "全部清除！",
+      "lost": "本局结束",
+      "score": "得分 {{score}}",
+      "lives": "生命 {{lives}}"
+    },
+    "rollingBall": {
+      "title": "滚动小球",
+      "canvasLabel": "滚动小球游戏区域",
+      "hint": "控制小球左右移动，落到不断滚动的平台上",
+      "start": "开始游戏",
+      "ready": "一路向下",
+      "lost": "小球掉下去了",
+      "score": "落台 {{score}}"
+    },
+    "flying": {
+      "title": "飞行的 Piko",
+      "canvasLabel": "飞行的 Piko 游戏区域",
+      "hint": "按空格、向上键或点击，让 Piko 向上飞并穿过能量门",
+      "start": "开始飞行",
+      "ready": "准备起飞",
+      "lost": "Piko 撞到能量门了",
+      "score": "穿越 {{score}}"
+    },
+    "catch": {
+      "title": "Piko 接接乐",
+      "canvasLabel": "Piko 接物游戏区域",
+      "hint": "左右移动 Piko，接住灵感星和晶体，避开红色故障块",
+      "start": "开始接取",
+      "ready": "接住掉落的灵感",
+      "finished": "灵感收集完成",
+      "lost": "Piko 需要休息一下",
+      "score": "灵感 {{score}}",
+      "status": "生命 {{lives}} · {{seconds}} 秒",
+      "result": "本局收集了 {{score}} 点灵感"
+    },
+    "leap": {
+      "title": "Piko 跃迁",
+      "canvasLabel": "Piko 跃迁游戏区域",
+      "hint": "长按空格、鼠标或屏幕蓄力，松开后跳向下一块灵感芯片",
+      "start": "开始跃迁",
+      "ready": "准备好下一跳",
+      "lost": "Piko 没有落稳",
+      "score": "跃迁 {{score}}",
+      "combo": "中心连击 ×{{combo}}",
+      "centerHint": "落在中心可获额外分数",
+      "chargeHint": "长按蓄力 · 松开跳跃",
+      "result": "本局获得 {{score}} 分"
     }
   },
   "literalScript": {
@@ -1860,7 +2140,8 @@
         "identitiesNotPlanned": "本集身份未规划，请先到「脚本」页配置本集身份。",
         "propsNotPlanned": "本集道具未规划，请先到「脚本」页配置本集道具。",
         "more": "更多",
-        "saveFailed": "保存失败"
+        "saveFailed": "保存失败",
+        "noSceneVariant": "无变体"
       },
       "insertManual": {
         "titleBeforeFirst": "在首个 Beat 前插入手工镜头",
@@ -1894,7 +2175,12 @@
         "identitiesPlaceholder": "逗号分隔，如 {{example}}；留空自动从画面描述提取",
         "identitiesPlaceholderEmpty": "逗号分隔身份ID；留空自动从画面描述提取",
         "submit": "插入",
-        "success": "已插入手工镜头"
+        "success": "已插入手工镜头",
+        "sceneVariant": "变体",
+        "noSceneVariant": "无变体",
+        "props": "出场道具",
+        "propsPlaceholder": "逗号分隔，如 {{example}}；留空自动从画面描述提取",
+        "propsPlaceholderEmpty": "逗号分隔道具ID；留空自动从画面描述提取"
       },
       "audio": {
         "narrationEmpty": "旁白为空，此 beat 无法生成音频。请先到「文案」填写。",
@@ -1917,7 +2203,9 @@
         "configureVoiceAction": "去配置",
         "beatNarrationVoice": "本条解说音频",
         "beatNarrationVoiceUpload": "上传本条音频",
-        "beatNarrationVoiceUploaded": "本条解说音频已上传"
+        "beatNarrationVoiceUploaded": "本条解说音频已上传",
+        "prereqHintCharacters": "。请到「角色」中上传解说主角声线。",
+        "prereqHintVoices": "。请到「资产 > 声线」上传或裁剪默认解说声线。"
       },
       "video": {
         "started": "Beat #{{n}} 视频已启动",
@@ -2073,7 +2361,16 @@
         "narratorVoiceTrimDuration": "保留秒数",
         "narratorVoiceTrimApply": "裁剪到 3-5 秒",
         "narratorVoiceTrimInvalid": "裁剪参数无效",
-        "narratorVoiceUse": "使用"
+        "narratorVoiceUse": "使用",
+        "seedance2SubjectPromptGenerated": "主体提示词已优化",
+        "grokVideoInspector": "Grok Video 检视器",
+        "happyHorseInspector": "HappyHorse 检视器",
+        "grokPromptLabel": "Grok 提示词",
+        "subjectPromptLabel": "主体提示词",
+        "generateGrokPrompt": "生成 Grok 提示词",
+        "generateSubjectPrompt": "生成主体提示词",
+        "seedance2CropTitleWithAspect": "裁剪 {{aspect}}",
+        "seedance2CropDragHandle": "移动裁剪区域"
       },
       "sketch": {
         "switched": "已切换草图",
@@ -2151,7 +2448,9 @@
         "openFreezone": "虾画编辑",
         "openFreezoneTip": "在 虾画 编辑当前 beat 的草图",
         "freezoneOpened": "已打开草图 虾画",
-        "freezoneOpenFailed": "打开草图 虾画 失败"
+        "freezoneOpenFailed": "打开草图 虾画 失败",
+        "cropTitleWithAspect": "裁剪 {{aspect}}",
+        "cropDragHandle": "移动裁剪区域"
       },
       "sketchGrid": {
         "title": "草图网格",
@@ -2173,7 +2472,8 @@
         "copySuccess": "提示词 已复制",
         "cut": "切割入池",
         "cutSuccess": "网格 #{{n}} 已切割",
-        "cutFailed": "网格 切割失败"
+        "cutFailed": "网格 切割失败",
+        "unknownScene": "未知场景"
       },
       "render": {
         "generateNew": "生成新图",
@@ -2210,7 +2510,15 @@
         "backgroundUploaded": "渲染 背景参考已上传",
         "backgroundUploadFailed": "上传 渲染 背景参考失败",
         "backgroundSaved": "渲染 背景参考已切换",
-        "backgroundSaveFailed": "保存 渲染 背景参考失败"
+        "backgroundSaveFailed": "保存 渲染 背景参考失败",
+        "backgroundCropSave": "保存截图",
+        "backgroundCropTitleWithAspect": "裁剪 {{aspect}}",
+        "backgroundCropDragHandle": "移动裁剪区域",
+        "relightLabel": "Relight 到 {{timeOfDay}}",
+        "relightLabelDefaultTime": "指定时间",
+        "relightTooltip": "Relight：按 beat 时间重新打光，不改变场景结构。",
+        "lockedLightTooltip": "锁图光：使用场景图自带光线，不重新打光。",
+        "lockedLightLabel": "锁图光"
       },
       "renderGrid": {
         "title": "渲染网格",
@@ -2363,6 +2671,12 @@
         "faceScore": "面部 {{score}}",
         "clothingScore": "服装 {{score}}",
         "jumpBeat": "跳 beat {{n}}"
+      },
+      "actionPanel": {
+        "episodeFreezone": "本集虾画",
+        "episodeFreezoneTooltip": "在虾画中打开本集素材",
+        "episodeFreezoneOpened": "已打开本集虾画",
+        "episodeFreezoneOpenFailed": "打开本集虾画失败"
       }
     },
     "state": {
@@ -2377,7 +2691,8 @@
       "readyRatio": "{{ready}}/{{total}}",
       "blockedCount": "{{count}} 未就绪",
       "composeReady": "已就绪",
-      "composeBlocked": "缺 {{count}}"
+      "composeBlocked": "缺 {{count}}",
+      "beatCount": "{{count}} 个 beat"
     },
     "compose": {
       "blocked": "还缺少以下内容:",
@@ -2506,7 +2821,8 @@
       "errors": {
         "invalidBeats": "选中的 beats 不在当前集范围内",
         "noBeats": "当前集暂无 beats"
-      }
+      },
+      "paddingCount": "+{{count}}空"
     },
     "renderSettings": {
       "model": "渲染模型",
@@ -2531,8 +2847,11 @@
     "projectDefault": "项目默认",
     "preset": "预设",
     "custom": "自定义",
-    "customPreviewUnavailable": "自定义风格暂不支持服务端预览",
-    "customPreviewHint": "待后端实装 POST /styles/{id}/preview/generate",
+    "customPreviewEmpty": "暂无上传的参考图",
+    "uploadedPreview": "已上传参考图预览",
+    "analyzingPreview": "正在解析参考图…",
+    "styleIdRequiredBeforeUpload": "请先填写风格 ID，再上传参考图",
+    "unsupportedPreviewType": "请上传 PNG、JPEG、WebP 或 GIF 图片。",
     "jsonFormatError": "JSON 格式错误",
     "jsonChangesApplied": "JSON 改动已应用",
     "styleSaved": "风格已保存",
@@ -2573,7 +2892,8 @@
     "noStylesAvailable": "没有可用的风格。点击右上角创建。",
     "paramsExtracted": "风格参数已提取",
     "idNameRequired": "请输入 ID 和名称",
-    "styleCreated": "风格已创建"
+    "styleCreated": "风格已创建",
+    "renameTitle": "重命名风格"
   },
   "identityPicker": {
     "title": "选择角色身份",
@@ -2691,7 +3011,12 @@
       "lock": "锁定画布",
       "unlock": "解锁画布",
       "organize": "整理 / 定位画布",
-      "organizeShortcut": "⌥⇧F"
+      "organizeShortcut": "⌥⇧F",
+      "toolMove": "移动工具",
+      "toolHand": "抓手工具",
+      "toolGroupLabel": "画布指针工具",
+      "hideEdges": "隐藏连线",
+      "showEdges": "显示连线"
     },
     "quickbar": {
       "addNode": "添加节点",
@@ -2719,6 +3044,11 @@
       "sortAsc": "时间升序",
       "batch": "批量操作",
       "selectedCount": "已选 {{n}} 项",
+      "searchPlaceholder": "搜索提示词…",
+      "searchPlaceholderName": "搜索名称…",
+      "clearSearch": "清空搜索",
+      "noMatch": "没有匹配的历史资产",
+      "noMatchOtherTabs": "当前分类没有匹配项，试试{{tabs}}",
       "empty": "暂无历史资产",
       "unknownDate": "未知日期",
       "view": "查看",
@@ -3075,7 +3405,8 @@
     "thinkingLevelDesc": "仅对 fal 的 Nano Banana 2 生效；高思考会额外增加费用。",
     "thinkingDisabled": "关闭",
     "thinkingMinimal": "标准",
-    "thinkingHigh": "高"
+    "thinkingHigh": "高",
+    "noModelsAvailable": "管理员尚未配置任何图片模型"
   },
   "node": {
     "menu": {
@@ -3130,7 +3461,8 @@
       "promptRequired": "请输入提示词",
       "apiKeyRequired": "后端 provider 未配置",
       "resultTitle": "结果图片",
-      "promptPlaceholder": "描述任何你想要生成或编辑的内容"
+      "promptPlaceholder": "描述任何你想要生成或编辑的内容",
+      "noModelAvailable": "管理员尚未配置任何图片模型，暂时无法生成"
     },
     "imageGen": {
       "contextPalette": {
@@ -3231,6 +3563,8 @@
         "textToMusicGen": "文字生成音乐"
       },
       "placeholder": "写下故事、场景或角色灵感。例如：雨夜旧车站里，一封迟到的信改变了所有人的选择。",
+      "generatePlaceholder": "描述你想生成的故事、场景、角色设定、对白或创作提示词…",
+      "generateText": "AI 生成文本",
       "modelPickerHint": "选择模型",
       "submit": "提交",
       "translate": "翻译（中英文互译）"
@@ -3261,13 +3595,23 @@
         "textToVideo": "文生视频",
         "allReference": "全能参考",
         "imageToVideo": "图生视频",
+        "firstFrame": "首帧",
         "firstLastFrame": "首尾帧",
-        "imageReference": "图片参考"
+        "imageReference": "图片参考",
+        "videoEdit": "视频编辑"
       },
       "placeholder": "根据文字描述生成视频。",
       "submit": "提交",
       "submitBusy": "生成中，请稍候",
       "partialBatchFailed": "已生成 {{ok}}/{{total}} 条，其余生成失败",
+      "humanReviewErrors": {
+        "assetFetchFailed": "第 {{index}} 张参考图片无法读取，请重新上传后重试。",
+        "assetExpired": "第 {{index}} 张参考图片链接已过期，请重新上传。",
+        "unsupportedImage": "第 {{index}} 张参考图片的格式或尺寸不受支持。",
+        "contentRejected": "第 {{index}} 张参考图片未通过内容审核，请更换图片。",
+        "reviewTimeout": "参考图片审核超时，请稍后重试。",
+        "unknownReviewError": "第 {{index}} 张参考图片审核失败，上游未返回具体原因。请更换图片或联系管理员。"
+      },
       "aspect": {
         "title": "比例",
         "auto": "Auto"
@@ -3289,7 +3633,20 @@
         "title": "生成音频",
         "on": "开启",
         "off": "关闭",
-        "durationExceeded": "音频总时长不能超过 {{max}} 秒，请缩短或替换配乐参考后再试。"
+        "durationTooShort": "单条音频时长不能低于 {{min}} 秒：{{clips}}。请替换或补长后再试。",
+        "durationTooLong": "单条音频时长不能超过 {{max}} 秒：{{clips}}。请裁剪或替换后再试。",
+        "durationTotalTooShort": "所有音频合计不能低于 {{min}} 秒，当前共 {{total}} 秒：{{clips}}。请增加或延长音频后再试。",
+        "durationTotalTooLong": "所有音频加起来不能超过 {{max}} 秒，当前共 {{total}} 秒：{{clips}}。请裁剪或去掉部分音频后再试。",
+        "clipDuration": "{{label}}（{{seconds}}s）",
+        "clipSeparator": "、",
+        "clipFallbackLabel": "音频{{index}}"
+      },
+      "referenceDuration": {
+        "videoFallbackLabel": "视频{{index}}",
+        "videoTooShort": "单条视频时长不能低于 {{min}} 秒：{{clips}}。请替换或延长后再试。",
+        "videoTooLong": "单条视频时长不能超过 {{max}} 秒：{{clips}}。请裁剪或替换后再试。",
+        "videoTotalTooShort": "所有视频合计不能低于 {{min}} 秒，当前共 {{total}} 秒：{{clips}}。请增加或延长视频后再试。",
+        "videoTotalTooLong": "所有视频合计不能超过 {{max}} 秒，当前共 {{total}} 秒：{{clips}}。请裁剪或移除部分视频后再试。"
       },
       "count": {
         "format": "{{count}}个"
@@ -3312,6 +3669,12 @@
           "redo": "重做",
           "reset": "重置"
         }
+      },
+      "player": {
+        "play": "播放",
+        "pause": "暂停",
+        "mute": "静音",
+        "unmute": "取消静音"
       }
     }
   },
@@ -3637,7 +4000,8 @@
         "actor": "人物",
         "prop": "道具",
         "staging": "占位"
-      }
+      },
+      "actorColor": "人物颜色"
     }
   },
   "split": {
@@ -3658,21 +4022,35 @@
   "settings": {
     "title": "设置",
     "close": "关闭",
+    "navigationLabel": "设置分类",
+    "statusConfigured": "{{page}}已配置",
+    "statusNotConfigured": "{{page}}未配置",
+    "secretSavedBadge": "已保存",
+    "secretSavedPlaceholder": "已保存 · {{preview}}（重新输入可替换）",
+    "pages": {
+      "models": "模型与渠道",
+      "storage": "媒体存储"
+    },
     "modelConfig": {
       "title": "模型配置",
-      "description": "选择模型网关渠道：使用平台官方网关，或自配本地 NewAPI。",
-      "baseUrlHint": "自定义 NewAPI 可通过环境变量 NEWAPI_BASE_URL 提供默认地址。",
+      "description": "选择模型网关渠道：使用平台官方网关、自定义 NewAPI，或组合使用本地与官方服务。",
+      "baseUrlHint": "本地 NewAPI 地址由 CE 运行环境自动配置。",
       "effectiveBadge": "当前生效：{{channel}}",
+      "guide": "配置手册",
       "loading": "加载中…",
       "requestFailed": "请求失败，请重试。",
+      "activateMode": "设为当前配置",
+      "configureBeforeActivate": "请先完成该配置后再启用。",
+      "modeActivated": "已启用{{mode}}配置。",
       "statusConfigured": "已配置",
       "statusNotConfigured": "未配置",
       "statusActive": "当前生效",
       "gatewayWarningIconLabel": "模型网关未配置",
-      "gatewayNotConfiguredImpact": "当前生效的模型网关未配置。文本、图片、视频、音频等模型调用会失败；请配置官方渠道或自定义 NewAPI 后再生成内容。",
+      "gatewayNotConfiguredImpact": "当前生效的模型网关未配置。文本、图片、视频、音频等模型调用会失败；请配置官方渠道或初始化本地 NewAPI 后再生成内容。",
       "modes": {
-        "official": "官方渠道",
-        "custom": "自定义 NewAPI"
+        "official": "官方",
+        "custom": "自定义",
+        "hybrid": "本地 + 官方混合"
       },
       "fields": {
         "baseUrl": "New API 地址",
@@ -3689,38 +4067,106 @@
         "saved": "已保存并切换为官方渠道。",
         "enabled": "已切换为官方渠道。",
         "missingFields": "请填写 API Key。",
-        "registerLink": "请前往 RelayClaw 进行注册"
+        "registerLink": "请前往 RelayClaw 进行注册",
+        "mediaCatalogTitle": "官方媒体模型列表",
+        "mediaCatalogStatus": "版本 {{version}} · {{count}} 个模型 · {{source}}",
+        "mediaCatalogSources": {
+          "bundled": "应用内置",
+          "remote": "在线更新"
+        },
+        "mediaCatalogAutoUpdate": "自动更新官方模型列表",
+        "mediaCatalogAutoUpdateHint": "后台定时检查，并在打开设置时立即应用兼容的模型目录更新。",
+        "mediaCatalogCheckNow": "立即检查更新",
+        "mediaCatalogUpdated": "官方媒体模型列表已更新。",
+        "mediaCatalogUpToDate": "官方媒体模型列表已是最新版本。",
+        "mediaCatalogCheckFailed": "检查官方媒体模型列表失败，请稍后重试。"
       },
       "custom": {
-        "description": "填入本地 NewAPI 地址和数据库信息后点初始化，后端会自动连库、建 token、写入配置并切换为自定义渠道。",
-        "init": "初始化配置",
-        "initialized": "初始化完成，已切换为自定义渠道。",
+        "description": "CE 使用本机 SQLite NewAPI。DramaClaw 会自动连接数据库、创建运行令牌并启用本地渠道。",
+        "init": "初始化本地 NewAPI",
+        "repair": "检测并修复",
+        "initialized": "本地 NewAPI 已就绪。",
+        "localStatusTitle": "本地 NewAPI",
+        "localReady": "运行令牌已配置",
+        "localNeedsInit": "等待初始化",
+        "sqliteReady": "SQLite 数据库已就绪，无需手动配置数据库路径。",
+        "sqliteWaiting": "正在等待本地 NewAPI 创建 SQLite 数据库。",
         "databaseTitle": "NewAPI 数据库",
         "databaseDescription": "用于查找管理员并补齐 access_token；SQLite 请填 sqlDsn=local 和已存在的 one-api.db 绝对路径。",
         "databaseConfigured": "数据库已配置",
         "databaseNotConfigured": "数据库未配置",
         "setupAdminTitle": "首次初始化管理员",
-        "setupAdminDescription": "如果你的 NewAPI 已经初始化，可以留空。未初始化时，请填写管理员密码，后端会调用你的 NewAPI /api/setup 创建管理员。",
+        "setupAdminDescription": "如果本地 NewAPI 尚未初始化，请为 root 管理员设置密码；已经初始化时可以留空直接检测。",
         "setupPassword": "初始化密码",
         "setupConfirmPassword": "确认密码",
         "setupPasswordPlaceholder": "至少 8 位",
         "setupConfirmPasswordPlaceholder": "再次输入密码",
         "setupPasswordOnlyOnce": "该账号和密码只会在全新 NewAPI 首次创建管理员时提交给你的 NewAPI 实例。若 NewAPI 已经初始化，即使这里填写了密码，也不会修改已有管理员密码。DramaClaw 不会保存密码，也不会用它执行后续操作；首次初始化完成后请自行保存，用于登录 NewAPI 后台。",
-        "setupRequired": "当前 NewAPI 还没有完成初始化，请在这里填写管理员用户名、初始化密码和确认密码后再点击初始化配置。",
+        "setupRequired": "当前本地 NewAPI 尚未完成初始化，请填写初始化密码和确认密码后重试。",
         "setupAlreadyInitializedPasswordIgnored": "检测到你的 NewAPI 已经初始化，本次没有调用 NewAPI 初始化接口，也没有修改已有管理员密码；你刚刚填写的密码已被忽略并清空。",
         "setupPasswordMissingUsername": "请填写管理员用户名。",
         "setupPasswordIncomplete": "请同时填写初始化密码和确认密码。",
         "setupPasswordTooShort": "初始化密码至少需要 8 位。",
         "setupPasswordMismatch": "两次输入的初始化密码不一致。"
       },
+      "quick": {
+        "title": "推荐配置",
+        "description": "本地 NewAPI 初始化完成后，使用一份配置同时完成供应商渠道、业务模型、Embedding 和媒体模型映射。",
+        "recommended": "推荐配置",
+        "custom": "我的配置",
+        "active": "使用中",
+        "upstreamKey": "上游 API Key",
+        "upstreamKeyPlaceholder": "输入模型供应商的 API Key",
+        "channelKeysTitle": "渠道 API Key",
+        "keyHint": "Key 按渠道单独填写，不会写入配置 JSON；已保存过对应供应商 Key 时可以留空。",
+        "savedKeyPlaceholder": "已保存 · {{preview}}（重新输入可替换）",
+        "fixJsonFirst": "请先修正配置 JSON，解析成功后会在这里显示渠道 Key 输入框。",
+        "editJson": "查看或编辑推荐配置 JSON",
+        "jsonHint": "channels 定义渠道；业务模型、Embedding 和每个媒体模型通过 channel 字段选择渠道。当前暂不支持重复 provider。",
+        "recommendedJsonHint": "推荐配置为内置只读模板。切换到我的配置可基于该模板修改并长期保存。",
+        "apply": "保存并应用全部配置",
+        "applyHint": "一次写入全部配置；现有逐项配置可在下方高级配置中继续调整。",
+        "applying": "正在处理：{{step}}",
+        "applied": "推荐配置已全部保存并启用。",
+        "initializeFirst": "请先初始化本地 NewAPI，确认数据库和管理员访问正常后再应用配置。",
+        "comfyConfig": "ComfyUI 配置",
+        "comfyTemplateHint": "需要本地 MiniMax H3 示例时再主动载入，打开混合配置不会自动创建 ComfyUI 渠道。",
+        "loadComfyTemplate": "载入 MiniMax H3 模板",
+        "advanced": "高级配置",
+        "invalidJson": "配置 JSON 无效：{{message}}",
+        "missingKeys": "以下渠道缺少上游 API Key：{{channels}}",
+        "steps": {
+          "initialize": "初始化本地 NewAPI",
+          "channel": "保存供应商渠道",
+          "features": "保存业务模型",
+          "embedding": "保存 Embedding",
+          "media": "保存媒体模型"
+        }
+      },
       "featureModels": {
-        "title": "文本模型映射",
-        "description": "为文本 / LLM 功能指定上游模型；未设置则使用后端默认。",
+        "title": "业务模型映射",
+        "description": "为文本理解、内容生成和视觉理解功能指定上游模型；未设置则使用后端默认。",
         "channelsTitle": "供应商渠道",
         "channelsDescription": "先添加要使用的供应商渠道，并配置上游 Key 和可选 Base URL 覆盖；每个供应商只能添加一次。",
         "addChannel": "新增渠道",
         "saveChannels": "保存渠道配置",
         "channelsSaved": "渠道配置已保存到本地。",
+        "comfyWorkflows": "ComfyUI Workflows",
+        "comfyWorkflowHint": "一个模型可以添加多份 API Format Workflow，具体路由由虾驿处理。API Key 可选。",
+        "comfyAddWorkflow": "添加 Workflow",
+        "comfyExpandWorkflow": "展开查看",
+        "comfyCollapseWorkflow": "收起",
+        "comfyModelName": "模型名称",
+        "comfyModelPlaceholder": "模型名称，例如 MiniMax-H3",
+        "comfyWorkflowId": "Workflow ID",
+        "comfyWorkflowJson": "Workflow JSON",
+        "comfyWorkflowIdPlaceholder": "Workflow ID，例如 minimax-h3-t2v",
+        "comfyDuplicateWorkflow": "Workflow ID 不能重复。",
+        "comfyInvalidWorkflow": "Workflow 必须是有效的 JSON 对象。",
+        "clearComfy": "清除 ComfyUI 配置",
+        "clearComfyTitle": "清除 ComfyUI 配置？",
+        "clearComfyConfirm": "将删除本地及 NewAPI 中的 ComfyUI 渠道、Workflow 和对应媒体模型映射。已生成的项目和媒体不会被删除。",
+        "comfyCleared": "ComfyUI 配置已清除。",
         "channelsSaveHint": "这里只保存 CE 本地渠道预设，不会立刻修改 NewAPI 已有渠道；下次保存模型映射时会使用这些预设更新 NewAPI 渠道。如需立即替换 NewAPI 渠道 Key，请点击对应渠道的更新按钮。",
         "syncChannel": "更新 NewAPI 渠道",
         "syncChannelHint": "立刻更新 NewAPI 中该供应商已有渠道的 Key 和 Base URL，不改模型映射。",
@@ -3751,50 +4197,48 @@
         "noMappings": "请先为功能填写上游模型名。",
         "missingBaseUrl": "请先填写 New API 地址。",
         "missingKeys": "以下供应商缺少上游 Key：{{providers}}",
-        "textModelsTitle": "纯文本模型",
-        "multimodalModelsTitle": "多模态模型",
+        "textModelsTitle": "文本理解与生成",
+        "multimodalModelsTitle": "视觉理解模型",
         "visionRequiredHint": "该功能会把图片发送给上游模型，请选择支持图片输入/视觉理解的多模态模型；纯文本模型可能运行失败。",
+        "multimodalRequiredBadge": "需要多模态",
+        "cogneeDescription": "小说导入和知识检索需要同时配置理解模型与向量模型，两者共同构成 Cognee 小说知识库。",
         "groups": {
-          "chat": "聊天 / Hermes",
-          "shot": "镜头页",
-          "sketch": "草图",
-          "episode": "剧集详情",
-          "sceneLibrary": "场景库",
-          "freezone": "Freezone",
-          "style": "风格页",
-          "contentRewrite": "内容改写",
-          "screenplay": "剧本规范化",
-          "assetCompile": "2.0 资产编译",
-          "directorWorld": "DirectorWorld",
-          "novelImport": "导入小说"
+          "xiahua": "虾画",
+          "xialiao": "虾料",
+          "xiatan": "虾塘",
+          "xiajing": "虾镜",
+          "xiadao": "虾导",
+          "xiage": "虾格",
+          "novelImport": "虾料 · 小说知识库（Cognee）"
         },
         "features": {
-          "HERMES": "Hermes / 虾导聊天模型",
-          "GLOBAL_VIDEO_OPTIMIZER": "AI 优化提示词",
-          "SEEDANCE2_PROMPT_COMPOSER": "Seedance 2.0 面板 / AI 优化",
-          "GLOBAL_VIDEO_IDENTITY_DETECTOR": "AI 检测身份与道具颜色标记",
-          "IDENTITY_PLANNER_CAST": "AI 规划身份 / 出场角色筛选",
-          "IDENTITY_PLANNER_ANALYSIS": "AI 规划身份 / 默认身份与其他身份分析",
-          "IDENTITY_PLANNER_APPEARANCE": "AI 规划身份 / 新身份服装造型描述",
-          "LITERAL_BEAT_META": "逐行生成",
-          "EPISODE_SCENE_PLANNER": "规划场景",
-          "EPISODE_PROP_PLANNER": "规划道具",
-          "SCENE_BUILD": "从图谱构建 / 场景解析与 environment_prompt",
+          "HERMES": "虾导聊天模型",
+          "GLOBAL_VIDEO_OPTIMIZER": "根据画面优化视频提示词",
+          "SEEDANCE2_PROMPT_COMPOSER": "组合视频生成提示词",
+          "GLOBAL_VIDEO_IDENTITY_DETECTOR": "识别草图中的角色与道具标记",
+          "IDENTITY_PLANNER_CAST": "规划本集出场角色",
+          "IDENTITY_PLANNER_ANALYSIS": "分析角色身份",
+          "IDENTITY_PLANNER_APPEARANCE": "生成角色身份造型",
+          "LITERAL_BEAT_META": "逐行拆分镜头与标注",
+          "EPISODE_SCENE_PLANNER": "规划本集场景",
+          "EPISODE_PROP_PLANNER": "规划本集道具",
+          "SCENE_BUILD": "解析并完善场景描述",
           "FREEZONE_TRANSLATION": "文本提示词中英互译",
+          "FREEZONE_TEXT_WRITER": "AI 文本生成",
           "FREEZONE_STORY_SCRIPT": "故事脚本生成",
-          "STYLE_ANALYZER": "上传参考图创建自定义风格",
-          "CONTENT_REWRITER": "原文转短视频口播逐行文本",
-          "SCREENPLAY_NORMALIZER": "剧本规范化",
-          "EPISODE_SCENE_RECONCILE": "基础场景资产校对",
-          "NARRATED_SCENE_ASSET": "解说剧场景资产规划",
-          "STAGING_PROP": "Freezone AI 临时道具规划",
-          "COGNEE": "cognify / memify 使用的 LLM"
+          "FREEZONE_VISION": "图片与视频内容解析",
+          "STYLE_ANALYZER": "从参考图分析自定义风格",
+          "CONTENT_REWRITER": "将原文改写为短视频口播",
+          "SCREENPLAY_NORMALIZER": "规划精品剧时解析本集场景结构",
+          "EPISODE_SCENE_RECONCILE": "校对并补充基础场景资产",
+          "NARRATED_SCENE_ASSET": "规划解说剧场景资产",
+          "STAGING_PROP": "规划导演世界临时道具",
+          "COGNEE": "① 内容理解与知识抽取（LLM）"
         }
       },
       "embeddingModel": {
-        "title": "Embedding 模型配置",
-        "description": "导入小说 / Cognee 向量检索使用的 embedding 模型。内部模型名固定为 DC-cognee-embedding，用户只需要选择渠道、填写上游模型名、向量维度和可选批量大小。",
-        "colInternalModel": "内部模型名",
+        "title": "② 向量化与语义检索（Embedding）",
+        "description": "负责文本向量化和知识库语义检索。自定义模型的维度会在项目创建时绑定。",
         "colProvider": "已配置渠道",
         "colUpstreamModel": "上游模型名",
         "colDimension": "维度",
@@ -3802,7 +4246,7 @@
         "defaultProvider": "选择渠道",
         "upstreamModelPlaceholder": "填写上游 embedding 模型名，如 text-embedding-3-large",
         "batchSizePlaceholder": "默认 10",
-        "dimensionWarning": "维度必须与上游 embedding 输出一致。批量大小为空时使用 EMBEDDING_BATCH_SIZE 环境变量或官方默认 10；如果上游支持更大批量，可以按需调高。",
+        "dimensionWarning": "维度会在创建项目时与自定义Embedding模型一起绑定；之后修改这里只影响新项目。更换已有项目的模型或维度前必须清空图谱并重建。批量大小为空时使用官方默认10。",
         "saveHint": "保存后会写入 NewAPI 映射，并把维度和可选批量大小保存到 CE 本地配置。",
         "noChannelsHint": "请先在上方添加供应商渠道，再配置 embedding 模型。",
         "save": "保存 Embedding 配置",
@@ -3810,14 +4254,51 @@
         "noChannels": "请先添加供应商渠道。",
         "missingProvider": "请选择 embedding 使用的供应商渠道。",
         "missingModel": "请填写上游 embedding 模型名。",
-        "invalidDimension": "请填写有效的 embedding 维度。",
+        "invalidDimension": "Embedding 维度必须为正整数。",
         "invalidBatchSize": "请填写有效的 embedding 批量大小。"
       },
       "mediaModels": {
-        "title": "图片 / 视频 / 音频模型配置",
-        "description": "这些模型已经由后端适配，固定模型名不能改；用户可以选择渠道，并填写 NewAPI model_mapping 的上游模型名，不填则使用固定模型名自身。-value 后缀为官方渠道专用模型。",
+        "title": "图片 / 视频 / 音频生成模型",
+        "description": "模型列表来自当前自定义本地配置。可新增图片、视频模型并配置其在虾画中显示的能力。",
+        "addModel": "新增模型",
+        "addModelTitle": "新增媒体模型",
+        "editModelTitle": "编辑媒体模型",
+        "editCapabilities": "编辑模型能力",
+        "removeModel": "移除模型",
+        "colActions": "操作",
+        "modelId": "模型 ID",
+        "displayName": "显示名称",
+        "mediaType": "媒体类型",
+        "sortOrder": "排序",
+        "enabled": "在虾画中启用",
+        "capabilitiesJson": "能力配置 JSON",
+        "commonCapabilities": "虾画能力",
+        "resolutionOptions": "分辨率",
+        "ratioOptions": "画面比例",
+        "customOptionPlaceholder": "输入自定义值，多个值用逗号分隔",
+        "addCustomOption": "添加自定义值",
+        "qualityOptions": "图片质量（逗号分隔）",
+        "minDuration": "最短时长（秒）",
+        "maxDuration": "最长时长（秒）",
+        "referenceImageMax": "参考图片上限",
+        "referenceVideoMax": "参考视频上限",
+        "referenceAudioMax": "参考音频上限",
+        "referenceAudioMinSeconds": "单条音频最短（秒）",
+        "referenceAudioMaxSeconds": "单条音频最长（秒）",
+        "referenceAudioTotalMinSeconds": "音频合计最短（秒）",
+        "referenceAudioTotalMaxSeconds": "音频合计最长（秒）",
+        "referenceVideoMinSeconds": "单条视频最短（秒）",
+        "referenceVideoMaxSeconds": "单条视频最长（秒）",
+        "referenceVideoTotalMinSeconds": "视频合计最短（秒）",
+        "referenceVideoTotalMaxSeconds": "视频合计最长（秒）",
+        "humanReview": "支持真人审核",
+        "supportedModes": "视频生成模式",
+        "capabilitiesHint": "使用与 EE 媒体模型目录一致的 config；保存全部配置后在虾画生效。",
+        "applyModelEdit": "应用到配置",
+        "missingModelFields": "请填写模型 ID、显示名称并选择渠道。",
+        "invalidCapabilitiesJson": "能力配置必须是有效的 JSON 对象。",
         "colType": "类型",
-        "colModel": "固定模型",
+        "colModel": "模型 ID",
         "colProvider": "已配置渠道",
         "colUpstreamModel": "上游模型名",
         "defaultProvider": "使用默认",
@@ -3825,6 +4306,7 @@
         "upstreamModelPlaceholder": "默认使用 {{model}}",
         "saveHint": "保存后会写入 NewAPI，并记录到本地配置。",
         "save": "保存图片 / 视频 / 音频配置",
+        "saveVideo": "保存视频配置",
         "saved": "图片 / 视频 / 音频模型映射已保存。",
         "noMappings": "请先为至少一个图片 / 视频 / 音频模型选择渠道。",
         "noChannelsHint": "请先在上方添加供应商渠道，再为图片 / 视频 / 音频模型选择渠道。",
@@ -3852,13 +4334,13 @@
       "notConfiguredImpact": "未配置参考媒体存储。纯文本和纯文生图通常不受影响；但需要上传本地参考图的功能会失败，例如虾画参考图、角色参考图、身份图、图生图、视频首帧和图生视频。请配置阿里云 OSS 或 Cloudinary。",
       "showSecret": "显示",
       "hideSecret": "隐藏",
-      "fieldsHint": "保存后写入 CE 本地配置库；后端不会回传完整 AccessKey，如需更新请重新输入。",
+      "fieldsHint": "保存后写入 CE 本地配置库；后端不会回传完整 AccessKey。留空保持已保存值，只填写需要替换的字段即可。",
       "save": "保存 OSS 配置",
       "saveCloudinary": "保存 Cloudinary 配置",
       "saveSuccess": "OSS 配置已保存",
       "cloudinarySaveSuccess": "Cloudinary 配置已保存",
       "saveFailed": "OSS 配置保存失败",
-      "cloudinaryFieldsHint": "保存后写入 CE 本地配置库；后端不会回传完整 API Key / Secret，如需更新请重新输入。API 文件夹可留空，留空时上传到 Cloudinary 根目录。",
+      "cloudinaryFieldsHint": "保存后写入 CE 本地配置库；后端不会回传完整 API Key / Secret。留空保持已保存值，只填写需要替换的字段即可。API 文件夹可留空，留空时上传到 Cloudinary 根目录。",
       "cloudinaryRegisterLink": "前往 Cloudinary 注册",
       "testUpload": "测试上传",
       "testUploadPlaceholder": "测试上传功能即将上线",
@@ -4007,7 +4489,9 @@
     "copyReport": "复制报错信息",
     "technicalDetails": "技术详情",
     "serviceConfigTitle": "生成服务未配置",
-    "openRouterConfigMessage": "当前模型需要 OpenRouter 服务，但后端还没有配置 API Key。请联系管理员处理。"
+    "openRouterConfigMessage": "当前模型需要 OpenRouter 服务，但后端还没有配置 API Key。请联系管理员处理。",
+    "stillRunningTitle": "仍在生成中",
+    "stillRunningMessage": "本次生成耗时较长，页面已停止等待，但任务仍在后台继续。可稍后刷新页面查看结果，或到任务中心查看进度。"
   },
   "videoCompose": {
     "title": "视频合成",

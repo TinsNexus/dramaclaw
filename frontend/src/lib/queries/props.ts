@@ -67,11 +67,11 @@ export function useDeleteProp(project: string) {
 }
 
 export function useGeneratePropReferenceAsync(project: string, name: string) {
-  return useMutation({
-    mutationFn: () =>
+  return useMutation<TaskResponse | ErrorResponse, Error, { model?: string } | void>({
+    mutationFn: (data: { model?: string } | void) =>
       jsonWithBackendError<TaskResponse | ErrorResponse>(
         api.post(p`api/v1/projects/${project}/props/${name}/reference/generate-async`, {
-          json: {},
+          json: data ?? {},
           throwHttpErrors: false,
         }),
       ),
@@ -109,18 +109,5 @@ export function useUploadPropReference(project: string, name: string) {
       qc.invalidateQueries({ queryKey: queryKeys.props(project) });
       qc.invalidateQueries({ queryKey: queryKeys.prop(project, name) });
     },
-  });
-}
-
-export function useBatchGeneratePropReferences(project: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      api
-        .post(p`api/v1/projects/${project}/props/reference/batch-generate`, {
-          json: {},
-        })
-        .json<TaskResponse | ErrorResponse>(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks(project) }),
   });
 }

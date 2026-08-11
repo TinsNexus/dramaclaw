@@ -2,9 +2,10 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { jsonWithBackendError } from "@/lib/api-errors";
 import { p } from "@/lib/api-path";
 import { queryKeys } from "@/lib/query-keys";
-import type { OkResponse } from "@/types/api";
+import type { ApiResponse, OkResponse } from "@/types/api";
 import type { Style } from "@/types/style";
 
 export function useStyles(project?: string) {
@@ -37,8 +38,8 @@ export function useStyleDetail(project: string, id: string | null) {
 export function useCreateStyle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; name: string; project: string; config: Record<string, unknown> }) =>
-      api.post("api/v1/styles", { json: data }).json<OkResponse<{ id: string }>>(),
+    mutationFn: (data: { id: string; name: string; project: string; config: Record<string, unknown>; preview_path?: string | null }) =>
+      api.post("api/v1/styles", { json: data }).json<ApiResponse<{ id: string }>>(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["styles"] }),
   });
 }
@@ -59,9 +60,28 @@ export function useAnalyzeStyle(project: string) {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
+      return jsonWithBackendError<ApiResponse<Record<string, unknown>>>(
+        api.post(p`api/v1/projects/${project}/styles/analyze`, {
+          body: formData,
+          throwHttpErrors: false,
+        }),
+      );
+    },
+  });
+}
+
+export function useUploadStylePreview(project: string) {
+  return useMutation({
+    mutationFn: async ({ file, styleId }: { file: File; styleId: string }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("style_id", styleId);
       return api
-        .post(p`api/v1/projects/${project}/styles/analyze`, { body: formData })
-        .json<OkResponse<Record<string, unknown>>>();
+        .post(p`api/v1/projects/${project}/styles/preview-upload`, {
+          body: formData,
+          throwHttpErrors: false,
+        })
+        .json<ApiResponse<{ preview_path: string }>>();
     },
   });
 }

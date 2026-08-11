@@ -25,7 +25,10 @@ from typing import Optional, List, Any, Callable, TYPE_CHECKING
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 
-from novelvideo.config import get_pydantic_model
+from novelvideo.config import (
+    get_newapi_structured_output_model_settings,
+    get_pydantic_model,
+)
 from novelvideo.cognee.tools import create_episode_planner_tools
 from novelvideo.shared.env_guard import preserve_st_env
 from novelvideo.utils.logging import log_agent_start, log_agent_end
@@ -167,6 +170,7 @@ def create_episode_planner_agent(tools: List[Callable]) -> Agent:
         system_prompt=EPISODE_PLANNER_PROMPT,
         tools=tools,
         output_type=EpisodePlannerOutput,
+        model_settings=get_newapi_structured_output_model_settings(),
         output_retries=3,
         name="剧集规划师",
     )
@@ -222,9 +226,6 @@ class EpisodePlannerAgent:
             规划的剧集列表
         """
         from novelvideo.models import NovelEpisode
-
-        with preserve_st_env():
-            from cognee.tasks.storage import add_data_points
 
         def report(progress: float, task: str):
             if on_progress:
@@ -308,10 +309,6 @@ class EpisodePlannerAgent:
 
             # 验证和修正编号
             episodes = self._validate_and_fix_episodes(episodes, target_episodes, log)
-
-            report(0.9, "存入图谱...")
-            log("存入 Cognee 图谱...")
-            await add_data_points(episodes)
 
             log_agent_end("剧集规划师", success=True, result=f"规划 {len(episodes)} 集")
             report(1.0, "完成")
@@ -398,6 +395,7 @@ class EpisodePlannerAgent:
             规划的剧集列表
         """
         from novelvideo.cognee.pipeline import extract_episodes_with_characters
+        from novelvideo.novel_source import require_imported_novel
 
         def log(message: str):
             if on_log:
@@ -407,9 +405,7 @@ class EpisodePlannerAgent:
         log("使用旧方案（单次 LLM 调用）...")
 
         # 从文件加载原文
-        novel_content = self.store.load_novel_content()
-        if not novel_content:
-            raise ValueError("无法加载原文内容")
+        novel_content = require_imported_novel(self.store.project_dir)
 
         episodes = await extract_episodes_with_characters(
             novel_content,

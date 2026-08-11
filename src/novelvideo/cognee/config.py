@@ -7,20 +7,34 @@
 """
 
 import contextvars
+import hashlib
 import importlib
 import logging
 import os
 import sys
 import warnings
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
-from typing import Optional
+from threading import RLock
+from typing import Awaitable, Callable, Iterator, Optional
 
 from dotenv import load_dotenv
 
+from novelvideo.cognee.concurrency import (
+    get_cognee_concurrency_config,
+    install_cognee_pipeline_concurrency,
+)
+from novelvideo.embedding_models import (
+    current_embedding_model_spec,
+    embedding_gateway_credentials,
+    require_current_embedding_model_spec,
+)
 from novelvideo.llm_instrumentation import (
     reset_model_call_reservation_active,
     set_model_call_reservation_active,
 )
+from novelvideo.cognee.ladybug_access import install_cognee_ladybug_access_patch
 from novelvideo.official_defaults import (
     DEFAULT_COGNEE_LLM_MODEL,
     DEFAULT_COGNEE_LLM_PROVIDER,
@@ -33,6 +47,7 @@ from novelvideo.shared.billing_errors import (
     find_insufficient_credits_stop,
 )
 from novelvideo.shared.env_guard import preserve_st_env
+from novelvideo.shared.runtime_env import is_ce_effective
 
 # 抑制 cognee/litellm 内部的 Pydantic 序列化警告
 # （豆包等非 OpenAI provider 的 Message 字段数与 cognee 期望不同，不影响功能）
@@ -49,23 +64,181 @@ _litellm_embedding_header_patch_installed = False
 _embedding_headers_capture: contextvars.ContextVar[dict[str, str] | None] = (
     contextvars.ContextVar("novelvideo_embedding_headers_capture", default=None)
 )
+logger = logging.getLogger(__name__)
+_cognee_logging_setup_lock = RLock()
+_MISSING_ENV = object()
+
+
+@contextmanager
+def _preserve_application_logging() -> Iterator[None]:
+    """Restore process logging after a side-effectful Cognee setup call."""
+    root_logger = logging.getLogger()
+    original_handlers = list(root_logger.handlers)
+    original_filters = list(root_logger.filters)
+    original_level = root_logger.level
+    original_disabled = root_logger.disabled
+    original_excepthook = sys.excepthook
+    original_log_file_setting = os.environ.get("COGNEE_LOG_FILE", _MISSING_ENV)
+    os.environ["COGNEE_LOG_FILE"] = "false"
+
+    try:
+        yield
+    finally:
+        original_handler_ids = {id(handler) for handler in original_handlers}
+        cognee_handlers = [
+            handler
+            for handler in root_logger.handlers
+            if id(handler) not in original_handler_ids
+        ]
+
+        root_logger.handlers[:] = original_handlers
+        root_logger.filters[:] = original_filters
+        root_logger.setLevel(original_level)
+        root_logger.disabled = original_disabled
+        sys.excepthook = original_excepthook
+        if original_log_file_setting is _MISSING_ENV:
+            os.environ.pop("COGNEE_LOG_FILE", None)
+        else:
+            os.environ["COGNEE_LOG_FILE"] = original_log_file_setting
+
+        for handler in cognee_handlers:
+            try:
+                handler.close()
+            except Exception:
+                # Logging cleanup must never hide the original import failure.
+                pass
+
+
+def _install_cognee_logging_guard() -> None:
+    """Guard every later Cognee ``setup_logging()`` invocation.
+
+    Cognee modules such as the embedding utilities call ``setup_logging`` again
+    when they are imported, after the package-level import has completed.
+    Guarding only ``import cognee`` therefore does not protect Celery.
+    """
+
+    logging_utils = sys.modules.get("cognee.shared.logging_utils")
+    if logging_utils is None:
+        logger.warning(
+            "Cognee logging guard could not be installed because "
+            "cognee.shared.logging_utils is not loaded"
+        )
+        return
+    original_setup = getattr(logging_utils, "setup_logging", None)
+    if not callable(original_setup) or getattr(
+        original_setup, "_novelvideo_logging_guard", False
+    ):
+        return
+
+    @wraps(original_setup)
+    def guarded_setup_logging(log_level=None, name=None):
+        # The package import has already configured structlog. Re-running
+        # Cognee's process-wide setup from a lazily imported submodule is both
+        # redundant and unsafe in a live thread worker because it temporarily
+        # clears the application's root handlers.
+        del log_level
+        return logging_utils.structlog.get_logger(name or logging_utils.__name__)
+
+    guarded_setup_logging._novelvideo_logging_guard = True
+    guarded_setup_logging._novelvideo_original = original_setup
+    logging_utils.setup_logging = guarded_setup_logging
+
+    # Replace aliases cached by Cognee modules imported during package
+    # initialization. Future modules import the guarded function directly.
+    for module_name, module in tuple(sys.modules.items()):
+        if not module_name.startswith("cognee.") or module is None:
+            continue
+        module_globals = vars(module)
+        for name, value in tuple(module_globals.items()):
+            if value is original_setup:
+                module_globals[name] = guarded_setup_logging
+
+
+def _detach_cognee_private_file_handlers(logging_utils) -> int:
+    """Detach file handlers created by Cognee before the guard was installed."""
+
+    handler_type = getattr(logging_utils, "PlainFileHandler", None)
+    if not isinstance(handler_type, type):
+        logger.warning(
+            "Cognee private file handlers could not be identified because "
+            "PlainFileHandler is unavailable"
+        )
+        return 0
+
+    root_logger = logging.getLogger()
+    handlers = [
+        handler for handler in root_logger.handlers if isinstance(handler, handler_type)
+    ]
+    for handler in handlers:
+        root_logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            # Do not leave a dangerous handler attached just because closing
+            # its underlying stream failed.
+            logger.warning("Failed to close a detached Cognee private file handler")
+    return len(handlers)
+
+
+def _import_cognee_without_logging_takeover():
+    """Import Cognee without letting it replace application logging.
+
+    Cognee 1.0.5 configures logging from its package ``__init__``. That setup
+    clears every root handler, installs a Rich traceback renderer with
+    ``show_locals=True``, and adds its own file handler. In a Celery thread
+    worker this can remove the worker handlers and spend long periods rendering
+    large pipeline locals while the broker heartbeat is starved.
+
+    Keep Cognee's internal structlog configuration, which its own loggers
+    expect, but restore the host process' root logger and exception hook after
+    Cognee logging setup. Cognee logs then flow through the logging policy owned
+    by the API, CLI, or Celery process.
+    """
+
+    with _cognee_logging_setup_lock:
+        loaded = sys.modules.get("cognee")
+        if loaded is not None:
+            logging_utils = sys.modules.get("cognee.shared.logging_utils")
+            if logging_utils is not None:
+                existing_setup = getattr(logging_utils, "setup_logging", None)
+            else:
+                existing_setup = None
+            if logging_utils is not None and not getattr(
+                existing_setup, "_novelvideo_logging_guard", False
+            ):
+                # The original host handlers are no longer recoverable after
+                # Cognee has configured process-wide logging. Keep this
+                # failure mode observable, detach its private file output, then
+                # guard every later setup call.
+                detached_handlers = _detach_cognee_private_file_handlers(logging_utils)
+                logger.warning(
+                    "Cognee was imported before DramaClaw installed its logging "
+                    "guard; application logging may already have been replaced; "
+                    "detached %d private file handler(s)",
+                    detached_handlers,
+                )
+        else:
+            # Cognee mutates the root logger during package import. Other
+            # application threads can observe that short import-time window,
+            # but restoring the host state immediately afterwards prevents the
+            # takeover from persisting for the worker lifetime.
+            with _preserve_application_logging():
+                loaded = importlib.import_module("cognee")
+        _install_cognee_logging_guard()
+    return loaded
 
 
 # 在导入 cognee 之前设置环境变量（Cognee 在导入时会读取）
 # 从 .env 读取配置并设置环境变量
 def _resolve_llm_provider(default: str = DEFAULT_COGNEE_LLM_PROVIDER) -> str:
-    provider = os.getenv("COGNEE_LLM_PROVIDER", "").strip()
-    model = os.getenv("COGNEE_LLM_MODEL", "").strip()
-    if provider:
-        return provider
-    gateway_key, gateway_base_url = _effective_newapi_gateway()
-    if gateway_key and gateway_base_url:
-        return "newapi"
-    if os.getenv("NEWAPI_BASE_URL", "").strip():
-        return "newapi"
-    if model.startswith("gemini-") or model.startswith("gemini/"):
-        return "gemini"
-    return default
+    """Return the product transport provider.
+
+    CE and EE both use newAPI as the compatibility boundary. The argument and
+    legacy provider helpers remain for extension compatibility, but deployment
+    environment variables cannot make the product runtime bypass the gateway.
+    """
+    del default
+    return "newapi"
 
 
 def _is_newapi_provider(provider: str) -> bool:
@@ -159,20 +332,41 @@ def _effective_newapi_gateway() -> tuple[str, str]:
 
         return get_newapi_runtime_credentials()
     except Exception:
+        if is_ce_effective():
+            # CE credentials are never allowed to fall back to deployment env.
+            return "", OFFICIAL_NEWAPI_BASE_URL
         return (
             os.getenv("NEWAPI_API_KEY", "").strip(),
             os.getenv("NEWAPI_BASE_URL", "").strip() or OFFICIAL_NEWAPI_BASE_URL,
         )
 
 
+def _current_gateway_fingerprint() -> str:
+    api_key, base_url = _effective_newapi_gateway()
+    material = f"{base_url}\n{api_key}".encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
+_active_gateway_fingerprint: str | None = None
+
+
+def cognee_gateway_restart_required() -> bool:
+    """Return whether CE settings changed after Cognee was initialized."""
+    return bool(
+        is_ce_effective()
+        and _active_gateway_fingerprint
+        and _active_gateway_fingerprint != _current_gateway_fingerprint()
+    )
+
+
 def _resolve_llm_api_key(llm_provider: str, llm_model: str) -> str:
+    if _is_newapi_provider(llm_provider):
+        return _effective_newapi_gateway()[0]
     api_key = os.getenv("COGNEE_LLM_API_KEY", "")
     if api_key:
         return api_key
     if llm_provider == "gemini":
         return os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-    if _is_newapi_provider(llm_provider):
-        return _effective_newapi_gateway()[0]
     if _is_openrouter_config(
         llm_provider,
         llm_model,
@@ -236,6 +430,22 @@ def _apply_cognee_runtime_defaults() -> None:
     )
     if graph_config_module and hasattr(graph_config_module, "get_graph_config"):
         graph_config_module.get_graph_config.cache_clear()
+
+
+def _install_cognee_pipeline_concurrency() -> None:
+    # Validate environment values during initialization, before the first import.
+    get_cognee_concurrency_config()
+    install_cognee_pipeline_concurrency()
+
+
+def _install_cognee_pipeline_concurrency_on_import() -> None:
+    try:
+        _install_cognee_pipeline_concurrency()
+    except (RuntimeError, ValueError) as exc:
+        logger.warning(
+            "Cognee pipeline concurrency installation deferred until init_cognee(): %s",
+            exc,
+        )
 
 
 def _patch_cognee_embedding_timeout() -> None:
@@ -452,8 +662,148 @@ def _embedding_response_trace(
     return request_id, response_id
 
 
+def _project_embedding_request_kwargs(kwargs: dict) -> dict:
+    """Apply the current project's immutable model and gateway to LiteLLM kwargs."""
+
+    spec = require_current_embedding_model_spec()
+    api_key, base_url = embedding_gateway_credentials(spec)
+    if not api_key or not base_url:
+        raise RuntimeError(f"Embedding gateway is not configured for {spec.gateway}")
+
+    routed = dict(kwargs)
+    routed["custom_llm_provider"] = "openai"
+    routed["model"] = _normalize_embedding_model("newapi", spec.internal_model)
+    routed["api_key"] = api_key
+    routed["api_base"] = base_url
+    if spec.send_dimensions:
+        routed["dimensions"] = spec.dimensions
+        allowed_openai_params = list(routed.get("allowed_openai_params") or [])
+        if "dimensions" not in allowed_openai_params:
+            allowed_openai_params.append("dimensions")
+        routed["allowed_openai_params"] = allowed_openai_params
+    else:
+        routed.pop("dimensions", None)
+        allowed_openai_params = [
+            param
+            for param in (routed.get("allowed_openai_params") or [])
+            if param != "dimensions"
+        ]
+        if allowed_openai_params:
+            routed["allowed_openai_params"] = allowed_openai_params
+        else:
+            routed.pop("allowed_openai_params", None)
+    return routed
+
+
+def _validate_embedding_vectors(
+    vectors: object,
+    *,
+    expected_dimensions: int,
+    expected_count: int,
+) -> list[list[float]]:
+    if not isinstance(vectors, list) or len(vectors) != expected_count:
+        received_count = len(vectors) if isinstance(vectors, list) else 0
+        raise RuntimeError(
+            "Embedding response count mismatch: "
+            f"expected {expected_count}, received {received_count}"
+        )
+    for index, vector in enumerate(vectors):
+        received = len(vector) if isinstance(vector, list) else 0
+        if received != expected_dimensions:
+            raise RuntimeError(
+                "Embedding dimension mismatch: "
+                f"expected {expected_dimensions}, received {received} "
+                f"at index {index}"
+            )
+    return vectors
+
+
+async def _run_project_embedding_with_billing(
+    operation: Callable[[], Awaitable[list[list[float]]]],
+    *,
+    expected_count: int,
+) -> list[list[float]]:
+    spec = require_current_embedding_model_spec()
+    captured_headers: dict[str, str] = {}
+    token = _embedding_headers_capture.set(captured_headers)
+    reservation_id = ""
+    active_token = None
+    metadata = {
+        "source": "cognee_embedding_gateway",
+        "embedding_gateway": spec.gateway,
+    }
+    try:
+        try:
+            reservation_id = (
+                await get_usage_meter().reserve_current_model_call_credit(
+                    model=spec.internal_model,
+                    billing_kind="embedding",
+                    metadata=metadata,
+                )
+            )
+        except Exception as exc:
+            insufficient = find_insufficient_credits_error(exc)
+            if insufficient is not None:
+                raise InsufficientCreditsStop(
+                    user_id=insufficient.user_id,
+                    cost=insufficient.cost,
+                    balance=insufficient.balance,
+                ) from None
+            raise
+        active_token = set_model_call_reservation_active(bool(reservation_id))
+        result = _validate_embedding_vectors(
+            await operation(),
+            expected_dimensions=spec.dimensions,
+            expected_count=expected_count,
+        )
+    except BaseException:
+        if reservation_id:
+            try:
+                await get_usage_meter().refund_model_call_credit_reservation(
+                    reservation_id,
+                    metadata={
+                        "source": "cognee_embedding_gateway_exception",
+                        "embedding_gateway": spec.gateway,
+                    },
+                )
+            except Exception:
+                pass
+        raise
+    finally:
+        if active_token is not None:
+            try:
+                reset_model_call_reservation_active(active_token)
+            except Exception:
+                pass
+        _embedding_headers_capture.reset(token)
+
+    if reservation_id:
+        try:
+            request_id = (
+                captured_headers.get("x-novelvideo-request-id")
+                or captured_headers.get("x-request-id")
+                or captured_headers.get("x-newapi-request-id")
+                or captured_headers.get("x-oneapi-request-id")
+                or ""
+            )
+            bump_metadata = dict(metadata)
+            response_id = captured_headers.get("x-novelvideo-response-id", "")
+            if response_id:
+                bump_metadata["response_id"] = response_id
+            await get_usage_meter().bump_model_call(
+                user_id=None,
+                model=spec.internal_model,
+                credit_reservation_id=reservation_id,
+                provider_request_id=request_id,
+                metadata=bump_metadata,
+            )
+        except Exception:
+            pass
+    return result
+
+
 def _patch_cognee_embedding_gateway() -> None:
-    """Force Cognee LiteLLM embeddings through the newAPI OpenAI-compatible gateway."""
+    """Install one concurrency-safe project-aware newAPI embedding gateway."""
     global _embedding_gateway_patch_installed
     if _embedding_gateway_patch_installed:
         return
@@ -471,121 +821,71 @@ def _patch_cognee_embedding_gateway() -> None:
         return
 
     original_embed_text = engine_cls.embed_text
+    original_get_vector_size = engine_cls.get_vector_size
+    original_handle_embedding_response = _mod.handle_embedding_response
+    litellm = _mod.litellm
+    original_aembedding = litellm.aembedding
 
-    async def patched_embed_text(self, text):
-        provider = str(getattr(self, "provider", "") or "").strip().lower()
-        endpoint = str(getattr(self, "endpoint", "") or "").strip()
-        if provider not in {"custom", "openai"} or not endpoint:
-            return await original_embed_text(self, text)
-
-        litellm = _mod.litellm
-        original_aembedding = litellm.aembedding
-
-        async def gateway_aembedding(*args, **kwargs):
-            kwargs.setdefault("custom_llm_provider", "openai")
-            raw_model = str(kwargs.get("model") or "").strip()
-            if raw_model:
-                kwargs["model"] = _normalize_embedding_model("newapi", raw_model)
-            if os.getenv("COGNEE_EMBEDDING_SEND_DIMENSIONS", "false").lower() not in (
-                "1",
-                "true",
-                "yes",
-                "on",
-            ):
-                # dimensions 仍用于本地向量库 sizing；默认不传给 newAPI 上游。
-                kwargs.pop("dimensions", None)
-            response = await original_aembedding(*args, **kwargs)
+    async def gateway_aembedding(*args, **kwargs):
+        response = await original_aembedding(
+            *args, **_project_embedding_request_kwargs(kwargs)
+        )
+        captured_headers = _embedding_headers_capture.get()
+        if captured_headers is not None:
             _attach_embedding_response_headers(response, captured_headers)
-            nonlocal captured_request_id, captured_response_id
             request_id, response_id = _embedding_response_trace(
                 response, captured_headers
             )
-            captured_request_id = captured_request_id or request_id
-            captured_response_id = captured_response_id or response_id
-            return response
+            if request_id:
+                captured_headers.setdefault("x-novelvideo-request-id", request_id)
+            if response_id:
+                captured_headers.setdefault("x-novelvideo-response-id", response_id)
+        return response
 
-        litellm.aembedding = gateway_aembedding
-        _install_litellm_embedding_header_capture()
-        captured_headers: dict[str, str] = {}
-        captured_request_id = ""
-        captured_response_id = ""
-        token = _embedding_headers_capture.set(captured_headers)
-        raw_model = str(
-            getattr(self, "model", "") or os.getenv("EMBEDDING_MODEL", "")
-        ).strip()
-        model = _normalize_embedding_model("newapi", raw_model)
-        billing_model = _billing_model_name(raw_model or model)
-        original_model = getattr(self, "model", None)
-        reservation_id = ""
-        active_token = None
-        try:
-            if model:
-                self.model = model
+    litellm.aembedding = gateway_aembedding
+    _install_litellm_embedding_header_capture()
 
-            try:
-                reservation_id = (
-                    await get_usage_meter().reserve_current_model_call_credit(
-                        model=billing_model,
-                        billing_kind="embedding",
-                        metadata={"source": "cognee_embedding_gateway"},
-                    )
-                )
-            except Exception as exc:
-                insufficient = find_insufficient_credits_error(exc)
-                if insufficient is not None:
-                    raise InsufficientCreditsStop(
-                        user_id=insufficient.user_id,
-                        cost=insufficient.cost,
-                        balance=insufficient.balance,
-                    ) from None
-                raise
-            active_token = set_model_call_reservation_active(bool(reservation_id))
-            result = await original_embed_text(self, text)
-        except BaseException:
-            if reservation_id:
-                try:
-                    await get_usage_meter().refund_model_call_credit_reservation(
-                        reservation_id,
-                        metadata={"source": "cognee_embedding_gateway_exception"},
-                    )
-                except Exception:
-                    pass
-            raise
-        finally:
-            if active_token is not None:
-                try:
-                    reset_model_call_reservation_active(active_token)
-                except Exception:
-                    pass
-            if original_model is not None:
-                self.model = original_model
-            _embedding_headers_capture.reset(token)
-            litellm.aembedding = original_aembedding
-        if reservation_id:
-            try:
-                request_id = (
-                    captured_request_id
-                    or captured_headers.get("x-request-id")
-                    or captured_headers.get("x-newapi-request-id")
-                    or captured_headers.get("x-oneapi-request-id")
-                    or ""
-                )
-                metadata = {"source": "cognee_embedding_gateway"}
-                if captured_response_id:
-                    metadata["response_id"] = captured_response_id
-                await get_usage_meter().bump_model_call(
-                    user_id=None,
-                    model=billing_model,
-                    credit_reservation_id=reservation_id,
-                    provider_request_id=request_id,
-                    metadata=metadata,
-                )
-            except Exception:
-                pass
-        return result
+    def project_handle_embedding_response(original_texts, embeddings, dimensions):
+        spec = current_embedding_model_spec()
+        return original_handle_embedding_response(
+            original_texts,
+            embeddings,
+            spec.dimensions if spec is not None else dimensions,
+        )
+
+    _mod.handle_embedding_response = project_handle_embedding_response
+
+    async def patched_embed_text(self, text):
+        provider = str(getattr(self, "provider", "") or "").strip().lower()
+        if provider not in {"custom", "openai"}:
+            return await original_embed_text(self, text)
+        expected_count = len(text) if isinstance(text, list) else 1
+
+        async def project_embed():
+            if getattr(self, "mock", False):
+                dimensions = require_current_embedding_model_spec().dimensions
+                return [[0.0] * dimensions for _ in range(expected_count)]
+            return await original_embed_text(self, text)
+
+        return await _run_project_embedding_with_billing(
+            project_embed,
+            expected_count=expected_count,
+        )
+
+    def patched_get_vector_size(self):
+        spec = current_embedding_model_spec()
+        if spec is not None:
+            return spec.dimensions
+        return original_get_vector_size(self)
 
     engine_cls.embed_text = patched_embed_text
+    engine_cls.get_vector_size = patched_get_vector_size
     engine_cls._novelvideo_original_embed_text = original_embed_text
+    engine_cls._novelvideo_original_get_vector_size = original_get_vector_size
+    engine_cls._novelvideo_original_handle_embedding_response = (
+        original_handle_embedding_response
+    )
+    engine_cls._novelvideo_original_aembedding = original_aembedding
     engine_cls._novelvideo_gateway_patch = True
     _embedding_gateway_patch_installed = True
 
@@ -607,7 +907,7 @@ def apply_cognee_project_storage_context(
 
     if cognee_module is None:
         with preserve_st_env():
-            import cognee as cognee_module
+            cognee_module = _import_cognee_without_logging_takeover()
 
     cognee_module.config.system_root_directory(cognee_system_dir)
     if hasattr(cognee_module.config, "data_root_directory"):
@@ -706,7 +1006,9 @@ def _apply_embedding_env(llm_provider: str, api_key: str) -> tuple[str, str, str
     )
     embedding_provider = _to_cognee_provider(embedding_provider)
 
-    embedding_api_key = os.getenv("COGNEE_EMBEDDING_API_KEY", "")
+    embedding_api_key = ""
+    if not _uses_newapi_gateway(raw_embedding_provider):
+        embedding_api_key = os.getenv("COGNEE_EMBEDDING_API_KEY", "")
     if not embedding_api_key:
         if embedding_provider == "gemini":
             embedding_api_key = (
@@ -720,6 +1022,8 @@ def _apply_embedding_env(llm_provider: str, api_key: str) -> tuple[str, str, str
             _get_scoped_env("COGNEE_EMBEDDING_ENDPOINT", "EMBEDDING_ENDPOINT"),
         ):
             embedding_api_key = os.getenv("OPENROUTER_API_KEY", "")
+        elif _uses_newapi_gateway(raw_embedding_provider):
+            embedding_api_key = _effective_newapi_gateway()[0]
         else:
             embedding_api_key = (
                 _effective_newapi_gateway()[0]
@@ -771,7 +1075,7 @@ _apply_cognee_runtime_defaults()
 
 try:
     with preserve_st_env():
-        import cognee
+        cognee = _import_cognee_without_logging_takeover()
 
     cognee_llm_provider = _to_cognee_provider(llm_provider)
     os.environ["LLM_MODEL"] = llm_model
@@ -788,29 +1092,40 @@ try:
     _patch_cognee_embedding_timeout()
     _install_insufficient_credits_log_filter()
     _patch_cognee_embedding_gateway()
+    install_cognee_ladybug_access_patch()
+    _install_cognee_pipeline_concurrency_on_import()
 
     COGNEE_AVAILABLE = True
 except ImportError:
     COGNEE_AVAILABLE = False
 
+if COGNEE_AVAILABLE and is_ce_effective() and api_key:
+    _active_gateway_fingerprint = _current_gateway_fingerprint()
+
 
 def init_cognee() -> None:
     """初始化 Cognee 配置。
 
-    从 .env 文件或环境变量读取配置，设置 LLM 和 Embedding。
+    CE 从 settings.db 解析网关，EE 从启动环境解析网关。Cognee 本身要求
+    通过进程环境初始化第三方客户端，因此该桥接只允许在进程启动配置未变化
+    时重复执行；CE 配置变化后必须重启。
 
     重要：必须在导入 cognee 之前设置环境变量，因为 Cognee 在导入时会读取环境变量。
 
-    需要的环境变量（在 .env 文件中）:
-        COGNEE_LLM_PROVIDER=newapi (或 gemini/openai/custom)
+    EE 可使用的部署环境变量:
         COGNEE_LLM_MODEL=DC-cognee-LLM
-        NEWAPI_API_KEY=your_key (或 GEMINI_API_KEY/OPENAI_API_KEY)
+        NEWAPI_API_KEY=your_key
         NEWAPI_BASE_URL=https://relayclaw.cdnfg.com/v1
-        COGNEE_LLM_ENDPOINT=https://openrouter.ai/api/v1  # custom provider 时可选
-        COGNEE_EMBEDDING_ENDPOINT=...                    # custom embedding 时可选
     """
+    global _active_gateway_fingerprint
+
     if not COGNEE_AVAILABLE:
         raise ImportError("cognee is not installed. Run: pip install cognee")
+    if cognee_gateway_restart_required():
+        raise RuntimeError(
+            "模型网关配置已更新，Cognee 仍持有启动时的旧配置；"
+            "请重启 DramaClaw 后再使用小说知识库。"
+        )
 
     llm_provider = _resolve_llm_provider()
 
@@ -820,11 +1135,8 @@ def init_cognee() -> None:
     )
     if not api_key:
         raise ValueError(
-            "未设置 Cognee LLM Key。请在 .env 文件中添加:\n"
-            "  COGNEE_LLM_API_KEY=your_key_here\n"
-            "  或 DramaClawAPI API key\n"
-            "  或 (Gemini) GEMINI_API_KEY=your_key_here\n"
-            "  或 OPENAI_API_KEY=your_key_here"
+            "未设置 Cognee LLM Key。请配置 DramaClaw 模型网关；"
+            "CE 在设置页配置，EE 通过 NEWAPI_API_KEY 配置。"
         )
 
     llm_model = _normalize_llm_model(
@@ -870,6 +1182,10 @@ def init_cognee() -> None:
     _patch_cognee_embedding_timeout()
     _install_insufficient_credits_log_filter()
     _patch_cognee_embedding_gateway()
+    install_cognee_ladybug_access_patch()
+    _install_cognee_pipeline_concurrency()
+    if is_ce_effective():
+        _active_gateway_fingerprint = _current_gateway_fingerprint()
 
 
 def configure_cognee(

@@ -2,6 +2,30 @@
 // Copyright (c) 2026 ClaymoreLab
 import type { TFunction } from "i18next";
 import { HTTPError } from "ky";
+import type { ErrorResponse } from "@/types/api";
+
+export const NOVEL_IMPORT_REQUIRED_CODE = "NOVEL_IMPORT_REQUIRED";
+
+export function backendErrorCodeToastMessage(
+  errorCode: string | null | undefined,
+  fallback: string,
+  t: TFunction,
+): string | null {
+  if (errorCode === NOVEL_IMPORT_REQUIRED_CODE) {
+    return t("common.novelImportRequired", { defaultValue: fallback });
+  }
+  return null;
+}
+
+export function backendErrorResponseToastMessage(
+  response: Pick<ErrorResponse, "code" | "error">,
+  t: TFunction,
+): string {
+  return (
+    backendErrorCodeToastMessage(response.code, response.error, t) ??
+    backendErrorToastMessage(new Error(response.error), t)
+  );
+}
 
 export class ProjectQueueLimitError extends Error {
   queueKind: string;
@@ -126,6 +150,20 @@ export function errorFromBackendBody(status: number, body: unknown, fallback: st
   if (errorCode === "BILLING_RULE_NOT_CONFIGURED") {
     return new BillingRuleNotConfiguredError(message, status, body);
   }
+  // Some older EE responses leaked the internal exception text without the
+  // structured error code. Keep those responses on the same safe UI path.
+  if (message.toLowerCase().includes("billing rule is not configured")) {
+    return new BillingRuleNotConfiguredError(message, status, body);
+  }
+  // Keep legacy/wrapped Freezone 5xx responses on the safe billing path only
+  // after every structured billing code has had a chance to classify them.
+  if (
+    status >= 500 &&
+    status < 600 &&
+    message.toLowerCase().includes("insufficient credits")
+  ) {
+    return new InsufficientCreditsError(message, status, body);
+  }
 
   if (status === 429 && typeof queueKind === "string" && queueKind.trim()) {
     const normalizedScope = limitScope === "user" ? "user" : "project";
@@ -194,6 +232,143 @@ export async function jsonWithBackendError<T>(request: Promise<Response>): Promi
  */
 export type GatewayErrorKind = "channel_policy" | "rate_limit";
 
+function parseJsonValueAt(text: string, start: number): unknown | null {
+  const opener = text[start];
+  if (opener !== "{" && opener !== "[") return null;
+
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{" || char === "[") {
+      stack.push(char);
+      continue;
+    }
+    if (char !== "}" && char !== "]") continue;
+    const expected = char === "}" ? "{" : "[";
+    if (stack.pop() !== expected) return null;
+    if (stack.length === 0) {
+      try {
+        return JSON.parse(text.slice(start, index + 1));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function providerErrorPayload(raw: string): unknown | null {
+  const text = raw.trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Gateway failures commonly wrap the provider response as
+    // `HTTP ...; body={...}`. Preserve the wrapper for diagnostics while
+    // parsing only the JSON body for the user-facing message.
+  }
+
+  const bodyMatch = /\bbody\s*=\s*/gi.exec(text);
+  if (bodyMatch) {
+    const jsonStart = bodyMatch.index + bodyMatch[0].length;
+    const payload = parseJsonValueAt(text, jsonStart);
+    if (payload) return payload;
+  }
+
+  // Video task errors use `HTTP <status> - {...}` rather than `body={...}`.
+  // Scan JSON object boundaries so the structured gateway error survives the
+  // Python task wrapper and remains available for localization.
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "{") continue;
+    const payload = parseJsonValueAt(text, index);
+    if (payload) return payload;
+  }
+  return null;
+}
+
+function messageFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (record.error && typeof record.error === "object") {
+    const nested = messageFromPayload(record.error);
+    if (nested) return nested;
+  }
+  if (typeof record.message === "string" && record.message.trim()) {
+    return record.message.trim();
+  }
+  return null;
+}
+
+/** Extract the provider's concise message without discarding the raw error. */
+export function providerErrorMessage(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return messageFromPayload(providerErrorPayload(raw));
+}
+
+interface HumanReviewAssetFailure {
+  index: number;
+  reasonCode: string;
+}
+
+function humanReviewAssetFailure(payload: unknown): HumanReviewAssetFailure | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (record.code === "human_review_asset_failed") {
+    const data =
+      record.data && typeof record.data === "object"
+        ? (record.data as Record<string, unknown>)
+        : {};
+    return {
+      index:
+        typeof data.asset_index === "number" && Number.isFinite(data.asset_index)
+          ? Math.max(1, Math.floor(data.asset_index))
+          : 1,
+      reasonCode:
+        typeof data.reason_code === "string" && data.reason_code.trim()
+          ? data.reason_code
+          : "unknown_review_error",
+    };
+  }
+  for (const nested of Object.values(record)) {
+    const found = humanReviewAssetFailure(nested);
+    if (found) return found;
+  }
+  return null;
+}
+
+function humanReviewAssetMessage(raw: string, t: TFunction): string | null {
+  const failure = humanReviewAssetFailure(providerErrorPayload(raw));
+  if (!failure) return null;
+  const keyByReason: Record<string, string> = {
+    asset_fetch_failed: "assetFetchFailed",
+    asset_expired: "assetExpired",
+    unsupported_image: "unsupportedImage",
+    content_rejected: "contentRejected",
+    review_timeout: "reviewTimeout",
+    unknown_review_error: "unknownReviewError",
+  };
+  const reasonKey = keyByReason[failure.reasonCode] ?? "unknownReviewError";
+  return t(`node.videoNode.humanReviewErrors.${reasonKey}`, {
+    index: failure.index,
+  });
+}
+
 export function classifyGatewayError(
   raw: string | null | undefined,
 ): GatewayErrorKind | null {
@@ -220,13 +395,20 @@ export function humanizeTaskError(
   t: TFunction,
 ): string {
   const fallback = raw && raw.trim() ? raw : t("common.error");
+  if (raw && /billing rule is not configured/i.test(raw)) {
+    return t("common.billingRuleNotConfigured", {
+      defaultValue: "计费规则未配置，请联系管理员设置积分规则",
+    });
+  }
+  const reviewMessage = raw ? humanReviewAssetMessage(raw, t) : null;
+  if (reviewMessage) return reviewMessage;
   switch (classifyGatewayError(raw)) {
     case "channel_policy":
       return t("common.generationChannelPolicyBlocked", { defaultValue: fallback });
     case "rate_limit":
       return t("common.generationRateLimited", { defaultValue: fallback });
     default:
-      return fallback;
+      return providerErrorMessage(raw) ?? fallback;
   }
 }
 
@@ -256,5 +438,10 @@ export function backendErrorToastMessage(error: unknown, t: TFunction): string {
       defaultValue: t("common.projectQueueFull", { queue: queueLabel }),
     });
   }
-  return error instanceof Error && error.message ? error.message : t("common.error");
+  if (error instanceof Error && error.message) {
+    const reviewMessage = humanReviewAssetMessage(error.message, t);
+    if (reviewMessage) return reviewMessage;
+    return providerErrorMessage(error.message) ?? error.message;
+  }
+  return t("common.error");
 }

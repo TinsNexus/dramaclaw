@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Optional
 
@@ -42,6 +44,8 @@ async def run_freezone_gen(
     provider: Optional[str] = None,
     model: Optional[str] = None,
     quality: Optional[str] = None,
+    model_params: Optional[dict[str, Any]] = None,
+    request_schema: Optional[dict[str, Any]] = None,
     output_task_type: str = "freezone_gen",
 ) -> Path:
     """text → image (with optional reference images).
@@ -75,6 +79,8 @@ async def run_freezone_gen(
         model_override=model,
         image_size_override=image_size,
     )
+    cfg["newapi_model_params"] = model_params or {}
+    cfg["newapi_request_schema"] = request_schema or {}
     if reference_paths:
         await generate_reference_edit_image(
             prompt=prompt,
@@ -136,9 +142,11 @@ async def run_freezone_mask_edit(
     provider_name = str(cfg.get("provider") or provider or "newapi").strip().lower()
     mask_prompt = (
         f"{prompt}\n\n"
-        "Use Image 1 as the source image. Use Image 2 as the edit mask reference. "
-        "Only modify the masked/transparent marked region; preserve all unmasked source pixels, "
-        "composition, identity, lighting, and texture as much as possible."
+        "Use Image 1 as the source image. Image 2 is the same image with a translucent RED "
+        "highlight painted over the region to edit. Edit ONLY the red-highlighted region; the "
+        "red highlight is just an annotation marking where to work and must NOT appear in the "
+        "output. Preserve all pixels outside the highlighted region — composition, identity, "
+        "lighting, and texture — as much as possible."
     ).strip()
     try:
         await generate_reference_edit_image(
@@ -245,6 +253,8 @@ async def run_freezone_edit(
     provider: Optional[str] = None,
     model: Optional[str] = None,
     quality: Optional[str] = None,
+    model_params: Optional[dict[str, Any]] = None,
+    request_schema: Optional[dict[str, Any]] = None,
     output_task_type: str = "freezone_edit",
 ) -> Path:
     """image + reference + prompt → new image.
@@ -268,6 +278,10 @@ async def run_freezone_edit(
         model_override=model,
         image_size_override=image_size,
     )
+    # 与 run_freezone_gen 同一口径：目录声明的动态参数按 schema 里的 requestPath
+    # 写进网关请求体。少了这两行，图编辑侧的 model_params 会在这里被丢掉。
+    cfg["newapi_model_params"] = model_params or {}
+    cfg["newapi_request_schema"] = request_schema or {}
     await generate_reference_edit_image(
         prompt=prompt,
         reference_images=refs,
@@ -1134,6 +1148,10 @@ async def run_freezone_video_gen(
     scene_optimize: str | None = None,
     backend: str = "huimeng_seedance-2.0-fast",
     last_frame_path: Optional[str] = None,
+    audio_setting: Optional[str] = None,
+    gen_mode: Optional[str] = None,
+    model_params: Optional[dict[str, Any]] = None,
+    request_schema: Optional[dict[str, Any]] = None,
 ) -> Path:
     """Freezone 文生视频。
 
@@ -1167,6 +1185,8 @@ async def run_freezone_video_gen(
         backend=backend,
         resolution=resolution,
         generate_audio=generate_audio,
+        model_params=model_params,
+        request_schema=request_schema,
     )
     if backend == "seedance_2":
         result = await video_gen.generate(
@@ -1180,7 +1200,22 @@ async def run_freezone_video_gen(
             resolution=resolution,
         )
     else:
-        first_image_ref = next((ref for ref in references if ref.type == "image"), None)
+        normalized_mode = {
+            "firstLastFrame": "first_last_frame",
+            "imageToVideo": "image_reference",
+            "imageReference": "image_reference",
+        }.get(str(gen_mode or "").strip(), str(gen_mode or "").strip())
+        if normalized_mode in {"first_frame", "first_last_frame"}:
+            first_image_ref = next(
+                (
+                    ref
+                    for ref in references
+                    if ref.type == "image" and "首帧" in str(ref.role or "")
+                ),
+                None,
+            )
+        else:
+            first_image_ref = next((ref for ref in references if ref.type == "image"), None)
         if (
             (first_image_ref is None or not first_image_ref.path)
             and not str(backend).startswith("huimeng_")
@@ -1188,6 +1223,9 @@ async def run_freezone_video_gen(
             and not is_freezone_seedance2_backend(backend)
         ):
             raise RuntimeError(f"backend {backend} requires a first-frame image reference")
+        extra_kwargs: dict[str, object] = {}
+        if audio_setting:
+            extra_kwargs["audio_setting"] = audio_setting
         result = await video_gen.generate(
             image_path=first_image_ref.path if first_image_ref and first_image_ref.path else None,
             prompt=prompt,
@@ -1198,6 +1236,8 @@ async def run_freezone_video_gen(
             references=references,
             human_review=bool(human_review),
             seedance2_config={"scene_optimize": scene_optimize} if scene_optimize else None,
+            gen_mode=gen_mode,
+            **extra_kwargs,
         )
     if not result or result.status.value != "done":
         err = result.error if result else "unknown error"
@@ -1210,6 +1250,24 @@ async def run_freezone_video_gen(
 # ============================================================
 # Extract frames (M1a) — 视频拉片
 # ============================================================
+
+
+def sort_extracted_frames_by_pts(paths: Iterable[Path]) -> list[Path]:
+    """按文件名尾部的数值排序抽帧结果，而不是按字典序。
+
+    ``-frame_pts true`` 让 ffmpeg 把 ``%03d`` 填成该帧的 PTS 而不是递增计数，
+    于是文件名位数不固定：字典序会把 ``scene_1000.png`` 排到 ``scene_900.png``
+    前面，送进模型的关键帧顺序和 ``keyframe_index`` 映射就全乱了。
+    """
+
+    def sort_key(path: Path) -> tuple[int, int, str]:
+        match = re.search(r"(\d+)$", path.stem)
+        if match is None:
+            # 没有数字后缀的（理论上不该出现）排到最后，按名字兜底。
+            return (1, 0, path.name)
+        return (0, int(match.group(1)), path.name)
+
+    return sorted(paths, key=sort_key)
 
 
 async def run_freezone_extract_frames(
@@ -1262,7 +1320,7 @@ async def run_freezone_extract_frames(
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg scene detect failed: {proc.stderr[-500:]}")
 
-    scene_files = sorted(out_dir.glob("scene_*.png"))
+    scene_files = sort_extracted_frames_by_pts(out_dir.glob("scene_*.png"))
 
     # Fallback: if too few scene cuts (e.g. talking head static video),
     # sample evenly-spaced frames so the user always gets *something*.
@@ -1370,16 +1428,17 @@ async def run_freezone_analyze_shots(
 ) -> dict:
     """Send N frames to a Vision model and parse a structured JSON response.
 
-    `provider`:
-      - "openrouter" (default) → OpenRouter chat completions (Gemini via OpenAI-compat)
-      - "google"               → legacy Google AI Studio direct path
-
-    The Freezone UI only uses the OpenRouter route. The Google path remains as
-    a legacy explicit override for old scripts/canvases.
+    Product requests always use the effective NewAPI gateway. ``provider`` is
+    retained only for payload compatibility with older saved canvases.
     """
-    import asyncio
     import json
-    import os
+
+    from novelvideo.freezone.vision_gateway import (
+        FREEZONE_VIDEO_ANALYSIS_TIMEOUT_SECONDS,
+        VisionInput,
+        call_freezone_vision_model,
+        image_media_type,
+    )
 
     if not frame_paths:
         raise ValueError("no frames to analyze")
@@ -1387,7 +1446,7 @@ async def run_freezone_analyze_shots(
     out_dir = outputs_dir(project_dir, "freezone_analyze") / job_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    chosen = (provider or "openrouter").lower()
+    del provider
     mode = (analysis_mode or "shots").strip().lower()
     if mode not in {"shots", "video_story"}:
         raise ValueError(f"unsupported analysis_mode: {analysis_mode}")
@@ -1400,107 +1459,21 @@ async def run_freezone_analyze_shots(
         else SHOT_ANALYSIS_PROMPT
     )
 
-    async def call_google() -> tuple[str, str]:
-        from google import genai
-        from google.genai import types
-
-        from novelvideo.config import GOOGLE_AI_API_KEY
-
-        key = api_key or GOOGLE_AI_API_KEY
-        if not key:
-            raise RuntimeError("GOOGLE_AI_API_KEY not set")
-        vision_model = model or os.environ.get("GEMINI_VISION_MODEL", "gemini-3.5-flash")
-        client = genai.Client(api_key=key)
-        contents: list = [prompt]
-        for path_str in frame_paths:
-            p = Path(path_str)
-            if not p.exists():
-                continue
-            contents.append(types.Part.from_bytes(data=p.read_bytes(), mime_type="image/png"))
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=vision_model,
-            contents=contents,
-        )
-        text = ""
-        if response and response.candidates:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, "text") and part.text:
-                    text += part.text
-        return vision_model, text
-
-    async def call_openrouter() -> tuple[str, str]:
-        import base64
-        import httpx
-
-        from novelvideo.config import OPENROUTER_API_KEY
-
-        key = api_key or OPENROUTER_API_KEY
-        if not key:
-            raise RuntimeError("OPENROUTER_API_KEY not set")
-        # OpenRouter exposes Gemini via /chat/completions (OpenAI-compat).
-        # We default to the same Gemini family as the Google direct path.
-        vision_model = model or os.environ.get("OPENROUTER_VISION_MODEL", "gemini-3.5-flash")
-        # Build OpenAI-compat content array: text + image_url(data:base64) parts.
-        content_parts: list[dict] = [{"type": "text", "text": prompt}]
-        for path_str in frame_paths:
-            p = Path(path_str)
-            if not p.exists():
-                continue
-            b64 = base64.b64encode(p.read_bytes()).decode("ascii")
-            content_parts.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{b64}"},
-                }
+    del api_key
+    vision_model, text = await call_freezone_vision_model(
+        prompt=prompt,
+        images=[
+            VisionInput(
+                data=Path(path).read_bytes(),
+                media_type=image_media_type(path),
             )
-        body = {
-            "model": vision_model,
-            "messages": [{"role": "user", "content": content_parts}],
-        }
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://supertale.local/freezone",
-            "X-Title": "SuperTale Image Freezone",
-        }
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                json=body,
-                headers=headers,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        text = ""
-        try:
-            text = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError):
-            pass
-        return vision_model, text
-
-    used_provider = chosen
-    vision_model: str
-    text: str
-    try:
-        if chosen == "openrouter":
-            vision_model, text = await call_openrouter()
-        else:
-            vision_model, text = await call_google()
-    except Exception as primary_err:
-        # Legacy fallback: explicit/old Google analysis requests may still fall
-        # through to OpenRouter. The default path is already OpenRouter.
-        if provider in ("google", "auto"):
-            try:
-                vision_model, text = await call_openrouter()
-                used_provider = "openrouter"
-                logger.warning("Google Vision failed (%s); falling back to OpenRouter", primary_err)
-            except Exception as secondary_err:
-                raise RuntimeError(
-                    f"Google failed: {primary_err}; OpenRouter fallback failed: {secondary_err}"
-                ) from primary_err
-        else:
-            raise
+            for path in frame_paths
+            if Path(path).exists()
+        ],
+        model_override=model,
+        timeout_seconds=FREEZONE_VIDEO_ANALYSIS_TIMEOUT_SECONDS,
+    )
+    used_provider = "newapi"
 
     if not text:
         raise RuntimeError(f"{used_provider} Vision returned no text")
@@ -1585,7 +1558,7 @@ async def _sample_evenly(video_path: Path, out_dir: Path, max_frames: int) -> li
         str(out_dir / "even_%03d.png"),
     ]
     await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
-    return sorted(out_dir.glob("even_*.png"))
+    return sort_extracted_frames_by_pts(out_dir.glob("even_*.png"))
 
 
 _SIZE_BASE = {

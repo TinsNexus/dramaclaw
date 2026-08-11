@@ -9,6 +9,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
+from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse
 
 from novelvideo.api.auth import (
     get_api_user,
@@ -50,6 +52,8 @@ _TASK_TYPE_LABELS = {
     "scene_reference_asset": "场景参考图",
     "prop_reference_asset": "道具参考图",
     "sketch_generation": "生成草图",
+    "director_control_to_sketch": "导演台转草图",
+    "sketch_grid_generation": "生成草图网格",
     "sketch_regen": "重生成草图",
     "mainline_sketch_from_context": "生成草图",
     "mainline_frame_from_context": "渲染分镜",
@@ -74,12 +78,13 @@ _TASK_TYPE_LABELS = {
     "freezone_audio_separate": "音频分离",
     "freezone_video_compose": "视频合成",
     "freezone_text_translate": "字幕翻译",
+    "freezone_text_generate": "AI 文本生成",
     "freezone_story_script": "生成故事脚本",
     "freezone_script_to_video_plan": "脚本转视频计划",
     "freezone_audio_speech": "生成语音",
     "freezone_audio_eleven_music": "生成音乐",
     "freezone_image_to_3gs": "图片转世界",
-    "batch_prop_ref": "批量道具参考图",
+    "freezone_image_reverse_prompt": "图片反推提示词",
 }
 _STAGE_ASSET_STEP_LABELS = {
     "pano_from_master": "Master 生成全景",
@@ -271,7 +276,7 @@ async def list_project_tasks(project: str, user: dict = Depends(get_api_user)):
     """列出单个项目的任务。生产多节点路径由 OpenResty 路由到项目 home node。"""
     ctx = await resolve_project_context(user=user, project_id=project, required_role="viewer")
     mgr = get_task_manager()
-    tasks = mgr.list_tasks_for_project(ctx)
+    tasks = await run_in_threadpool(mgr.list_tasks_for_project, ctx)
     tasks.sort(key=lambda task: task.updated_at or task.created_at or "", reverse=True)
     return {"ok": True, "data": [_serialize_task(t, ctx=ctx) for t in tasks]}
 
@@ -292,9 +297,13 @@ async def get_project_task_limits(project: str, user: dict = Depends(get_api_use
             queue_kind,
             eligible_user_count=eligible_user_count,
         )
-        active = mgr.count_active_tasks_for_project_lane(ctx, queue_kind)
         user_limit = project_user_lane_active_limit(queue_kind)
-        user_active = mgr.count_active_tasks_for_project_user_lane(ctx, queue_kind)
+        active, user_active = await run_in_threadpool(
+            lambda: (
+                mgr.count_active_tasks_for_project_lane(ctx, queue_kind),
+                mgr.count_active_tasks_for_project_user_lane(ctx, queue_kind),
+            )
+        )
         data[queue_kind] = {
             "limit": limit,
             "active": active,
@@ -311,17 +320,22 @@ async def clear_project_completed_tasks(project: str, user: dict = Depends(get_a
     """删除单个项目的已完成任务记录。"""
     ctx = await resolve_project_context(user=user, project_id=project, required_role="editor")
     mgr = get_task_manager()
-    deleted = 0
-    for t in mgr.list_tasks_for_project(ctx):
-        if _effective_task_status(t) == "completed":
-            mgr.delete_task_for_project(
-                ctx,
-                t.task_type,
-                t.episode,
-                beat_num=t.beat_num,
-                scope=t.scope,
-            )
-            deleted += 1
+
+    def clear_completed() -> int:
+        deleted = 0
+        for task in mgr.list_tasks_for_project(ctx):
+            if _effective_task_status(task) == "completed":
+                mgr.delete_task_for_project(
+                    ctx,
+                    task.task_type,
+                    task.episode,
+                    beat_num=task.beat_num,
+                    scope=task.scope,
+                )
+                deleted += 1
+        return deleted
+
+    deleted = await run_in_threadpool(clear_completed)
     return {"ok": True, "data": {"deleted": deleted}}
 
 
@@ -337,7 +351,14 @@ async def get_project_task(
     """查询单个项目内指定任务的状态。"""
     ctx = await resolve_project_context(user=user, project_id=project, required_role="viewer")
     mgr = get_task_manager()
-    task = mgr.get_task_for_project(ctx, task_type, episode, beat_num=beat_num, scope=scope)
+    task = await run_in_threadpool(
+        mgr.get_task_for_project,
+        ctx,
+        task_type,
+        episode,
+        beat_num=beat_num,
+        scope=scope,
+    )
     if not task:
         return {"ok": True, "data": None, "message": "Task not found"}
     return {"ok": True, "data": _serialize_task(task, ctx=ctx)}
@@ -367,7 +388,7 @@ async def stream_project_tasks(
         last_heartbeat = asyncio.get_event_loop().time()
         last_auth_check = last_heartbeat
 
-        for t in mgr.list_tasks_for_project(ctx):
+        for t in await run_in_threadpool(mgr.list_tasks_for_project, ctx):
             payload = _serialize_task(t, ctx=ctx)
             key = payload["task_key"]
             last[key] = (t.status, round(t.progress, 3), t.updated_at)
@@ -383,7 +404,7 @@ async def stream_project_tasks(
         }
 
         while True:
-            tasks = mgr.list_tasks_for_project(ctx)
+            tasks = await run_in_threadpool(mgr.list_tasks_for_project, ctx)
             seen: set[str] = set()
             for t in tasks:
                 payload = _serialize_task(t, ctx=ctx)
@@ -455,7 +476,14 @@ async def stream_project_task(
                 return
 
             mgr = get_task_manager()
-            task = mgr.get_task_for_project(ctx, task_type, episode, beat_num=beat_num, scope=scope)
+            task = await run_in_threadpool(
+                mgr.get_task_for_project,
+                ctx,
+                task_type,
+                episode,
+                beat_num=beat_num,
+                scope=scope,
+            )
 
             if not task:
                 import time
@@ -512,25 +540,14 @@ async def cancel_project_task_route(
     episode: int,
     beat_num: int = Query(None, description="Beat 编号（single_video 等按 beat 区分的任务需要）"),
     scope: str | None = Query(None, description="任务作用域（mode_key、grid_index 等）"),
+    force: bool = Query(False, description="确认终止已开始执行的任务"),
+    acknowledge_no_refund: bool = Query(False, description="确认运行中终止不退积分"),
     user: dict = Depends(get_api_user),
 ):
-    """终止单个项目内指定任务。项目任务后端通路；Ray 已废弃。
+    """终止一个项目任务。
 
-    没有 Ray fallback 判断 — 当前 runner 实现是 Celery，task_states 里有 task
-    就直接走 cancel_project_task(设 Redis 取消 flag + Celery revoke + 标 status)。
-    旧版这里有非 Celery backend fallback,每次 task 找不到都会连接旧任务
-    backend 产生噪音日志,已删。
-
-    **Mid-flight cooperative cancel 的范围限制**:`cancel_project_task` 会:
-      1. 设 Redis cancel flag(等 runner watcher poll)
-      2. Celery revoke(terminate=True)(发 SIGTERM 给 worker)
-      3. 把 task_state 标 cancelled(UI 看到任务消失)
-    其中 (1) 真正中断**已经在 await 外部 API 的 task** 只对**有 watcher 的 runner**
-    生效。当前只有 `runners/freezone.py:_run_freezone_gen/edit_async` 用了
-    `_await_with_cancel_watch` —— 其他 runner(sketch/render/video/audio 等)
-    revoke 后 SIGTERM 不能立即打断 asyncio `await`,会等当前 step 跑完才退出。
-    用户体感是"UI 显示已取消,但后端浪费一段算力"。
-    扩到其他 runner 是后续 cleanup,加 `_await_with_cancel_watch` 包裹即可。
+    队列态任务通过原子状态迁移取消并退款。运行中任务首次请求返回 409，
+    只有再次明确确认“不退款”后才发送协作取消标记和 Celery revoke。
     """
     ctx = await resolve_project_context(user=user, project_id=project, required_role="editor")
     logger.info(
@@ -542,7 +559,14 @@ async def cancel_project_task_route(
         scope,
     )
     mgr = get_task_manager()
-    task = mgr.get_task_for_project(ctx, task_type, episode, beat_num=beat_num, scope=scope)
+    task = await run_in_threadpool(
+        mgr.get_task_for_project,
+        ctx,
+        task_type,
+        episode,
+        beat_num=beat_num,
+        scope=scope,
+    )
     if not task:
         logger.warning(
             "[%s] cancel_project_task: task not found (type=%s episode=%s beat=%s scope=%s)",
@@ -553,5 +577,12 @@ async def cancel_project_task_route(
             scope,
         )
         return {"ok": False, "error": "Task not found"}
-    await get_task_backend().cancel_project_task(ctx, task)
-    return {"ok": True, "message": "Task cancelled"}
+    result = await get_task_backend().cancel_project_task(
+        ctx,
+        task,
+        force=force,
+        acknowledge_no_refund=acknowledge_no_refund,
+    )
+    if result.get("requires_confirmation"):
+        return JSONResponse(status_code=409, content=result)
+    return result

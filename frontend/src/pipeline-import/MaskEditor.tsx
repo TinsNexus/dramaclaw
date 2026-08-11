@@ -7,6 +7,7 @@ import {
   fetchFreezoneJobResult,
 } from "@/api/ops";
 import { awaitTaskCompletion } from "@/api/tasks";
+import { buildRedHighlightMaskBlob } from "@/lib/mask-highlight";
 
 interface MaskEditorProps {
   project: string;
@@ -28,9 +29,9 @@ const DEFAULT_BRUSH = 50;
  * Mask edit UI:
  *   - Canvas A renders the base image (read-only).
  *   - Canvas B floats above as a translucent red mask layer the user paints on.
- *   - On submit, we composite Canvas B into a "transparent-on-white" PNG
- *     (transparent = paint = editable region per OpenAI's mask convention),
- *     upload it to /freezone/upload, then POST /freezone/redraw with mask_url.
+ *   - On submit, we composite the base image + a uniform translucent-red highlight
+ *     over the painted region (see mask-highlight.ts), upload it to /freezone/upload,
+ *     then POST /freezone/redraw with mask_url.
  */
 export function MaskEditor({
   project,
@@ -157,35 +158,17 @@ export function MaskEditor({
   };
 
   /**
-   * Build the OpenAI-shaped mask PNG:
-   *   transparent pixels = painted region (editable),
-   *   opaque pixels (white) = preserve.
-   * Our mask canvas already has paint at non-transparent pixels — we invert
-   * by drawing a white background under "everywhere except where we painted":
-   * a destination-out using current alpha then fill white in-place.
+   * 蒙版导出（供视觉模型识别）：源图 + 涂抹区二值化后的均匀半透明红高亮，见 mask-highlight.ts。
+   * 后端 /freezone/redraw 对所有 mask_url 一律套用「红色高亮」prompt，EraseOverlay /
+   * RedrawOverlay / MaskEditor 三个生产者必须导出同一格式；旧的「白底 + 透明孔洞」会让模型
+   * 去找一个 RGB 里根本不存在的红色区域 → 定位失败。
    */
   const buildMaskBlob = async (): Promise<Blob> => {
-    const src = maskCanvasRef.current;
-    if (!src) throw new Error("mask canvas not ready");
-    const w = src.width;
-    const h = src.height;
-    const out = document.createElement("canvas");
-    out.width = w;
-    out.height = h;
-    const ctx = out.getContext("2d");
-    if (!ctx) throw new Error("ctx");
-    // 1. Fill the whole output canvas opaque white = "preserve everywhere".
-    ctx.fillStyle = "rgba(255,255,255,1)";
-    ctx.fillRect(0, 0, w, h);
-    // 2. Punch holes wherever the painted mask has non-transparent pixels.
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.drawImage(src, 0, 0);
-    return await new Promise<Blob>((resolve, reject) => {
-      out.toBlob((blob) => {
-        if (!blob) reject(new Error("toBlob returned null"));
-        else resolve(blob);
-      }, "image/png");
-    });
+    const mask = maskCanvasRef.current;
+    const baseImg = baseImgRef.current;
+    if (!mask) throw new Error("mask canvas not ready");
+    if (!baseImg) throw new Error("source image not ready");
+    return await buildRedHighlightMaskBlob(baseImg, mask);
   };
 
   const hasPaint = (): boolean => {
@@ -226,7 +209,7 @@ export function MaskEditor({
         prompt,
       });
       setProgressMsg("处理中（30-60s）...");
-      const completed = await awaitTaskCompletion(ref.task_key, project);
+      const completed = await awaitTaskCompletion(ref.task_key, project, { taskType: ref.task_type });
       const directUrl =
         (completed.result?.["output_url"] as string | undefined) || undefined;
       const url =
@@ -354,7 +337,7 @@ export function MaskEditor({
               ) : error ? (
                 <span className="text-red-400">{error}</span>
               ) : (
-                <>红色 = 待编辑区域 · OpenAI gpt-image-2 · 可能 30-60 秒</>
+                <>红色 = 待编辑区域 · LingShan-G2 · 可能 30-60 秒</>
               )}
             </div>
             <div className="flex gap-2">

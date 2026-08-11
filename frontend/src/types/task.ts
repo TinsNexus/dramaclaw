@@ -11,6 +11,7 @@ export type TaskStatus =
   | "cancelled";
 
 export interface Task {
+  task_id?: string;
   task_type: string;
   username: string;
   project: string;
@@ -25,6 +26,7 @@ export interface Task {
   metadata?: Record<string, unknown>;
   error?: string;
   logs?: string[];
+  created_at?: string;
   task_type_label?: string;
   display_name?: string;
 }

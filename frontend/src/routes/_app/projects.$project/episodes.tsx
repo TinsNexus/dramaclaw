@@ -21,7 +21,6 @@ import {
   MapPinned,
   Package,
   Play,
-  RefreshCw,
   Sparkles,
   Users,
   type LucideIcon,
@@ -42,8 +41,11 @@ import {
 } from "@/lib/queries/episodes";
 import { deriveEpisodeStats, type EpisodeStats } from "@/lib/episode-stats";
 import { useStageTask } from "@/hooks/use-stage-task";
+import { useTaskController } from "@/hooks/use-task-controller";
+import { TASK_TYPES } from "@/lib/task-types";
 import { queryKeys } from "@/lib/query-keys";
 import {
+  backendErrorResponseToastMessage,
   backendErrorToastMessage,
   BillingRuleNotConfiguredError,
 } from "@/lib/api-errors";
@@ -61,8 +63,11 @@ import {
 } from "@/components/episode/header-collapse";
 import { StageProgressPanel } from "@/components/stage-progress-panel";
 import { CreditCostInline } from "@/components/credit-cost-inline";
+import type { CreditPromotionDisplay } from "@/components/credits/credit-visual";
 import { EpisodeListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
+import { SUBTLE_HEADER_ACTION_BUTTON_CLASS } from "@/components/ui/header-action-styles";
+import { HeaderRefreshButton } from "@/components/ui/header-refresh-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -252,6 +257,7 @@ function TopBar({
   onPlan,
   planPending,
   planCostDisplay,
+  planPromotion,
   showRefresh,
   onRefresh,
   refreshPending,
@@ -267,8 +273,9 @@ function TopBar({
   onPlan: () => void;
   planPending: boolean;
   planCostDisplay?: string | null;
+  planPromotion?: CreditPromotionDisplay | null;
   showRefresh: boolean;
-  onRefresh: () => void;
+  onRefresh: () => Promise<boolean>;
   refreshPending: boolean;
   selectedEpisode: Episode | null;
   episodes: Episode[];
@@ -329,20 +336,11 @@ function TopBar({
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
         {showRefresh && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={refreshPending}
-            className="h-8 gap-1.5 rounded-[8px] px-3 text-xs font-normal shadow-none hover:bg-white/[0.04]"
-          >
-            {refreshPending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            {t("episode.list.refresh")}
-          </Button>
+          <HeaderRefreshButton
+            label={t("episode.list.refresh")}
+            onRefresh={onRefresh}
+            refreshing={refreshPending}
+          />
         )}
         {showReplan && (
           <Button
@@ -357,7 +355,12 @@ function TopBar({
               <Play className="size-3.5" />
             )}
             {t("episode.list.replanEpisodes")}
-            <CreditCostInline display={planCostDisplay} />
+            <CreditCostInline
+              display={planCostDisplay}
+              promotion={planPromotion}
+              className="text-black"
+              iconClassName="text-black drop-shadow-none [&_path]:fill-current"
+            />
           </Button>
         )}
         {showPlan && (
@@ -373,7 +376,12 @@ function TopBar({
               <Play className="size-3.5" />
             )}
             {t("episode.list.planEpisodes")}
-            <CreditCostInline display={planCostDisplay} />
+            <CreditCostInline
+              display={planCostDisplay}
+              promotion={planPromotion}
+              className="text-black"
+              iconClassName="text-black drop-shadow-none [&_path]:fill-current"
+            />
           </Button>
         )}
         {showBack && (
@@ -381,7 +389,7 @@ function TopBar({
             variant="outline"
             size="sm"
             onClick={onBack}
-            className="h-8 gap-1.5 rounded-[8px] border-white/10 bg-transparent px-3 text-xs font-normal shadow-none hover:bg-white/[0.04] dark:bg-transparent"
+            className={SUBTLE_HEADER_ACTION_BUTTON_CLASS}
           >
             <ArrowLeft className="size-3.5" />
             {t("episode.list.backToEpisodes")}
@@ -477,6 +485,7 @@ function EpisodePlanShortcut({
   summary,
   actionLabel,
   costDisplay,
+  promotion,
   pending,
   disabled = false,
   onClick,
@@ -485,6 +494,7 @@ function EpisodePlanShortcut({
   summary: string;
   actionLabel: string;
   costDisplay?: string | null;
+  promotion?: CreditPromotionDisplay | null;
   pending: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -516,7 +526,7 @@ function EpisodePlanShortcut({
           <Sparkles className="size-3" />
         )}
         {actionLabel}
-        <CreditCostInline display={costDisplay} />
+        <CreditCostInline display={costDisplay} promotion={promotion} />
       </Button>
     </div>
   );
@@ -528,28 +538,22 @@ function EpisodeListItem({
   project,
   episode,
   onSelect,
-  onPlanScenes,
-  onPlanProps,
   identityCostDisplay,
+  identityPromotion,
   sceneCostDisplay,
+  scenePromotion,
   propCostDisplay,
-  scenePending,
-  propPending,
-  sceneDisabled,
-  propDisabled,
+  propPromotion,
 }: {
   project: string;
   episode: Episode;
   onSelect: () => void;
-  onPlanScenes: (episodeNum: number) => void;
-  onPlanProps: (episodeNum: number) => void;
   identityCostDisplay?: string | null;
+  identityPromotion?: CreditPromotionDisplay | null;
   sceneCostDisplay?: string | null;
+  scenePromotion?: CreditPromotionDisplay | null;
   propCostDisplay?: string | null;
-  scenePending: boolean;
-  propPending: boolean;
-  sceneDisabled: boolean;
-  propDisabled: boolean;
+  propPromotion?: CreditPromotionDisplay | null;
 }) {
   const { t } = useTranslation();
   // 镜头数量 = 该集 beats 数。复用既有的 beats 查询（无需后端新增字段）；react-query
@@ -585,6 +589,51 @@ function EpisodeListItem({
       } else {
         toast.warning(t("episode.script.planIdentitiesNone"));
       }
+    },
+  });
+  const planScenes = usePlanEpisodeScenes(project);
+  const planProps = usePlanEpisodeProps(project);
+  // 场景/道具规划走异步任务：POST 只是入队，请求返回时任务才刚开始。用任务控制器
+  // 接管进行中状态（含刷新页面后的重连），否则按钮转圈会在入队瞬间就停，和底部
+  // 任务中心的「生成中」对不上。
+  const sceneTask = useTaskController({
+    key: {
+      taskType: TASK_TYPES.EPISODE_SCENE_PLANNER,
+      project,
+      episode: episode.number,
+    },
+    invalidateKeys: [
+      queryKeys.episodes(project),
+      queryKeys.episodeDetail(project, episode.number),
+      queryKeys.scenes(project),
+      queryKeys.pipelineStatus(project),
+    ],
+    showCompleteToast: false,
+    onComplete: (result) => {
+      const data = (result ?? {}) as { total_count?: number };
+      toast.success(
+        t("episode.script.scenePlanComplete", { count: data.total_count ?? 0 }),
+      );
+    },
+  });
+  const propTask = useTaskController({
+    key: {
+      taskType: TASK_TYPES.EPISODE_PROP_PLANNER,
+      project,
+      episode: episode.number,
+    },
+    invalidateKeys: [
+      queryKeys.episodes(project),
+      queryKeys.episodeDetail(project, episode.number),
+      queryKeys.props(project),
+      queryKeys.pipelineStatus(project),
+    ],
+    showCompleteToast: false,
+    onComplete: (result) => {
+      const data = (result ?? {}) as { total_count?: number };
+      toast.success(
+        t("episode.script.propPlanComplete", { count: data.total_count ?? 0 }),
+      );
     },
   });
   const title =
@@ -623,6 +672,49 @@ function EpisodeListItem({
   };
 
   const identityPending = planIdentities.isPending || identityTask.started;
+
+  // CE(无控制面)下后端同步跑完并直接返回结果，没有任务可订阅；EE 走队列，
+  // 返回的是 TaskResponse，此时才接上 SSE 流。
+  const handlePlanScenes = async () => {
+    try {
+      const res = await planScenes.mutateAsync(episode.number);
+      if (res.ok === false) {
+        toast.error(backendErrorToastMessage(res.error, t));
+        return;
+      }
+      if (isPlanEpisodeAssetsResult(res)) {
+        toast.success(
+          t("episode.script.scenePlanComplete", { count: res.data.total_count }),
+        );
+        return;
+      }
+      sceneTask.start({ scope: res.scope });
+    } catch (err) {
+      toast.error(backendErrorToastMessage(err, t));
+    }
+  };
+
+  const handlePlanProps = async () => {
+    try {
+      const res = await planProps.mutateAsync(episode.number);
+      if (res.ok === false) {
+        toast.error(backendErrorToastMessage(res.error, t));
+        return;
+      }
+      if (isPlanEpisodeAssetsResult(res)) {
+        toast.success(
+          t("episode.script.propPlanComplete", { count: res.data.total_count }),
+        );
+        return;
+      }
+      propTask.start({ scope: res.scope });
+    } catch (err) {
+      toast.error(backendErrorToastMessage(err, t));
+    }
+  };
+
+  const scenePending = planScenes.isPending || sceneTask.started;
+  const propPending = planProps.isPending || propTask.started;
 
   return (
     <div
@@ -672,6 +764,7 @@ function EpisodeListItem({
           pending={identityPending}
           disabled={identityPending}
           costDisplay={identityCostDisplay}
+          promotion={identityPromotion}
           onClick={handlePlanIdentities}
         />
         <EpisodePlanShortcut
@@ -683,9 +776,10 @@ function EpisodeListItem({
               : t("episode.list.planScenes")
           }
           pending={scenePending}
-          disabled={sceneDisabled}
+          disabled={scenePending}
           costDisplay={sceneCostDisplay}
-          onClick={() => onPlanScenes(episode.number)}
+          promotion={scenePromotion}
+          onClick={handlePlanScenes}
         />
         <EpisodePlanShortcut
           icon={<Package className="size-3.5 shrink-0 text-amber-400" />}
@@ -696,9 +790,10 @@ function EpisodeListItem({
               : t("episode.list.planProps")
           }
           pending={propPending}
-          disabled={propDisabled}
+          disabled={propPending}
           costDisplay={propCostDisplay}
-          onClick={() => onPlanProps(episode.number)}
+          promotion={propPromotion}
+          onClick={handlePlanProps}
         />
       </div>
 
@@ -792,32 +887,30 @@ function EpisodesPage() {
 
   // Plan-episodes SSE — global task, not per-episode (episode sentinel = 0).
   const planEpisodes = usePlanEpisodes(project);
-  const planEpisodesCost = useGenerationCreditCost("feature", "build_episodes");
+  const planEpisodesCost = useGenerationCreditCost("feature", "mainline.build_episodes");
   const planEpisodesCostDisplay =
     planEpisodesCost.data?.data.display ??
     (planEpisodesCost.error instanceof BillingRuleNotConfiguredError
       ? t("common.billingRuleNotConfiguredShort")
       : null);
-  const planIdentitiesCost = useGenerationCreditCost("feature", "identity_planner");
+  const planIdentitiesCost = useGenerationCreditCost("feature", "mainline.identity_planner");
   const planIdentitiesCostDisplay =
     planIdentitiesCost.data?.data.display ??
     (planIdentitiesCost.error instanceof BillingRuleNotConfiguredError
       ? t("common.billingRuleNotConfiguredShort")
       : null);
-  const planScenesCost = useGenerationCreditCost("feature", "episode_scene_planner");
+  const planScenesCost = useGenerationCreditCost("feature", "mainline.episode_scene_planner");
   const planScenesCostDisplay =
     planScenesCost.data?.data.display ??
     (planScenesCost.error instanceof BillingRuleNotConfiguredError
       ? t("common.billingRuleNotConfiguredShort")
       : null);
-  const planPropsCost = useGenerationCreditCost("feature", "episode_prop_planner");
+  const planPropsCost = useGenerationCreditCost("feature", "mainline.episode_prop_planner");
   const planPropsCostDisplay =
     planPropsCost.data?.data.display ??
     (planPropsCost.error instanceof BillingRuleNotConfiguredError
       ? t("common.billingRuleNotConfiguredShort")
       : null);
-  const planScenes = usePlanEpisodeScenes(project);
-  const planProps = usePlanEpisodeProps(project);
   const planTask = useStageTask({
     taskType: "build_episodes",
     project,
@@ -832,7 +925,7 @@ function EpisodesPage() {
     try {
       const res = await planEpisodes.mutateAsync({});
       if (res.ok === false) {
-        toast.error(backendErrorToastMessage(res.error, t));
+        toast.error(backendErrorResponseToastMessage(res, t));
         return;
       }
       planTask.start();
@@ -857,47 +950,10 @@ function EpisodesPage() {
         );
       }
       await Promise.all(invalidations);
-      toast.success(t("episode.list.refreshed"));
+      return true;
     } catch {
       toast.error(t("common.error"));
-    }
-  };
-
-  const handlePlanScenes = async (episodeNum: number) => {
-    try {
-      const res = await planScenes.mutateAsync(episodeNum);
-      if (res.ok === false) {
-        toast.error(backendErrorToastMessage(res.error, t));
-        return;
-      }
-      toast.success(
-        isPlanEpisodeAssetsResult(res)
-          ? t("episode.script.scenePlanComplete", {
-              count: res.data.total_count,
-            })
-          : res.message,
-      );
-    } catch (err) {
-      toast.error(backendErrorToastMessage(err, t));
-    }
-  };
-
-  const handlePlanProps = async (episodeNum: number) => {
-    try {
-      const res = await planProps.mutateAsync(episodeNum);
-      if (res.ok === false) {
-        toast.error(backendErrorToastMessage(res.error, t));
-        return;
-      }
-      toast.success(
-        isPlanEpisodeAssetsResult(res)
-          ? t("episode.script.propPlanComplete", {
-              count: res.data.total_count,
-            })
-          : res.message,
-      );
-    } catch (err) {
-      toast.error(backendErrorToastMessage(err, t));
+      return false;
     }
   };
 
@@ -920,6 +976,7 @@ function EpisodesPage() {
       onPlan={handlePlan}
       planPending={planPending}
       planCostDisplay={planEpisodesCostDisplay}
+      planPromotion={planEpisodesCost.data?.data.promotion}
       showRefresh={!selectedEpisode}
       onRefresh={handleRefresh}
       refreshPending={refreshPending}
@@ -1006,33 +1063,34 @@ function EpisodesPage() {
                       <Play className="size-3.5" />
                     )}
                     {t("episode.list.planEpisodes")}
-                    <CreditCostInline display={planEpisodesCostDisplay} />
+                    <CreditCostInline
+                      display={planEpisodesCostDisplay}
+                      promotion={planEpisodesCost.data?.data.promotion}
+                    />
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-                  {displayEpisodes.map((ep) => (
-                    <EpisodeListItem
-                      project={project}
-                      key={ep.number}
-                      episode={ep}
-                      onSelect={() => handleSelectEpisode(ep.number)}
-                      onPlanScenes={handlePlanScenes}
-                      onPlanProps={handlePlanProps}
-                      identityCostDisplay={planIdentitiesCostDisplay}
-                      sceneCostDisplay={planScenesCostDisplay}
-                      propCostDisplay={planPropsCostDisplay}
-                      scenePending={
-                        planScenes.isPending && planScenes.variables === ep.number
-                      }
-                      propPending={
-                        planProps.isPending && planProps.variables === ep.number
-                      }
-                      sceneDisabled={planScenes.isPending}
-                      propDisabled={planProps.isPending}
-                    />
-                  ))}
-                </div>
+                // 卡片内的场景/道具规划用 useTaskController 订阅任务，需要一个
+                // 注册表宿主。列表不绑定单集，用 episode=0 作为宿主 scope；每张卡
+                // 片的 key 里带自己的集数，彼此互不干扰。
+                <TaskControllerProvider project={project} episode={0}>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+                    {displayEpisodes.map((ep) => (
+                      <EpisodeListItem
+                        project={project}
+                        key={ep.number}
+                        episode={ep}
+                        onSelect={() => handleSelectEpisode(ep.number)}
+                        identityCostDisplay={planIdentitiesCostDisplay}
+                        identityPromotion={planIdentitiesCost.data?.data.promotion}
+                        sceneCostDisplay={planScenesCostDisplay}
+                        scenePromotion={planScenesCost.data?.data.promotion}
+                        propCostDisplay={planPropsCostDisplay}
+                        propPromotion={planPropsCost.data?.data.promotion}
+                      />
+                    ))}
+                  </div>
+                </TaskControllerProvider>
               )}
             </div>
           </div>

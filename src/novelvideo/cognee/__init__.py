@@ -30,10 +30,11 @@ from novelvideo.models import (
 from .pipeline import (
     run_character_extraction_pipeline,
     run_episode_planning_pipeline,
+    extract_scenes_from_graph,
     extract_scenes_from_script,
     extract_props_from_graph,
 )
-from .tools import create_script_writer_tools, create_episode_planner_tools
+from .tools import create_episode_planner_tools
 
 __all__ = [
     # 存储
@@ -51,11 +52,11 @@ __all__ = [
     # Pipeline
     "run_character_extraction_pipeline",
     "run_episode_planning_pipeline",
+    "extract_scenes_from_graph",
     "extract_scenes_from_script",
     "extract_props_from_graph",
 
     # Tools
-    "create_script_writer_tools",
     "create_episode_planner_tools",
 
     # 配置

@@ -278,6 +278,7 @@ async def generate_prop_reference(
         else await make_sqlite_store(username, project_name)
     )
     style = (body.style if body else "") or _project_style(username, project_name)
+    model = str(body.model if body else "").strip()
     prop = await _require_prop(store, name)
     if prop is None:
         return {"ok": False, "error": f"Prop '{name}' not found"}
@@ -286,13 +287,34 @@ async def generate_prop_reference(
 
     scope = prop_reference_asset_scope(prop.name)
     if ctx is not None:
+        from novelvideo.api.routes.model_credits import _fixed_image_billing_params
+        from novelvideo.generators.nanobanana_prop import (
+            _prop_reference_image_source,
+            resolve_prop_reference_image_model,
+        )
+
+        _, selected_model = _prop_reference_image_source(model)
+        pricing_model = selected_model or resolve_prop_reference_image_model()
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="prop_reference_asset",
             queue_kind="default",
             episode=0,
             scope=scope,
-            payload={"prop_name": prop.name, "style": style, "output_dir": output_dir},
+            payload={
+                "prop_name": prop.name,
+                "style": style,
+                "model": model,
+                "output_dir": output_dir,
+                "billing": {
+                    "pricing_kind": "image",
+                    "pricing_model": pricing_model,
+                    "pricing_params": _fixed_image_billing_params(
+                        "prop_reference", model=pricing_model
+                    ),
+                },
+            },
         )
         return {
             "ok": True,
@@ -308,37 +330,3 @@ async def generate_prop_reference(
         }
 
     return {"ok": False, "error": "道具参考图生成需要 project context"}
-
-
-@router.post("/projects/{project}/props/reference/batch-generate")
-async def batch_generate_prop_references(
-    project: str,
-    body: PropReferenceGenerateRequest | None = None,
-    user: dict = Depends(get_api_user),
-):
-    resolved = await resolve_project_scope(project, user, required_role="editor")
-    ctx = resolved.ctx
-    username = resolved.username
-    project_name = resolved.project_name
-    output_dir = resolved.output_dir
-    style = (body.style if body else "") or _project_style(username, project_name)
-
-    if ctx is not None:
-        queued = await get_task_backend().enqueue_project_task(
-            ctx,
-            task_type="batch_prop_ref",
-            queue_kind="default",
-            episode=0,
-            payload={"style": style, "output_dir": output_dir},
-        )
-        return {
-            "ok": True,
-            "task_type": "batch_prop_ref",
-            "task_id": queued.task_state.task_id,
-            "task_key": project_task_state_key("batch_prop_ref", ctx.project_id, 0),
-            "backend": queued.backend,
-            "queue": queued.queue,
-            "message": "批量道具参考图生成任务已进入队列",
-        }
-
-    return {"ok": False, "error": "批量道具参考图生成需要 project context"}

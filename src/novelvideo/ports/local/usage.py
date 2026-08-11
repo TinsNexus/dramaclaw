@@ -37,11 +37,15 @@ class NoOpUsageMeter:
         *,
         user_id: str,
         feature_key: str,
+        product_surface: str,
         project_id: str = "",
         resource_kind: str = "",
         task_id: str = "",
         task_type: str = "",
         metadata: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+        quantity: int | float | str | None = 1,
+        idempotency_key: str = "",
         require_price_rule: bool = False,
         require_positive_cost: bool = False,
     ) -> dict[str, Any]:
@@ -49,6 +53,7 @@ class NoOpUsageMeter:
             "id": "",
             "user_id": user_id,
             "feature_key": feature_key,
+            "product_surface": product_surface,
             "cost": 0,
             "reserved": False,
             "balance_after": None,
@@ -84,6 +89,42 @@ class NoOpUsageMeter:
         self,
         reservation_id: str,
         *,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> None:
+        return None
+
+    async def settle_feature_credit_reservation(
+        self,
+        reservation_id: str,
+        *,
+        action: str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        return {
+            "reservation_id": reservation_id,
+            "action": action,
+            "status": "completed",
+        }
+
+    async def settle_cancelled_feature_credit_reservation(
+        self,
+        reservation_id: str,
+        *,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        return {
+            "reservation_id": reservation_id,
+            "decision": "refund",
+            "status": "completed",
+        }
+
+    async def mark_current_paid_execution_attempt(
+        self,
+        *,
+        status: str,
+        provider_request_id: str = "",
+        provider_task_id: str = "",
+        provider_response_id: str = "",
         metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         return None

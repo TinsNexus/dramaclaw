@@ -44,7 +44,7 @@ export function useCharacters(project: string) {
 export function useBuildCharacters(project: string) {
   return useMutation({
     mutationFn: () =>
-      jsonWithBackendError<TaskResponse>(
+      jsonWithBackendError<TaskResponse | ErrorResponse>(
         api.post(p`api/v1/projects/${project}/characters/build`, {
           json: {},
           throwHttpErrors: false,
@@ -217,6 +217,7 @@ function invalidateCharacterVoiceQueries(
 ) {
   qc.invalidateQueries({ queryKey: queryKeys.characters(project) });
   qc.invalidateQueries({ queryKey: queryKeys.characterVoiceSamples(project, name) });
+  qc.invalidateQueries({ queryKey: queryKeys.audioBillingQuotes(project) });
 }
 
 function updateCharacterVoiceCache(

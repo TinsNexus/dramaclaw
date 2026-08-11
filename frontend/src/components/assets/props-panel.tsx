@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Package, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { Loader2, Package, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { AssetHeaderActions } from "@/components/assets/asset-header-actions-slot";
+import { CharacterImageSourceSelect } from "@/components/assets/character-image-source-select";
 import { PropAssetCard } from "@/components/assets/prop-asset-card";
 import { AssetBeatReferences } from "@/components/assets/asset-beat-references";
-import { CreditCostInline } from "@/components/credit-cost-inline";
 import {
   AssetResultCount,
   AssetSearchBox,
@@ -22,9 +22,10 @@ import {
   type BeatReference,
 } from "@/lib/queries/asset-references";
 import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
+import { useAssetImageSourceSelection } from "@/lib/queries/character-image-selection";
 import { useAssetFocus } from "@/hooks/use-asset-focus";
-import { StageProgressPanel } from "@/components/stage-progress-panel";
 import { Button } from "@/components/ui/button";
+import { HeaderRefreshButton } from "@/components/ui/header-refresh-button";
 import {
   Tooltip,
   TooltipContent,
@@ -51,9 +52,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useTaskController } from "@/hooks/use-task-controller";
 import { propReferenceAssetScope } from "@/lib/task-scope";
-import { backendErrorToastMessage } from "@/lib/api-errors";
 import {
-  useBatchGeneratePropReferences,
+  backendErrorToastMessage,
+  BillingRuleNotConfiguredError,
+} from "@/lib/api-errors";
+import {
   useCreateProp,
   useDeleteProp,
   useGeneratePropReferenceAsync,
@@ -86,10 +89,6 @@ const PROP_TYPE_VALUES = [
 
 function isErrorResponse(value: unknown): value is ErrorResponse {
   return Boolean(value && typeof value === "object" && (value as { ok?: unknown }).ok === false);
-}
-
-function formatCreditCost(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
 }
 
 async function openPropFreezoneCanvas(project: string, propName: string) {
@@ -237,12 +236,14 @@ function PropDialog({
 function PropAssetCardController({
   project,
   prop,
+  imageSourceSelection,
   referenceCount,
   onEdit,
   onDelete,
 }: {
   project: string;
   prop: PropAsset;
+  imageSourceSelection: string;
   referenceCount: number;
   onEdit: () => void;
   onDelete: () => void;
@@ -250,7 +251,19 @@ function PropAssetCardController({
   const { t } = useTranslation();
   const generateReference = useGeneratePropReferenceAsync(project, prop.name);
   const uploadReference = useUploadPropReference(project, prop.name);
-  const referenceCost = useGenerationCreditCost("fixed_image", "prop_reference");
+  const referenceCost = useGenerationCreditCost(
+    "feature",
+    "mainline.prop_reference_image",
+    {
+      surface: "supertale",
+      params: imageSourceSelection ? { image_selection: imageSourceSelection } : null,
+    },
+  );
+  const referenceCostDisplay =
+    referenceCost.data?.data.display ??
+    (referenceCost.error instanceof BillingRuleNotConfiguredError
+      ? t("common.billingRuleNotConfiguredShort")
+      : undefined);
   const [freezonePending, setFreezonePending] = useState(false);
   const refTask = useTaskController({
     key: {
@@ -266,7 +279,7 @@ function PropAssetCardController({
 
   async function handleGenerate() {
     try {
-      const res = await generateReference.mutateAsync();
+      const res = await generateReference.mutateAsync({ model: imageSourceSelection });
       if (isErrorResponse(res)) {
         toast.error(res.error);
         return;
@@ -304,7 +317,8 @@ function PropAssetCardController({
       generating={generateReference.isPending || refTask.started}
       uploading={uploadReference.isPending}
       referenceCount={referenceCount}
-      referenceCost={referenceCost.data?.data.display}
+      referenceCost={referenceCostDisplay}
+      referencePromotion={referenceCost.data?.data.promotion}
       freezonePending={freezonePending}
       onEdit={onEdit}
       onDelete={onDelete}
@@ -330,22 +344,9 @@ export function PropsPanel({
   const updateProp = useUpdateProp(project, editing?.name ?? "");
   const deleteProp = useDeleteProp(project);
   const refIndex = useAssetReferenceIndex(project);
-  const referenceCost = useGenerationCreditCost("fixed_image", "prop_reference");
-  const batchGenerate = useBatchGeneratePropReferences(project);
-  const batchTask = useTaskController({
-    key: { taskType: "batch_prop_ref", project, episode: 0 },
-    invalidateKeys: [queryKeys.props(project)],
-  });
+  const imageSourceQuery = useAssetImageSourceSelection(project, "prop");
+  const imageSourceSelection = imageSourceQuery.data?.data.image_source_selection ?? "";
   const allItems = props.data?.data ?? [];
-  const missingReferenceCount = useMemo(
-    () => allItems.filter((prop) => !prop.reference_url && !prop.reference_path).length,
-    [allItems],
-  );
-  const batchReferenceCost = useMemo(() => {
-    const unitCost = referenceCost.data?.data.cost;
-    if (!unitCost || missingReferenceCount <= 0) return null;
-    return formatCreditCost(unitCost * missingReferenceCount);
-  }, [missingReferenceCount, referenceCost.data?.data.cost]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState<AssetSortKey>("name");
   const items = useMemo(() => {
@@ -365,13 +366,6 @@ export function PropsPanel({
     );
   }, [allItems, searchQuery, sortKey, refIndex]);
   const gridRef = useAssetFocus(focusId, !props.isLoading && items.length > 0);
-  const showBatchTask =
-    batchTask.started || batchTask.stream.status !== "idle" || batchTask.logs.length > 0;
-  const lastBatchLog = batchTask.logs[batchTask.logs.length - 1];
-  const batchLogs =
-    lastBatchLog === batchTask.stream.currentTask
-      ? batchTask.logs.slice(0, -1)
-      : batchTask.logs;
 
   async function handleSave(data: PropPayload) {
     const payload = { ...data, name: data.name.trim() };
@@ -384,20 +378,6 @@ export function PropsPanel({
     }
     setDialogOpen(false);
     setEditing(null);
-  }
-
-  async function handleBatchGenerate() {
-    const res = await batchGenerate.mutateAsync();
-    if (isErrorResponse(res)) {
-      toast.error(res.error);
-      return;
-    }
-    if (res.scope) {
-      batchTask.start({ scope: res.scope });
-    } else {
-      batchTask.start();
-    }
-    toast.success(res.message);
   }
 
   async function handleDelete(prop: PropAsset) {
@@ -413,31 +393,20 @@ export function PropsPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <AssetHeaderActions>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={async () => { await props.refetch(); toast.success(t("common.refreshed")); }}
+        <CharacterImageSourceSelect project={project} kind="prop" />
+        <HeaderRefreshButton
+          label={t("common.refresh")}
+          onRefresh={async () => {
+            const result = await props.refetch();
+            if (result.isError) {
+              toast.error(t("common.error"));
+              return false;
+            }
+            return true;
+          }}
+          refreshing={props.isRefetching}
           data-props-refresh
-          className="h-8 gap-1.5 rounded-[8px] border-white/10 bg-transparent px-3 text-xs font-normal shadow-none transition-transform hover:bg-white/[0.04] active:scale-95 dark:bg-transparent"
-        >
-          <RefreshCw className="size-3.5" />
-          {t("common.refresh")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleBatchGenerate}
-          disabled={batchGenerate.isPending}
-          className="relative h-8 gap-1.5 rounded-[8px] border-white/10 bg-transparent px-3 text-xs font-normal shadow-none hover:bg-white/[0.04] dark:bg-transparent"
-        >
-          {batchGenerate.isPending ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {t("assets.props.batchGenerate")}
-          <CreditCostInline display={batchReferenceCost} />
-        </Button>
+        />
         <TooltipProvider delay={80}>
           <Tooltip>
             <TooltipTrigger
@@ -462,18 +431,6 @@ export function PropsPanel({
         </TooltipProvider>
       </AssetHeaderActions>
       <div className="min-h-0 flex-1 overflow-auto p-6">
-        {showBatchTask && (
-          <div className="mb-4 overflow-hidden rounded-lg border border-border/70">
-            <StageProgressPanel
-              title={t("assets.props.batchStatusTitle")}
-              currentTask={batchTask.stream.currentTask}
-              progress={batchTask.stream.progress}
-              logs={batchLogs}
-              onStop={batchTask.stop}
-              stopping={batchTask.stopping}
-            />
-          </div>
-        )}
         {!props.isLoading && allItems.length > 0 && (
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -536,6 +493,7 @@ export function PropsPanel({
                 <PropAssetCardController
                   project={project}
                   prop={prop}
+                  imageSourceSelection={imageSourceSelection}
                   referenceCount={refIndex.countFor("prop", prop.name)}
                   onEdit={() => {
                     setEditing(prop);

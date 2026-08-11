@@ -30,7 +30,9 @@ describe("freezone viewer contracts", () => {
     expect(registry).toContain("node.menu.pano360Viewer");
     expect(nodeSelectionMenu).toContain("CANVAS_NODE_TYPES.pano360Viewer");
     expect(spawnOverlay).toContain("CANVAS_NODE_TYPES.pano360Viewer");
-    expect(nodesIndex).toContain("pano360ViewerNode: Pano360ViewerNode");
+    expect(nodesIndex).toContain(
+      "pano360ViewerNode: withLodShell('pano360ViewerNode', Pano360ViewerNode)"
+    );
     expect(nodesIndex).toContain("Pano360ViewerNode");
   });
 
@@ -353,7 +355,8 @@ describe("freezone viewer contracts", () => {
     expect(overlay).not.toContain("activeSourceId");
     expect(overlay).toContain("output_role: 'scene_360_candidate'");
     expect(overlay).toContain("media_kind: 'pano360'");
-    expect(overlay).toContain("aspectRatio,");
+    expect(overlay).toContain("const SCENE_360_OUTPUT_ASPECT_RATIO = '2:1' as const;");
+    expect(overlay).toContain("aspectRatio: SCENE_360_OUTPUT_ASPECT_RATIO");
   });
 
   it("lets canvas ThreeDWorldNode open pano360 image sources when explicitly connected", () => {
@@ -429,8 +432,23 @@ describe("freezone viewer contracts", () => {
     expect(worldNode).toContain("const sourceKind = imageTo3gsKindForSource(sourceNode, selectedImageSourceKind)");
     expect(worldNode).toContain("submitFreezoneImageTo3GS");
     expect(worldNode).toContain("sourceFromImageTo3gsResult");
+    expect(worldNode).toContain("'freezone.image_to_3gs'");
+    expect(worldNode).toContain("worldBillingRuleMissing");
+    expect(worldNode).toContain("<CreditCostPill");
+    expect(worldNode).toContain("NODE_CREDIT_PILL_FLAT_CLASS");
+    expect(worldNode).toContain("NODE_GENERATE_BUTTON_BASE_CLASS");
+    expect(worldNode).toContain('<ArrowUp className="h-4 w-4" />');
     expect(zh).toContain('"generateDirectorWorld": "生成3DGS世界"');
     expect(en).toContain('"generateDirectorWorld": "Generate 3DGS World"');
+  });
+
+  it("shows and enforces the shared video-analysis feature price", () => {
+    const toolbar = read("src/features/canvas/ui/NodeActionToolbar.tsx");
+
+    expect(toolbar).toContain('"freezone.video_analyze"');
+    expect(toolbar).toContain("videoAnalyzeBillingRuleMissing");
+    expect(toolbar).toContain("videoAnalyzeCreditCostDisplay");
+    expect(toolbar).toContain("<CreditCostPill");
   });
 
   it("keeps freezone 3GS commit roles for generated PLY source kinds", () => {

@@ -180,6 +180,7 @@ def m04_client_factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     runtime_dir = tmp_path / "runtime" / "alice" / _PROJECT
     for path in (project_dir, state_dir, runtime_dir):
         path.mkdir(parents=True, exist_ok=True)
+    (project_dir / "novel.txt").write_text("测试原文", encoding="utf-8")
     store.project_dir = str(project_dir)
     (project_dir / "assets" / "characters" / _CHARACTER).mkdir(parents=True, exist_ok=True)
     portrait = project_dir / "assets" / "characters" / _CHARACTER / "portrait.png"
@@ -365,6 +366,23 @@ def _assert_task_shape(payload: dict, *, backend: str, task_type: str):
     assert payload["queue"] == ("inline" if backend == "inline" else "default")
 
 
+def test_prop_reference_generation_accepts_image_source_model(m04_client_factory):
+    client, task_backend, _project_dir = m04_client_factory("inline")
+
+    payload = client.post(
+        f"/api/v1/projects/{_PROJECT}/props/{_PROP}/reference/generate-async",
+        json={"model": "newapi_nanobanana2"},
+    ).json()
+    _assert_task_shape(
+        payload,
+        backend="inline",
+        task_type="prop_reference_asset",
+    )
+
+    assert payload["ok"] is True
+    assert task_backend.calls[-1]["payload"]["model"] == "newapi_nanobanana2"
+
+
 def test_m04_l2_exercises_all_57_endpoint_contracts(m04_client_factory):
     client, _backend, project_dir = m04_client_factory("inline")
     png = _png_bytes()
@@ -524,7 +542,6 @@ def test_m04_l2_exercises_all_57_endpoint_contracts(m04_client_factory):
     )
     _assert_ok(client.post(f"/api/v1/projects/{_PROJECT}/props/铜令/delete"))
     _assert_ok(client.post(f"/api/v1/projects/{_PROJECT}/props/{_PROP}/reference/generate-async"))
-    _assert_ok(client.post(f"/api/v1/projects/{_PROJECT}/props/reference/batch-generate"))
 
     _assert_ok(client.get("/api/v1/styles", params={"project": _PROJECT}))
     _assert_ok(client.get("/api/v1/styles/custom_drama", params={"project": _PROJECT}))
@@ -620,10 +637,6 @@ def test_m04_task_backend_responses_are_ce_ee_isomorphic(m04_client_factory, bac
             client.post(f"/api/v1/projects/{_PROJECT}/props/{_PROP}/reference/generate-async"),
         ),
         (
-            "batch_prop_ref",
-            client.post(f"/api/v1/projects/{_PROJECT}/props/reference/batch-generate"),
-        ),
-        (
             "audio_generation_indextts2",
             client.post(f"/api/v1/projects/{_PROJECT}/episodes/1/audio/generate", json={}),
         ),
@@ -642,7 +655,6 @@ def test_m04_task_backend_responses_are_ce_ee_isomorphic(m04_client_factory, bac
         "character_portrait",
         "identity_image",
         "prop_reference_asset",
-        "batch_prop_ref",
         "audio_generation_indextts2",
         "audio_generation_indextts2",
     ]
@@ -660,3 +672,13 @@ def test_m04_legacy_tts_routes_return_410_with_indextts2_hint(m04_client_factory
     for response in responses:
         assert response.status_code == 410
         assert "IndexTTS2" in json.dumps(response.json(), ensure_ascii=False)
+
+
+def test_m04_batch_prop_reference_generation_route_is_removed(m04_client_factory):
+    client, _backend, _project_dir = m04_client_factory("inline")
+
+    response = client.post(
+        f"/api/v1/projects/{_PROJECT}/props/reference/batch-generate"
+    )
+
+    assert response.status_code == 404

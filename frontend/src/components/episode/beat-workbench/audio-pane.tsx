@@ -6,10 +6,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 
-import { useRegenerateBeatAudio } from "@/lib/queries/audio";
-import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
+import {
+  useAudioBillingQuote,
+  useRegenerateBeatAudio,
+} from "@/lib/queries/audio";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { CreditCostInline } from "@/components/credit-cost-inline";
+import {
+  backendErrorToastMessage,
+  BillingRuleNotConfiguredError,
+} from "@/lib/api-errors";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -51,13 +57,13 @@ function audioPrereqTarget(error: string): VoiceConfigTarget | null {
   return "voices";
 }
 
-function audioPrereqMessage(error: string): string {
+function audioPrereqMessage(error: string, t: (key: string) => string): string {
   const message = String(error || "").trim();
   if (!message.includes("解说声线缺失")) return message;
   if (message.includes("解说主角") || message.includes("角色工作台")) {
-    return `${message}。请到「角色」中上传解说主角声线。`;
+    return `${message}${t("episode.workbench.audio.prereqHintCharacters")}`;
   }
-  return `${message}。请到「资产 > 声线」上传或裁剪默认解说声线。`;
+  return `${message}${t("episode.workbench.audio.prereqHintVoices")}`;
 }
 
 /** 音频 sub-tab — per-beat IndexTTS2 task dispatch and playback. */
@@ -70,7 +76,18 @@ export function AudioPane({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const regenerate = useRegenerateBeatAudio(project, episode);
-  const audioCost = useGenerationCreditCost("beat_tts");
+  const audioCost = useAudioBillingQuote(
+    project,
+    episode,
+    { beatNumbers: [beat.beat_number], mode: "redo_selected" },
+    [beat.audio_type, beat.speaker, beat.narration_segment].join(":"),
+  );
+  const audioCostDisplay =
+    audioCost.data?.data.display ??
+    (audioCost.error instanceof BillingRuleNotConfiguredError
+      ? t("common.billingRuleNotConfiguredShort")
+      : null);
+  const audioPrereqError = audioCost.data?.data.prereq_errors?.[0] ?? "";
   const audioTask = useTaskController({
     key: { taskType: TASK_TYPES.AUDIO_GENERATION_INDEXTTS2, project, episode },
     alsoReconcile: [TASK_TYPES.AUDIO_GENERATION],
@@ -88,7 +105,7 @@ export function AudioPane({
 
   const showAudioError = (error: string) => {
     const target = audioPrereqTarget(error);
-    const message = audioPrereqMessage(error);
+    const message = audioPrereqMessage(error, t);
     if (!target) {
       toast.error(message);
       return;
@@ -116,8 +133,8 @@ export function AudioPane({
       }
       audioTask.start({ scope: res.scope });
       toast.success(t("episode.workbench.audio.regenerated", { n: beat.beat_number }));
-    } catch {
-      toast.error(t("episode.workbench.audio.regenFailed"));
+    } catch (error) {
+      toast.error(backendErrorToastMessage(error, t));
     }
   };
 
@@ -147,7 +164,13 @@ export function AudioPane({
           <Button
             size="xs"
             variant="outline"
-            onClick={() => setRegenConfirm(true)}
+            onClick={() => {
+              if (audioPrereqError) {
+                showAudioError(audioPrereqError);
+                return;
+              }
+              setRegenConfirm(true);
+            }}
             disabled={regenerate.isPending || audioTask.started}
             className={MEDIA_PRIMARY_ACTION_BUTTON_CLASS}
           >
@@ -156,8 +179,15 @@ export function AudioPane({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {t("common.regenerate")}
-            <CreditCostInline display={audioCost.data?.data.display} />
+            {audioPrereqError
+              ? t("episode.workbench.audio.configureVoiceAction")
+              : t("common.regenerate")}
+            {!audioPrereqError && (
+              <CreditCostInline
+                display={audioCostDisplay}
+                promotion={audioCost.data?.data.promotion}
+              />
+            )}
           </Button>
         </div>
       )}

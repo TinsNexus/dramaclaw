@@ -31,6 +31,19 @@ def _log(manager, ctx: ProjectContext, envelope: dict[str, Any], message: str) -
     )
 
 
+def _resolve_video_aspect_ratio(value: object, frame_path: object) -> str:
+    """Use the provider's adaptive mode when I2V should follow its first frame.
+
+    Legacy Seedance 1.x tasks historically omitted ``ratio`` and were forced to
+    9:16.  Seedance does not expose a fixed 2:3 output preset, but its I2V API
+    supports ``adaptive`` specifically for following the supplied first frame.
+    """
+    requested = str(value or "").strip()
+    if requested and requested.lower() != "auto":
+        return requested
+    return "adaptive" if str(frame_path or "").strip() else "9:16"
+
+
 def _append_freezone_video_node_history(
     *,
     ctx: ProjectContext,
@@ -52,8 +65,9 @@ def _append_freezone_video_node_history(
     extra: dict[str, Any] = {}
     if payload.get("model_id"):
         extra["model"] = str(payload["model_id"])
-    if payload.get("gen_mode"):
-        extra["gen_mode"] = str(payload["gen_mode"])
+    history_mode = payload.get("requested_gen_mode") or payload.get("gen_mode")
+    if history_mode:
+        extra["gen_mode"] = str(history_mode)
 
     record = build_node_history_record(
         task_type="freezone_video_gen",
@@ -175,7 +189,7 @@ async def _run_single_video_async(envelope: dict[str, Any], ctx: ProjectContext)
         "image_path": frame_path,
         "prompt": prompt,
         "output_path": video_path.as_posix(),
-        "aspect_ratio": str(config.get("ratio") or "9:16"),
+        "aspect_ratio": _resolve_video_aspect_ratio(config.get("ratio"), frame_path),
         "duration": video_duration,
         "on_log": on_log,
         "on_progress": on_progress,
@@ -310,6 +324,17 @@ async def _run_video_generation_async(
     episode = int(envelope.get("episode") or payload.get("episode") or 0)
     output_dir = str(payload.get("output_dir") or ctx.output_dir)
     beats = list(payload.get("beats") or [])
+    requested_beat_numbers = {
+        int(value)
+        for value in payload.get("beat_numbers") or []
+        if int(value) > 0
+    }
+    if requested_beat_numbers:
+        beats = [
+            beat
+            for beat in beats
+            if int(beat.get("beat_number") or 0) in requested_beat_numbers
+        ]
     video_backend = str(payload.get("video_backend") or "mock")
     resolution = str(payload.get("resolution") or "720p")
     ratio = str(payload.get("ratio") or "9:16")
@@ -791,6 +816,10 @@ async def _run_freezone_video_gen_async(
             scene_optimize=str(payload.get("scene_optimize") or ""),
             backend=str(payload.get("backend") or ""),
             last_frame_path=payload.get("last_frame_path"),
+            audio_setting=payload.get("audio_setting") or None,
+            gen_mode=payload.get("gen_mode") or None,
+            model_params=payload.get("model_params") or None,
+            request_schema=payload.get("request_schema") or None,
         )
     except Exception as exc:
         _append_freezone_video_node_history(

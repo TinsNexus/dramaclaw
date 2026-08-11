@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 from .paths import shape_hint_registry_path, shape_hints_dir
 
 STAGING_PROP_MODEL = "DC-staging-prop-planner-LLM"
-STAGING_PROP_THINKING_LEVEL = "low"
 
 
 SYSTEM_PROMPT = """You are BuilderGPT inside SuperTale's DirectorWorld editor.
@@ -241,45 +240,28 @@ def create_staging_prop_agent(
     api_key: str,
     base_url: str,
 ):
-    from openai import AsyncOpenAI
     from pydantic_ai import Agent
-    from pydantic_ai.models.openai import OpenAIChatModel
-    from pydantic_ai.providers.openai import OpenAIProvider
 
     from novelvideo.config import (
         _env_float,
         _get_newapi_text_model_profile,
-        _newapi_text_openai_client_kwargs,
-        get_newapi_text_pydantic_model_settings,
+        _newapi_text_openai_model,
+        get_newapi_structured_output_model_settings,
     )
-
-    model_settings = get_newapi_text_pydantic_model_settings(
-        "STAGING_PROP_THINKING_LEVEL",
-        STAGING_PROP_THINKING_LEVEL,
-    )
-    agent_kwargs: dict[str, Any] = {}
-    if model_settings is not None:
-        agent_kwargs["model_settings"] = model_settings
 
     return Agent(
-        OpenAIChatModel(
+        _newapi_text_openai_model(
             model,
-            provider=OpenAIProvider(
-                openai_client=AsyncOpenAI(
-                    **_newapi_text_openai_client_kwargs(
-                        api_key=api_key,
-                        base_url=base_url,
-                        timeout_seconds=_env_float("STAGING_PROP_TIMEOUT_SECONDS", 120.0),
-                    )
-                ),
-            ),
+            api_key=api_key,
+            base_url=base_url,
+            timeout_seconds=_env_float("STAGING_PROP_TIMEOUT_SECONDS", 120.0),
             profile=_get_newapi_text_model_profile(model),
         ),
         system_prompt=SYSTEM_PROMPT,
+        model_settings=get_newapi_structured_output_model_settings(),
         output_type=StagingPropAgentOutput,
         output_retries=2,
         name="DirectorWorld Staging Prop Planner",
-        **agent_kwargs,
     )
 
 

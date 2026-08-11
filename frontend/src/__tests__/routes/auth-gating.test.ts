@@ -38,7 +38,6 @@ vi.mock("@/stores/auth-store", () => ({
   useAuthStore: useAuthStoreMock,
 }));
 
-vi.mock("@/components/layout/sidebar", () => ({ Sidebar: () => null }));
 vi.mock("@/components/layout/header", () => ({ Header: () => null }));
 vi.mock("@/hooks/use-reduced-motion", () => ({ useReducedMotion: () => true }));
 vi.mock("@/stores/app-store", () => ({
@@ -48,6 +47,10 @@ vi.mock("@/stores/app-store", () => ({
 }));
 vi.mock("@/lib/queries/projects", () => ({
   useAllProjectSummaries: () => ({ data: [], isLoading: false }),
+}));
+vi.mock("@/lib/queries/product-surfaces", () => ({
+  surfaceAccess: () => undefined,
+  useProductSurfaces: () => ({ data: undefined }),
 }));
 vi.mock("@/lib/project-route", () => ({
   canonicalProjectRouteParam: (project: string) => project,

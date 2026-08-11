@@ -29,10 +29,20 @@ async def _run_ingest_fast(envelope: dict[str, Any], ctx: ProjectContext) -> dic
     config = dict(payload.get("config") or {})
     manager = get_task_manager()
 
-    store = CogneeStore(ctx.owner_project_label, output_dir=str(ctx.output_dir))
+    store = CogneeStore(
+        ctx.owner_project_label,
+        output_dir=str(ctx.output_dir),
+        state_dir=str(ctx.state_dir),
+    )
     await store.initialize()
 
-    def update(progress: float, task: str) -> None:
+    def update(progress: float | None, task: str) -> None:
+        """Persist a progress milestone or a log-only status update.
+
+        Cognee emits log messages between the explicit ingest milestones.  A log
+        message does not carry progress, so ``None`` preserves the last reported
+        value instead of resetting the progress bar to zero.
+        """
         manager.update_progress_for_project(
             ctx,
             "ingest_fast",
@@ -46,8 +56,9 @@ async def _run_ingest_fast(envelope: dict[str, Any], ctx: ProjectContext) -> dic
         result = await store.ingest_novel_fast(
             novel_path,
             rebuild=bool(config.get("rebuild", False)),
+            spine_template=str(config.get("spine_template") or "").strip() or None,
             on_progress=update,
-            on_log=lambda message: update(0.0, message),
+            on_log=lambda message: update(None, message),
         )
         return result
     finally:

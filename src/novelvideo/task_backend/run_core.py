@@ -14,7 +14,11 @@ from novelvideo.shared.billing_errors import (
     insufficient_credits_payload,
     is_insufficient_credits_error,
 )
-from novelvideo.task_backend.cancel import TaskCancelled, TaskTimedOut, is_cancel_requested
+from novelvideo.task_backend.cancel import (
+    TaskCancelled,
+    TaskTimedOut,
+    is_cancel_requested,
+)
 from novelvideo.task_backend.registry import get_project_task_runner
 from novelvideo.task_backend.subprocesses import project_task_subprocess_context
 from novelvideo.task_state import project_task_run_context
@@ -36,13 +40,15 @@ _PROJECT_TASK_RESOURCE_KINDS = {
     "identity_image": "portrait",
     "scene_reference_asset": "render",
     "prop_reference_asset": "render",
-    "batch_prop_ref": "render",
     "stage_asset": "render",
     "freezone_image_to_3gs": "render",
     "sketch_generation": "sketch",
+    "director_control_to_sketch": "sketch",
+    "sketch_grid_generation": "sketch",
     "sketch_regen": "sketch",
     "mainline_sketch_from_context": "sketch",
     "mainline_frame_from_context": "render",
+    "mainline_director_control_sketch": "sketch",
     "sketch_edit_execute": "sketch",
     "action_sketch": "sketch",
     "selected_regen": "render",
@@ -57,6 +63,7 @@ _PROJECT_TASK_RESOURCE_KINDS = {
     "freezone_analyze": "video",
     "freezone_video_story": "video",
     "freezone_image_reverse_prompt": "script",
+    "freezone_text_generate": "script",
     "freezone_story_script": "script",
 }
 
@@ -197,7 +204,9 @@ def _set_project_task_metrics_context(
         billing_user_id,
         project_id=str(getattr(ctx, "project_id", "") or ""),
         resource_kind=_resource_kind_for_task(task_type),
-        billing_metadata={key: value for key, value in context_metadata.items() if value},
+        billing_metadata={
+            key: value for key, value in context_metadata.items() if value
+        },
     )
 
 
@@ -221,12 +230,16 @@ async def _confirm_feature_credit_reservation(
     if not reservation_id:
         return
     try:
-        await get_usage_meter().confirm_feature_credit_reservation(
+        await get_usage_meter().settle_feature_credit_reservation(
             reservation_id,
+            action="confirm",
             metadata=metadata,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("feature credit confirmation failed: %s", exc)
+        logger.error(
+            "feature credit confirmation intent remains awaiting retry: %s",
+            exc,
+        )
 
 
 async def _refund_feature_credit_reservation(
@@ -237,12 +250,40 @@ async def _refund_feature_credit_reservation(
     if not reservation_id:
         return
     try:
-        await get_usage_meter().refund_feature_credit_reservation(
+        await get_usage_meter().settle_feature_credit_reservation(
+            reservation_id,
+            action="refund",
+            metadata=metadata,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "feature credit refund intent remains awaiting retry: %s",
+            exc,
+        )
+
+
+async def _refund_undelivered_feature_credit_reservation(
+    reservation_id: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Refund a failed or cancelled task that delivered no usable result.
+
+    Paid provider attempts are recorded independently for platform cost
+    accounting and do not turn an undelivered user task into a billable result.
+    """
+    if not reservation_id:
+        return
+    try:
+        await get_usage_meter().settle_cancelled_feature_credit_reservation(
             reservation_id,
             metadata=metadata,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("feature credit refund failed: %s", exc)
+        logger.error(
+            "undelivered feature credit refund remains awaiting retry: %s",
+            exc,
+        )
 
 
 async def _emit_project_task_metrics(
@@ -284,7 +325,9 @@ async def _emit_project_task_metrics(
             return
 
         if clean_outcome == "success" and task_type == "script_writer":
-            beats = _positive_int((result or {}).get("beats") if isinstance(result, dict) else None)
+            beats = _positive_int(
+                (result or {}).get("beats") if isinstance(result, dict) else None
+            )
             await usage_meter.bump_content_counter(
                 user_id=user_id,
                 metric="scripts_written",
@@ -329,11 +372,20 @@ def _project_task_timeout_seconds() -> int:
         try:
             return int(raw_value)
         except ValueError:
-            logger.warning("Invalid ST_PROJECT_TASK_TIMEOUT_S=%r; using default", raw_value)
+            logger.warning(
+                "Invalid ST_PROJECT_TASK_TIMEOUT_S=%r; using default", raw_value
+            )
     return 30 * 60
 
 
-def _project_task_failure_for_exception(exc: BaseException) -> tuple[str, dict[str, Any], bool]:
+def _project_task_failure_for_exception(
+    exc: BaseException,
+) -> tuple[str, dict[str, Any], bool]:
+    from novelvideo.novel_source import NovelImportRequiredError
+
+    if isinstance(exc, NovelImportRequiredError):
+        return str(exc), {"error_code": exc.error_code}, True
+
     if isinstance(exc, TaskTimedOut):
         timeout_seconds = int(getattr(exc, "timeout_seconds", None) or 30 * 60)
         timeout_minutes = max(round(timeout_seconds / 60), 1)
@@ -447,7 +499,9 @@ def run_project_task_core_sync(
     run_metadata = {**dict(metadata or {}), **billing_metadata}
     feature_reservation_id = _feature_credit_reservation_id(run_metadata)
     timeout_seconds = _project_task_timeout_seconds()
-    deadline_monotonic = time.monotonic() + timeout_seconds if timeout_seconds > 0 else None
+    deadline_monotonic = (
+        time.monotonic() + timeout_seconds if timeout_seconds > 0 else None
+    )
 
     _clear_project_task_metrics_context()
 
@@ -497,16 +551,34 @@ def run_project_task_core_sync(
                 task_type,
                 billing_metadata=billing_metadata,
             )
-            manager.update_progress_for_project(
+            execution_started = manager.begin_task_execution_for_project(
                 ctx,
                 task_type,
                 episode,
                 beat_num=beat_num,
                 scope=scope,
-                progress=0.01,
-                current_task="任务已开始",
+                expected_task_id=run_task_id,
                 metadata=run_metadata,
             )
+            if not execution_started:
+                logger.info(
+                    "Skip project task whose queued state was cancelled or replaced: "
+                    "project=%s task_type=%s task_id=%s",
+                    ctx.project_id,
+                    task_type,
+                    run_task_id,
+                )
+                asyncio.run(
+                    _refund_feature_credit_reservation(
+                        feature_reservation_id,
+                        metadata={
+                            "source": "task_cancelled_before_execution",
+                            "cancel_requested": True,
+                            "business_outcome": "cancelled",
+                        },
+                    )
+                )
+                return {"cancelled": True, "cancelled_before_execution": True}
 
             _ensure_builtin_runners_registered()
             runner = get_project_task_runner(task_type)
@@ -539,7 +611,7 @@ def run_project_task_core_sync(
             except BaseException as exc:
                 if isinstance(exc, TaskCancelled):
                     asyncio.run(
-                        _refund_feature_credit_reservation(
+                        _refund_undelivered_feature_credit_reservation(
                             feature_reservation_id,
                             metadata={"source": "task_cancelled"},
                         )
@@ -557,9 +629,11 @@ def run_project_task_core_sync(
                         expected_task_id=run_task_id,
                     )
                     return {"cancelled": True}
-                error, failure_payload, handled = _project_task_failure_for_exception(exc)
+                error, failure_payload, handled = _project_task_failure_for_exception(
+                    exc
+                )
                 asyncio.run(
-                    _refund_feature_credit_reservation(
+                    _refund_undelivered_feature_credit_reservation(
                         feature_reservation_id,
                         metadata={
                             "source": "task_failed",
@@ -592,6 +666,39 @@ def run_project_task_core_sync(
                     return {"failed": True, **failure_payload}
                 raise
 
+            completion_error: BaseException | None = None
+            try:
+                manager.complete_task_for_project(
+                    ctx,
+                    task_type,
+                    episode,
+                    beat_num=beat_num,
+                    scope=scope,
+                    result=result or {"ok": True},
+                    current_task="完成",
+                    logs=["完成"],
+                    metadata=_completion_metadata_with_provider_task_id(
+                        run_metadata, result
+                    ),
+                    expected_task_id=run_task_id,
+                )
+            except BaseException as exc:
+                # Runner results are the delivery evidence.  The task-center
+                # SQLite row is only an observability/read-model write and may
+                # fail after an asset has already been durably saved.
+                completion_error = exc
+
+            asyncio.run(
+                _confirm_feature_credit_reservation(
+                    feature_reservation_id,
+                    metadata={
+                        "source": "task_completed",
+                        "business_outcome": "delivered",
+                    },
+                )
+            )
+            if completion_error is not None:
+                raise completion_error
             asyncio.run(
                 _emit_project_task_metrics(
                     ctx,
@@ -601,24 +708,6 @@ def run_project_task_core_sync(
                     scope=scope,
                     result=result,
                 )
-            )
-            asyncio.run(
-                _confirm_feature_credit_reservation(
-                    feature_reservation_id,
-                    metadata={"source": "task_completed"},
-                )
-            )
-            manager.complete_task_for_project(
-                ctx,
-                task_type,
-                episode,
-                beat_num=beat_num,
-                scope=scope,
-                result=result or {"ok": True},
-                current_task="完成",
-                logs=["完成"],
-                metadata=_completion_metadata_with_provider_task_id(run_metadata, result),
-                expected_task_id=run_task_id,
             )
         return result or {"ok": True}
     finally:

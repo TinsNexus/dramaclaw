@@ -95,8 +95,8 @@ def test_render_settings_returns_current_selection_and_options(monkeypatch, tmp_
     assert body["ok"] is True
     assert body["data"]["render_image_selection"] == "newapi_nanobanana2"
     assert body["data"]["options"] == {
-        "newapi_gpt_image2": "DC-Image-2",
-        "newapi_nanobanana2": "DC-Banana-2",
+        "newapi_gpt_image2": "LingShan-G2",
+        "newapi_nanobanana2": "LingShan-NB-2",
     }
     assert body["data"]["sketch_aspect_padding"] is True
     assert "force_half_k" not in body["data"]
@@ -173,8 +173,8 @@ def test_sketch_settings_returns_current_selection_and_options(monkeypatch, tmp_
     assert body["ok"] is True
     assert body["data"]["sketch_image_selection"] == "newapi_nanobanana2"
     assert body["data"]["options"] == {
-        "newapi_gpt_image2": "DC-Image-2",
-        "newapi_nanobanana2": "DC-Banana-2",
+        "newapi_gpt_image2": "LingShan-G2",
+        "newapi_nanobanana2": "LingShan-NB-2",
     }
 
 
@@ -248,6 +248,7 @@ def test_director_control_frame_status_reports_missing_and_ready(monkeypatch, tm
     assert ready_body["data"]["url"] == (
         "/static/projects/proj_demo/director_control_frames/ep001/beat_04/combined.png"
     )
+    assert ready_body["data"]["mode_key"] == "1x1_16-9_sketch"
 
 
 def test_director_control_to_sketch_starts_existing_actor(monkeypatch, tmp_path):
@@ -274,7 +275,7 @@ def test_director_control_to_sketch_starts_existing_actor(monkeypatch, tmp_path)
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["task_type"] == "sketch_generation"
+    assert body["task_type"] == "director_control_to_sketch"
     assert body["scope"] == "director_control_to_sketch:ep001:beat_04"
     assert calls == [
         {

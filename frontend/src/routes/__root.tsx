@@ -4,6 +4,8 @@ import { createRootRoute, Outlet, useRouterState, type ErrorComponentProps } fro
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AppUpdateRequired } from "@/components/app-update-required";
+import { ConfirmDialogHost } from "@/components/confirm-dialog-host";
+import { ThemedToaster } from "@/components/themed-toaster";
 import { isChunkLoadError } from "@/lib/chunk-load-recovery";
 
 /**
@@ -32,6 +34,8 @@ function RootLayout() {
     <>
       <RouteFocusManager />
       <Outlet />
+      <ThemedToaster />
+      <ConfirmDialogHost />
     </>
   );
 }

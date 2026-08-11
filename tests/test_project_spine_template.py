@@ -257,15 +257,16 @@ async def test_start_ingest_allows_spine_template_change_during_rebuild(
     (uploads / "novel.txt").write_text("正文", encoding="utf-8")
 
     monkeypatch.setattr(ingest, "resolve_project_scope", _project_scope_resolver(tmp_path))
+
+    def save_in_state_dir(state_dir, config=None, **kwargs):
+        assert state_dir == str(tmp_path / "state")
+        saved.update(config or {})
+        saved.update(kwargs)
+
     monkeypatch.setattr(
         ingest,
-        "load_project_config",
-        lambda username, project: {"visual_style": "chinese_period_drama", **saved},
-    )
-    monkeypatch.setattr(
-        ingest,
-        "save_project_config",
-        lambda username, project, config=None, **kwargs: saved.update(config or {}),
+        "save_project_config_in_state_dir",
+        save_in_state_dir,
     )
 
     response = await ingest.start_ingest(
@@ -300,3 +301,121 @@ async def test_start_ingest_rejects_spine_template_change_without_rebuild(
 
     assert response["ok"] is False
     assert "重新导入" in response["error"]
+
+
+@pytest.mark.asyncio
+async def test_start_ingest_rejects_headerless_premium_drama_before_saving(
+    monkeypatch, tmp_path
+):
+    from novelvideo.api.routes import ingest
+
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "novel.txt").write_text(
+        "第一集\n孙悟空走进寝房，看见师父正在休息。",
+        encoding="utf-8",
+    )
+    saved: dict = {}
+    monkeypatch.setattr(ingest, "resolve_project_scope", _project_scope_resolver(tmp_path))
+    monkeypatch.setattr(
+        ingest,
+        "save_project_config_in_state_dir",
+        lambda state_dir, config=None, **kwargs: saved.update(config or {}),
+    )
+
+    response = await ingest.start_ingest(
+        "demo",
+        IngestStart(filename="novel.txt", rebuild=True, spine_template="drama"),
+        {"username": "alice"},
+    )
+
+    assert response["ok"] is False
+    assert response["error_type"] == "screenplay_format"
+    assert response["format_check"]["scene_header_status"] == "missing"
+    assert saved == {}
+
+
+@pytest.mark.asyncio
+async def test_start_ingest_rejects_prose_ending_in_outside_as_headerless_drama(
+    monkeypatch, tmp_path
+):
+    from novelvideo.api.routes import ingest
+
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "novel.txt").write_text(
+        "第一集\n孙悟空快步走到门外\n他发现师父已经离开。",
+        encoding="utf-8",
+    )
+    saved: dict = {}
+    monkeypatch.setattr(ingest, "resolve_project_scope", _project_scope_resolver(tmp_path))
+    monkeypatch.setattr(
+        ingest,
+        "save_project_config_in_state_dir",
+        lambda state_dir, config=None, **kwargs: saved.update(config or {}),
+    )
+
+    response = await ingest.start_ingest(
+        "demo",
+        IngestStart(filename="novel.txt", rebuild=True, spine_template="drama"),
+        {"username": "alice"},
+    )
+
+    assert response["ok"] is False
+    assert response["error_type"] == "screenplay_format"
+    assert response["format_check"]["scene_header_status"] == "missing"
+    assert saved == {}
+
+
+@pytest.mark.asyncio
+async def test_start_ingest_accepts_standard_premium_drama(monkeypatch, tmp_path):
+    from novelvideo.api.routes import ingest
+
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "script.txt").write_text(
+        "第一集\n1-1 菩提寝房 夜 内\n孙悟空：师父。",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ingest, "resolve_project_scope", _project_scope_resolver(tmp_path))
+
+    response = await ingest.start_ingest(
+        "demo",
+        IngestStart(filename="script.txt", rebuild=True, spine_template="drama"),
+        {"username": "alice"},
+    )
+
+    assert response["ok"] is False
+    assert "project context" in response["error"]
+
+
+@pytest.mark.asyncio
+async def test_start_ingest_accepts_repairable_premium_drama(monkeypatch, tmp_path):
+    from novelvideo.api.routes import ingest
+
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "script.txt").write_text(
+        "\n".join(
+            [
+                "第一集",
+                "场次：1",
+                "地点：菩提寝房",
+                "时间：夜",
+                "内外景：内",
+                "人物：孙悟空",
+                "孙悟空：师父。",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ingest, "resolve_project_scope", _project_scope_resolver(tmp_path))
+
+    response = await ingest.start_ingest(
+        "demo",
+        IngestStart(filename="script.txt", rebuild=True, spine_template="drama"),
+        {"username": "alice"},
+    )
+
+    assert response["ok"] is False
+    assert "project context" in response["error"]

@@ -3,6 +3,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TFunction } from "i18next";
 
+const handleSessionExpiredMock = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@/lib/api", () => ({
+  handleSessionExpired: handleSessionExpiredMock,
+}));
+
 import { apiCall } from "@/api/client";
 import {
   backendErrorToastMessage,
@@ -13,10 +19,36 @@ import {
 } from "@/lib/api-errors";
 
 afterEach(() => {
+  handleSessionExpiredMock.mockClear();
   vi.unstubAllGlobals();
 });
 
 describe("apiCall backend errors", () => {
+  it("routes a 401 through the shared session-expired handler", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ detail: "Missing session or agent token" }),
+          {
+            status: 401,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+
+    await expect(
+      apiCall("projects/demo/freezone/canvases/demo/projections:status", {
+        prefix: "http://localhost/api/v1",
+        method: "POST",
+        json: { projection_keys: [] },
+      } as Parameters<typeof apiCall>[1]),
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(handleSessionExpiredMock).toHaveBeenCalledOnce();
+  });
+
   it("keeps status on string detail backend errors", () => {
     const error = errorFromBackendBody(
       409,
@@ -204,6 +236,53 @@ describe("apiCall backend errors", () => {
     );
   });
 
+  it("maps legacy wrapped Freezone insufficient-credit errors", () => {
+    const error = errorFromBackendBody(
+      503,
+      {
+        detail:
+          "failed to start freezone image-to-video task: insufficient credits for user usr_1: required 40, available 8",
+      },
+      "Service Unavailable",
+    );
+    const tMock = vi.fn((key: string, options?: { defaultValue?: string }) => {
+      if (key === "common.insufficientCredits") {
+        return "积分不足，请联系管理员充值";
+      }
+      return options?.defaultValue ?? key;
+    });
+
+    expect(error).toBeInstanceOf(InsufficientCreditsError);
+    expect(backendErrorToastMessage(error, tMock as unknown as TFunction)).toBe(
+      "积分不足，请联系管理员充值",
+    );
+  });
+
+  it("prefers a structured billing-rule code over legacy message text", () => {
+    const error = errorFromBackendBody(
+      503,
+      {
+        detail: {
+          error_code: "BILLING_RULE_NOT_CONFIGURED",
+          message: "billing rule is not configured; insufficient credits fallback",
+        },
+      },
+      "Service Unavailable",
+    );
+
+    expect(error).toBeInstanceOf(BillingRuleNotConfiguredError);
+  });
+
+  it("does not classify non-5xx legacy text as insufficient credits", () => {
+    const error = errorFromBackendBody(
+      400,
+      { detail: "invalid request: insufficient credits text from client" },
+      "Bad Request",
+    );
+
+    expect(error).not.toBeInstanceOf(InsufficientCreditsError);
+  });
+
   it("uses i18n for missing billing rule display text", () => {
     const error = errorFromBackendBody(
       409,
@@ -213,7 +292,7 @@ describe("apiCall backend errors", () => {
         data: {
           error_code: "BILLING_RULE_NOT_CONFIGURED",
           billing_kind: "feature",
-          billing_key: "build_characters",
+          billing_key: "mainline.build_characters",
         },
       },
       "Conflict",
@@ -247,7 +326,7 @@ describe("apiCall backend errors", () => {
           metadata: {
             error_code: "BILLING_RULE_NOT_CONFIGURED",
             billing_kind: "feature",
-            billing_key: "ingest_fast",
+            billing_key: "mainline.ingest_fast",
           },
         },
       },
@@ -266,7 +345,7 @@ describe("apiCall backend errors", () => {
           error_code: "BILLING_RULE_NOT_CONFIGURED",
           message: "计费规则未配置，请联系管理员设置积分规则",
           billing_kind: "feature",
-          billing_key: "ingest_fast",
+          billing_key: "mainline.ingest_fast",
         },
       },
       "Request failed with status code 409 Conflict",

@@ -1,6 +1,7 @@
 import base64
 import importlib
 import logging
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,46 +19,69 @@ def _isolate_settings_db(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "STATE_DIR", state_dir)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_model_gateway(monkeypatch, tmp_path):
+    _isolate_settings_db(monkeypatch, tmp_path)
+    # This module tests low-level environment-driven gateway adapters. CE
+    # database precedence is covered in test_model_gateway_settings.py.
+    monkeypatch.setenv("ST_CONTROL_PLANE_DSN", "postgresql://test-control-plane")
+
+
+def _patch_scene_newapi_gateway(
+    monkeypatch,
+    *,
+    api_key: str = "newapi-token",
+    base_url: str = "http://newapi.test/v1",
+) -> None:
+    import novelvideo.config as config
+
+    monkeypatch.setattr(
+        config,
+        "get_effective_newapi_gateway_config",
+        lambda: SimpleNamespace(api_key=api_key, base_url=base_url),
+    )
+
+
 def test_dc_image_2_selection_maps_to_newapi_gpt_image2(monkeypatch, tmp_path):
     _isolate_settings_db(monkeypatch, tmp_path)
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
-    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "LingShan-G2")
     monkeypatch.setenv("DEFAULT_CHARACTER_IMAGE_SELECTION", "newapi_gpt_image2")
 
     import novelvideo.config as config
 
     config = importlib.reload(config)
 
-    assert config.character_image_selection_options()["newapi_gpt_image2"] == "DC-Image-2"
+    assert config.character_image_selection_options()["newapi_gpt_image2"] == "LingShan-G2"
     assert config.get_character_image_selection() == "newapi_gpt_image2"
 
     image_config = config.get_grid_generation_config(selection_override="newapi_gpt_image2")
     assert image_config["provider"] == "newapi"
     assert image_config["api_key"] == "newapi-token"
     assert image_config["base_url"] == "http://newapi.test/v1"
-    assert image_config["model"] == "gpt-image-2"
+    assert image_config["model"] == "LingShan-G2"
 
 
 def test_dc_banana_2_selection_maps_to_newapi_nanobanana2(monkeypatch, tmp_path):
     _isolate_settings_db(monkeypatch, tmp_path)
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
-    monkeypatch.setenv("NEWAPI_NANOBANANA2_MODEL", "nano-banana-2")
+    monkeypatch.setenv("NEWAPI_NANOBANANA2_MODEL", "LingShan-NB-2")
     monkeypatch.setenv("DEFAULT_CHARACTER_IMAGE_SELECTION", "newapi_nanobanana2")
 
     import novelvideo.config as config
 
     config = importlib.reload(config)
 
-    assert config.character_image_selection_options()["newapi_nanobanana2"] == "DC-Banana-2"
+    assert config.character_image_selection_options()["newapi_nanobanana2"] == "LingShan-NB-2"
     assert config.get_character_image_selection() == "newapi_nanobanana2"
 
     image_config = config.get_grid_generation_config(selection_override="newapi_nanobanana2")
     assert image_config["provider"] == "newapi"
     assert image_config["api_key"] == "newapi-token"
     assert image_config["base_url"] == "http://newapi.test/v1"
-    assert image_config["model"] == "nano-banana-2"
+    assert image_config["model"] == "LingShan-NB-2"
 
 
 def test_fixed_asset_image_providers_default_to_newapi_when_env_is_empty(monkeypatch):
@@ -68,7 +92,7 @@ def test_fixed_asset_image_providers_default_to_newapi_when_env_is_empty(monkeyp
         "SCENE_360_IMAGE_PROVIDER",
     ):
         monkeypatch.setenv(key, "")
-    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "LingShan-G2")
 
     import novelvideo.config as config
 
@@ -84,7 +108,7 @@ def test_fixed_asset_image_providers_default_to_newapi_when_env_is_empty(monkeyp
     nanobanana_prop = importlib.reload(nanobanana_prop)
     scene_reference_images = importlib.reload(scene_reference_images)
 
-    assert nanobanana_prop.resolve_prop_reference_image_model() == "gpt-image-2"
+    assert nanobanana_prop.resolve_prop_reference_image_model() == "LingShan-G2"
     assert scene_reference_images._scene_image_provider("master", None) == "newapi"
     assert scene_reference_images._scene_image_provider("reverse_master", None) == "newapi"
 
@@ -124,7 +148,7 @@ def test_newapi_sketch_config_defaults_to_dc_image2_low_quality(monkeypatch):
 
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
-    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "LingShan-G2")
     monkeypatch.setenv("DEFAULT_SKETCH_IMAGE_SELECTION", "newapi_gpt_image2")
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
@@ -132,7 +156,7 @@ def test_newapi_sketch_config_defaults_to_dc_image2_low_quality(monkeypatch):
     sketch_config = config.get_sketch_generation_config()
 
     assert sketch_config["provider"] == "newapi"
-    assert sketch_config["model"] == "gpt-image-2"
+    assert sketch_config["model"] == "LingShan-G2"
     assert sketch_config["image_size"] == "1K"
     assert sketch_config["openai_image_quality"] == "low"
 
@@ -155,14 +179,10 @@ def test_newapi_sketch_config_defaults_to_dc_image2_low_quality(monkeypatch):
     assert image_bytes == b"sketch"
     assert error == ""
     assert posted["timeout"] == nanobanana_grid.NEWAPI_IMAGE_HTTP_TIMEOUT_SECONDS == 1800.0
-    assert posted["json"]["model"] == "gpt-image-2"
+    assert posted["json"]["model"] == "LingShan-G2"
     assert posted["json"]["quality"] == "low"
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "2:3",
-        "image_size": "1K",
-        "resolution": "1k",
-        "quality": "low",
-    }
+    assert posted["json"]["size"] == "688x1024"
+    assert "extra_fields" not in posted["json"]
     assert trace == {"request_id": "req-sketch", "response_id": "resp-sketch"}
 
 
@@ -196,7 +216,7 @@ def test_newapi_sketch_config_can_use_dc_banana2_without_quality(monkeypatch):
 
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
-    monkeypatch.setenv("NEWAPI_NANOBANANA2_MODEL", "nano-banana-2")
+    monkeypatch.setenv("NEWAPI_NANOBANANA2_MODEL", "LingShan-NB-2")
     monkeypatch.setenv("DEFAULT_SKETCH_IMAGE_SELECTION", "newapi_nanobanana2")
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
@@ -204,7 +224,7 @@ def test_newapi_sketch_config_can_use_dc_banana2_without_quality(monkeypatch):
     sketch_config = config.get_sketch_generation_config()
 
     assert sketch_config["provider"] == "newapi"
-    assert sketch_config["model"] == "nano-banana-2"
+    assert sketch_config["model"] == "LingShan-NB-2"
     assert sketch_config["image_size"] == "1K"
 
     image_bytes, _text, error = run_async(
@@ -223,13 +243,204 @@ def test_newapi_sketch_config_can_use_dc_banana2_without_quality(monkeypatch):
 
     assert image_bytes == b"sketch"
     assert error == ""
-    assert posted["json"]["model"] == "nano-banana-2"
+    assert posted["json"]["model"] == "LingShan-NB-2"
     assert "quality" not in posted["json"]
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "2:3",
-        "image_size": "1K",
-        "resolution": "1k",
-    }
+    assert posted["json"]["size"] == "688x1024"
+    assert "extra_fields" not in posted["json"]
+
+
+def test_catalog_can_enable_arbitrary_newapi_image_quality(monkeypatch):
+    import httpx
+    from novelvideo.generators import nanobanana_grid
+
+    posted = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": base64.b64encode(b"image").decode()}]}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, *, headers, json):
+            posted["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+    image_bytes, _text, error = run_async(
+        nanobanana_grid._call_newapi_image_api(
+            api_key="newapi-token",
+            model="Seedream-Custom",
+            prompt="prompt",
+            image_config={
+                "aspect_ratio": "adaptive",
+                "image_size": "3K",
+                "quality": "ultra",
+                "request_schema": {
+                    "endpoint": "images/generations",
+                    "parameters": [
+                        {
+                            "key": "watermark",
+                            "requestPath": "watermark",
+                            "control": "switch",
+                            "default": False,
+                        }
+                    ],
+                    "includeQuality": True,
+                },
+                "model_params": {"watermark": True},
+            },
+            base_url="http://newapi.test/v1",
+        )
+    )
+
+    assert image_bytes == b"image"
+    assert error == ""
+    assert posted["json"]["model"] == "Seedream-Custom"
+    assert posted["json"]["quality"] == "ultra"
+    assert posted["json"]["size"] == "2880x2880"
+    assert posted["json"]["watermark"] is True
+    assert "extra_fields" not in posted["json"]
+
+
+@pytest.mark.parametrize(
+    ("model", "resolution", "ratio"),
+    [
+        ("custom-seedream-alias", "2K", "3:2"),
+        ("future-image-model", "2K", "16:9"),
+        ("future-image-model", "2K", "21:9"),
+        ("future-image-model", "3K", "16:9"),
+        ("future-image-model", "2048x1376", "3:2"),
+    ],
+)
+def test_admin_min_pixels_applies_to_named_and_explicit_resolutions(
+    model,
+    resolution,
+    ratio,
+):
+    from novelvideo.generators.nanobanana_grid import resolve_openai_image_size
+
+    width, height = (
+        int(value)
+        for value in resolve_openai_image_size(
+            ratio,
+            resolution,
+            model,
+            allow_dynamic_resolution=True,
+            min_pixels=3_686_400,
+        ).split("x")
+    )
+
+    assert width * height >= 3_686_400
+
+
+@pytest.mark.parametrize(
+    ("resolution", "ratio", "expected"),
+    [
+        ("8K", "16:9", "8192x4608"),
+        ("5.5K", "1:1", "5632x5632"),
+        ("2048x1152", "1:1", "2048x1152"),
+    ],
+)
+def test_newapi_image_size_supports_dynamic_admin_resolutions(
+    resolution,
+    ratio,
+    expected,
+):
+    from novelvideo.generators.nanobanana_grid import resolve_openai_image_size
+
+    assert (
+        resolve_openai_image_size(
+            ratio,
+            resolution,
+            "future-image-model",
+            allow_dynamic_resolution=True,
+        )
+        == expected
+    )
+
+
+def test_newapi_image_call_rejects_unrecognized_admin_resolution():
+    from novelvideo.generators import nanobanana_grid
+
+    image_bytes, _text, error = run_async(
+        nanobanana_grid._call_newapi_image_api(
+            api_key="newapi-token",
+            model="future-image-model",
+            prompt="prompt",
+            image_config={"aspect_ratio": "16:9", "image_size": "ultra"},
+            base_url="http://newapi.test/v1",
+        )
+    )
+
+    assert image_bytes is None
+    assert "unsupported image resolution: ultra" in error
+
+
+def test_newapi_image_call_applies_admin_min_pixels(monkeypatch):
+    import httpx
+    from novelvideo.generators import nanobanana_grid
+
+    posted = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": base64.b64encode(b"image").decode()}]}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, *, headers, json):
+            posted["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+    image_bytes, _text, error = run_async(
+        nanobanana_grid._call_newapi_image_api(
+            api_key="newapi-token",
+            model="arbitrary-admin-model-id",
+            prompt="prompt",
+            image_config={
+                "aspect_ratio": "3:2",
+                "image_size": "2048x1376",
+                "request_schema": {
+                    "endpoint": "images/generations",
+                    "parameters": [],
+                    "minPixels": 3_686_400,
+                },
+            },
+            base_url="http://newapi.test/v1",
+        )
+    )
+
+    assert image_bytes == b"image"
+    assert error == ""
+    width, height = (int(value) for value in posted["json"]["size"].split("x"))
+    assert width * height >= 3_686_400
+    assert posted["json"]["watermark"] is False
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_image_call_sends_gpt_image2_params(monkeypatch):
@@ -266,7 +477,7 @@ def test_newapi_image_call_sends_gpt_image2_params(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="portrait prompt",
             image_config={
                 "aspect_ratio": "3:4",
@@ -281,15 +492,11 @@ def test_newapi_image_call_sends_gpt_image2_params(monkeypatch):
     assert error == ""
     assert posted["url"] == "http://newapi.test/v1/images/generations"
     assert posted["headers"]["Authorization"] == "Bearer newapi-token"
-    assert posted["json"]["model"] == "gpt-image-2"
+    assert posted["json"]["model"] == "LingShan-G2"
     assert posted["json"]["prompt"] == "portrait prompt"
     assert posted["json"]["quality"] == "medium"
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "3:4",
-        "image_size": "1K",
-        "resolution": "1k",
-        "quality": "medium",
-    }
+    assert posted["json"]["size"] == "768x1024"
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_image_call_reports_transport_exception_type(monkeypatch):
@@ -314,7 +521,7 @@ def test_newapi_image_call_reports_transport_exception_type(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="portrait prompt",
             image_config={"aspect_ratio": "16:9", "image_size": "1K"},
             base_url="http://newapi.test/v1",
@@ -324,7 +531,7 @@ def test_newapi_image_call_reports_transport_exception_type(monkeypatch):
     assert image_bytes is None
     assert "请求异常: ReadTimeout" in error
     assert "endpoint=http://newapi.test/v1" in error
-    assert "model=gpt-image-2" in error
+    assert "model=LingShan-G2" in error
 
 
 def test_newapi_image_call_reraises_insufficient_credit(monkeypatch):
@@ -340,7 +547,7 @@ def test_newapi_image_call_reraises_insufficient_credit(monkeypatch):
         run_async(
             nanobanana_grid._call_newapi_image_api(
                 api_key="newapi-token",
-                model="gpt-image-2",
+                model="LingShan-G2",
                 prompt="portrait prompt",
                 base_url="http://newapi.test/v1",
             )
@@ -365,7 +572,7 @@ def test_newapi_sketch_grid_reraises_insufficient_credit(monkeypatch, tmp_path):
             "provider": "newapi",
             "api_key": "newapi-token",
             "base_url": "http://newapi.test/v1",
-            "model": "gpt-image-2",
+            "model": "LingShan-G2",
             "rows": 1,
             "cols": 1,
             "batch_size": 1,
@@ -430,7 +637,7 @@ def test_newapi_image_call_omits_quality_for_nanobanana2(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="nano-banana-2",
+            model="LingShan-NB-2",
             prompt="portrait prompt",
             image_config={
                 "aspect_ratio": "3:4",
@@ -443,13 +650,10 @@ def test_newapi_image_call_omits_quality_for_nanobanana2(monkeypatch):
 
     assert image_bytes == b"image-bytes"
     assert error == ""
-    assert posted["json"]["model"] == "nano-banana-2"
+    assert posted["json"]["model"] == "LingShan-NB-2"
     assert "quality" not in posted["json"]
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "3:4",
-        "image_size": "1K",
-        "resolution": "1k",
-    }
+    assert posted["json"]["size"] == "768x1024"
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_image_call_relays_reference_images(monkeypatch):
@@ -477,6 +681,7 @@ def test_newapi_image_call_relays_reference_images(monkeypatch):
             return None
 
         async def post(self, url, *, headers, json):
+            posted["url"] = url
             posted["json"] = json
             return FakeResponse()
 
@@ -490,24 +695,45 @@ def test_newapi_image_call_relays_reference_images(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="identity prompt",
             reference_images=[b"ref-a", b"ref-b"],
-            image_config={"aspect_ratio": "3:4", "image_size": "1K", "quality": "medium"},
+            image_config={
+                "aspect_ratio": "3:4",
+                "image_size": "1K",
+                "quality": "medium",
+                "output_format": "png",
+                "input_fidelity": "high",
+            },
             base_url="http://newapi.test/v1",
         )
     )
 
     assert image_bytes == b"image-bytes"
     assert error == ""
+    assert posted["url"] == "http://newapi.test/v1/images/edits"
     assert relayed == [
-        (b"ref-a", "png", None, nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG),
-        (b"ref-b", "png", None, nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG),
+        (
+            b"ref-a",
+            "png",
+            nanobanana_grid.NEWAPI_MEDIA_INPUT_MIN_TTL_SECONDS,
+            nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG,
+        ),
+        (
+            b"ref-b",
+            "png",
+            nanobanana_grid.NEWAPI_MEDIA_INPUT_MIN_TTL_SECONDS,
+            nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG,
+        ),
     ]
-    assert posted["json"]["images"] == [
+    assert posted["json"]["image"] == [
         "https://relay.test/1.png",
         "https://relay.test/2.png",
     ]
+    assert "images" not in posted["json"]
+    assert posted["json"]["output_format"] == "png"
+    assert posted["json"]["input_fidelity"] == "high"
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_image_call_preserves_reference_image_extensions(monkeypatch):
@@ -546,7 +772,7 @@ def test_newapi_image_call_preserves_reference_image_extensions(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="identity prompt",
             reference_images=[
                 ("face.jpg", b"jpg-bytes", "image/jpeg"),
@@ -560,8 +786,18 @@ def test_newapi_image_call_preserves_reference_image_extensions(monkeypatch):
     assert image_bytes == b"image-bytes"
     assert error == ""
     assert relayed == [
-        (b"jpg-bytes", "jpg", None, nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG),
-        (b"webp-bytes", "webp", None, nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG),
+        (
+            b"jpg-bytes",
+            "jpg",
+            nanobanana_grid.NEWAPI_MEDIA_INPUT_MIN_TTL_SECONDS,
+            nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG,
+        ),
+        (
+            b"webp-bytes",
+            "webp",
+            nanobanana_grid.NEWAPI_MEDIA_INPUT_MIN_TTL_SECONDS,
+            nanobanana_grid.IMAGE_TRANSFORM_AI_REFERENCE_JPEG,
+        ),
     ]
 
 
@@ -623,7 +859,7 @@ def test_newapi_image_http_error_logs_redacted_request_context(monkeypatch, capl
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="sensitive prompt body",
             reference_images=[b"ref-a"],
             image_config={"aspect_ratio": "2:1", "image_size": "2K", "quality": "medium"},
@@ -636,11 +872,11 @@ def test_newapi_image_http_error_logs_redacted_request_context(monkeypatch, capl
     assert image_bytes is None
     assert "request_id=req-123" in error
     assert "cf-ray-456" in error
-    assert "model=gpt-image-2" in error
-    assert "extra_fields" in error
+    assert "model=LingShan-G2" in error
+    assert "size=2048x1024" in error
     assert "reference_image_count=1" in error
     assert "request_id=req-123" in log_text
-    assert "http://newapi.test/v1/images/generations" in log_text
+    assert "http://newapi.test/v1/images/edits" in log_text
     assert "prompt_sha256=" in log_text
     assert "sensitive prompt body" not in error
     assert "sensitive prompt body" not in log_text
@@ -704,7 +940,7 @@ def test_newapi_image_http_5xx_does_not_retry_in_app(monkeypatch):
     image_bytes, _text, error = run_async(
         nanobanana_grid._call_newapi_image_api(
             api_key="newapi-token",
-            model="gpt-image-2",
+            model="LingShan-G2",
             prompt="retry prompt",
             image_config={"aspect_ratio": "2:1", "image_size": "2K", "quality": "medium"},
             base_url="http://newapi.test/v1",
@@ -739,7 +975,7 @@ def test_newapi_identity_image_sends_portrait_then_costume_references(
         config={
             "provider": "newapi",
             "api_key": "newapi-token",
-            "model": "nano-banana-2",
+            "model": "LingShan-NB-2",
             "base_url": "http://newapi.test/v1",
         }
     )
@@ -762,7 +998,7 @@ def test_newapi_identity_image_sends_portrait_then_costume_references(
 
     assert image_bytes == b"identity-image"
     assert output_path.read_bytes() == b"identity-image"
-    assert captured["model"] == "nano-banana-2"
+    assert captured["model"] == "LingShan-NB-2"
     assert captured["base_url"] == "http://newapi.test/v1"
     assert captured["image_config"] == {
         "aspect_ratio": "16:9",
@@ -791,7 +1027,7 @@ def test_newapi_character_portrait_reraises_insufficient_credit(monkeypatch, tmp
         config={
             "provider": "newapi",
             "api_key": "newapi-token",
-            "model": "gpt-image-2",
+            "model": "LingShan-G2",
             "base_url": "http://newapi.test/v1",
         }
     )
@@ -815,7 +1051,7 @@ def test_newapi_character_portrait_raise_on_error_preserves_provider_detail(monk
 
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
-    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("NEWAPI_IMAGE_MODEL", "LingShan-G2")
     monkeypatch.setenv("DEFAULT_CHARACTER_IMAGE_SELECTION", "newapi_gpt_image2")
     importlib.reload(config)
     monkeypatch.setattr(
@@ -851,16 +1087,15 @@ def test_newapi_scene_master_uses_text_only_nanobanana2(monkeypatch, tmp_path):
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
     monkeypatch.setenv("SCENE_MASTER_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setenv("SCENE_MASTER_IMAGE_MODEL", "nano-banana-2")
+    monkeypatch.setenv("SCENE_MASTER_IMAGE_MODEL", "LingShan-NB-2")
+    _patch_scene_newapi_gateway(monkeypatch)
     monkeypatch.setattr(
         scene_reference_images,
         "_call_newapi_image_api",
         fake_call_newapi_image_api,
     )
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_API_KEY", "newapi-token")
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_BASE_URL", "http://newapi.test/v1")
     monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "nano-banana-2")
+    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "LingShan-NB-2")
 
     scene = NovelScene(
         name="古董店",
@@ -883,7 +1118,7 @@ def test_newapi_scene_master_uses_text_only_nanobanana2(monkeypatch, tmp_path):
     assert output_path.read_bytes() == b"scene-master"
     assert captured["api_key"] == "newapi-token"
     assert captured["base_url"] == "http://newapi.test/v1"
-    assert captured["model"] == "nano-banana-2"
+    assert captured["model"] == "LingShan-NB-2"
     assert captured["reference_images"] is None
     assert captured["image_config"] == {
         "aspect_ratio": "16:9",
@@ -913,10 +1148,9 @@ def test_newapi_scene_time_plate_master_injects_time_and_base_reference(monkeypa
         "_call_newapi_image_api",
         fake_call_newapi_image_api,
     )
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_API_KEY", "newapi-token")
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_BASE_URL", "http://newapi.test/v1")
+    _patch_scene_newapi_gateway(monkeypatch)
     monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "nano-banana-2")
+    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "LingShan-NB-2")
 
     scene = NovelScene(
         name="古董店_夜晚",
@@ -963,10 +1197,9 @@ def test_newapi_scene_variant_plate_master_keeps_described_lighting(monkeypatch,
         "_call_newapi_image_api",
         fake_call_newapi_image_api,
     )
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_API_KEY", "newapi-token")
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_BASE_URL", "http://newapi.test/v1")
+    _patch_scene_newapi_gateway(monkeypatch)
     monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "nano-banana-2")
+    monkeypatch.setattr(scene_reference_images, "SCENE_MASTER_IMAGE_MODEL", "LingShan-NB-2")
 
     scene = NovelScene(
         name="城市街道_雨夜版",
@@ -1015,13 +1248,12 @@ def test_newapi_reverse_master_uses_master_reference_nanobanana2(monkeypatch, tm
         "_call_newapi_image_api",
         fake_call_newapi_image_api,
     )
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_API_KEY", "newapi-token")
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_BASE_URL", "http://newapi.test/v1")
+    _patch_scene_newapi_gateway(monkeypatch)
     monkeypatch.setattr(scene_reference_images, "SCENE_REVERSE_MASTER_IMAGE_PROVIDER", "newapi")
     monkeypatch.setattr(
         scene_reference_images,
         "SCENE_REVERSE_MASTER_IMAGE_MODEL",
-        "nano-banana-2",
+        "LingShan-NB-2",
     )
 
     scene = NovelScene(
@@ -1045,7 +1277,7 @@ def test_newapi_reverse_master_uses_master_reference_nanobanana2(monkeypatch, tm
     assert output_path.read_bytes() == b"scene-reverse"
     assert captured["api_key"] == "newapi-token"
     assert captured["base_url"] == "http://newapi.test/v1"
-    assert captured["model"] == "nano-banana-2"
+    assert captured["model"] == "LingShan-NB-2"
     assert captured["reference_images"] == [
         ("scene_master_master.png", b"master-bytes", "image/png")
     ]
@@ -1057,7 +1289,7 @@ def test_newapi_reverse_master_uses_master_reference_nanobanana2(monkeypatch, tm
     assert "REFERENCE 1 = the scene's FRONT-FACING master" in captured["prompt"]
 
 
-def test_newapi_reverse_master_can_use_gpt_image2_quality_low(monkeypatch, tmp_path):
+def test_newapi_reverse_master_can_use_gpt_image2_quality_medium(monkeypatch, tmp_path):
     _isolate_settings_db(monkeypatch, tmp_path)
     from novelvideo.generators import scene_reference_images
     from novelvideo.models import NovelScene
@@ -1077,13 +1309,12 @@ def test_newapi_reverse_master_can_use_gpt_image2_quality_low(monkeypatch, tmp_p
         "_call_newapi_image_api",
         fake_call_newapi_image_api,
     )
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_API_KEY", "newapi-token")
-    monkeypatch.setattr(scene_reference_images, "NEWAPI_BASE_URL", "http://newapi.test/v1")
+    _patch_scene_newapi_gateway(monkeypatch)
     monkeypatch.setattr(scene_reference_images, "SCENE_REVERSE_MASTER_IMAGE_PROVIDER", "newapi")
     monkeypatch.setattr(
         scene_reference_images,
         "SCENE_REVERSE_MASTER_IMAGE_MODEL",
-        "gpt-image-2",
+        "LingShan-G2",
     )
 
     scene = NovelScene(
@@ -1100,7 +1331,7 @@ def test_newapi_reverse_master_can_use_gpt_image2_quality_low(monkeypatch, tmp_p
         )
     )
 
-    assert captured["model"] == "gpt-image-2"
+    assert captured["model"] == "LingShan-G2"
     assert captured["reference_images"] == [
         ("scene_master_master.png", b"master-bytes", "image/png")
     ]
@@ -1108,7 +1339,7 @@ def test_newapi_reverse_master_can_use_gpt_image2_quality_low(monkeypatch, tmp_p
         "aspect_ratio": "16:9",
         "image_size": "1K",
         "output_format": "png",
-        "quality": "low",
+        "quality": "medium",
     }
 
 
@@ -1147,7 +1378,7 @@ def test_newapi_prop_reference_gpt_image2_sends_quality_medium(monkeypatch, tmp_
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
     monkeypatch.setenv("PROP_REF_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "LingShan-G2")
     importlib.reload(config)
     nanobanana_prop = importlib.reload(nanobanana_prop)
     monkeypatch.setattr(
@@ -1168,14 +1399,10 @@ def test_newapi_prop_reference_gpt_image2_sends_quality_medium(monkeypatch, tmp_
     assert output_path.read_bytes() == b"prop-ref"
     assert posted["url"] == "http://newapi.test/v1/images/generations"
     assert posted["headers"]["Authorization"] == "Bearer newapi-token"
-    assert posted["json"]["model"] == "gpt-image-2"
+    assert posted["json"]["model"] == "LingShan-G2"
     assert posted["json"]["quality"] == "medium"
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "16:9",
-        "image_size": "1K",
-        "resolution": "1k",
-        "quality": "medium",
-    }
+    assert posted["json"]["size"] == "1088x608"
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_prop_reference_nanobanana2_omits_quality(monkeypatch, tmp_path):
@@ -1211,7 +1438,7 @@ def test_newapi_prop_reference_nanobanana2_omits_quality(monkeypatch, tmp_path):
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
     monkeypatch.setenv("PROP_REF_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "nano-banana-2")
+    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "LingShan-NB-2")
     importlib.reload(config)
     nanobanana_prop = importlib.reload(nanobanana_prop)
     monkeypatch.setattr(
@@ -1230,13 +1457,10 @@ def test_newapi_prop_reference_nanobanana2_omits_quality(monkeypatch, tmp_path):
 
     assert result == str(output_path)
     assert output_path.read_bytes() == b"prop-ref"
-    assert posted["json"]["model"] == "nano-banana-2"
+    assert posted["json"]["model"] == "LingShan-NB-2"
     assert "quality" not in posted["json"]
-    assert posted["json"]["extra_fields"] == {
-        "aspect_ratio": "16:9",
-        "image_size": "1K",
-        "resolution": "1k",
-    }
+    assert posted["json"]["size"] == "1088x608"
+    assert "extra_fields" not in posted["json"]
 
 
 def test_newapi_prop_reference_reraises_insufficient_credit(monkeypatch, tmp_path):
@@ -1250,7 +1474,7 @@ def test_newapi_prop_reference_reraises_insufficient_credit(monkeypatch, tmp_pat
     monkeypatch.setenv("NEWAPI_API_KEY", "newapi-token")
     monkeypatch.setenv("NEWAPI_BASE_URL", "http://newapi.test/v1")
     monkeypatch.setenv("PROP_REF_IMAGE_PROVIDER", "newapi")
-    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("PROP_REF_IMAGE_MODEL", "LingShan-G2")
     importlib.reload(config)
     nanobanana_prop = importlib.reload(nanobanana_prop)
     monkeypatch.setattr(nanobanana_prop, "_call_newapi_image_api", fake_call_newapi_image_api)
@@ -1278,7 +1502,9 @@ def test_freezone_single_image_generation_routes_newapi(monkeypatch, tmp_path):
         captured.update(kwargs)
         return b"freezone-image", "", ""
 
-    monkeypatch.setattr(nanobanana_grid, "_call_newapi_image_api", fake_call_newapi_image_api)
+    monkeypatch.setattr(
+        nanobanana_grid, "_call_newapi_image_api", fake_call_newapi_image_api
+    )
 
     output_path = tmp_path / "freezone.png"
     image_path = run_async(
@@ -1291,7 +1517,7 @@ def test_freezone_single_image_generation_routes_newapi(monkeypatch, tmp_path):
             config={
                 "provider": "newapi",
                 "api_key": "newapi-token",
-                "model": "gpt-image-2",
+                "model": "LingShan-G2",
                 "base_url": "http://newapi.test/v1",
                 "openai_image_quality": "medium",
                 "openai_sketch_image_quality": "low",
@@ -1307,7 +1533,7 @@ def test_freezone_single_image_generation_routes_newapi(monkeypatch, tmp_path):
     assert image_path == output_path
     assert output_path.read_bytes() == b"freezone-image"
     assert captured["api_key"] == "newapi-token"
-    assert captured["model"] == "gpt-image-2"
+    assert captured["model"] == "LingShan-G2"
     assert captured["prompt"] == "freezone prompt"
     assert captured["reference_images"] is None
     assert captured["base_url"] == "http://newapi.test/v1"
@@ -1315,6 +1541,8 @@ def test_freezone_single_image_generation_routes_newapi(monkeypatch, tmp_path):
         "aspect_ratio": "1:1",
         "image_size": "2K",
         "quality": "medium",
+    "request_schema": {},
+        "model_params": {},
     }
 
 

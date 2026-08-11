@@ -1,6 +1,8 @@
 """分集列表 & 规划 & 身份端点。"""
 
 import logging
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 
 from novelvideo.api.auth import get_api_user
@@ -14,7 +16,13 @@ from novelvideo.api.deps import (
     resolve_project_scope,
 )
 from novelvideo.api.schemas import EpisodePlanRequest, EpisodeUpdate, InsertManualShotRequest
+from novelvideo.novel_source import (
+    has_imported_novel,
+    novel_import_required_response,
+    resolve_uploaded_novel_filename,
+)
 from novelvideo.ports import get_task_backend, get_usage_meter
+from novelvideo.project_config import load_project_config_file_from_state_dir
 from novelvideo.task_identity import project_task_state_key
 
 logger = logging.getLogger("novelvideo.api.episodes")
@@ -109,6 +117,13 @@ async def _plan_episode_assets(
         logs.append(message)
 
     compiler = _asset_compiler_cls()(store)
+    state_dir = str(getattr(store, "state_dir", "") or "")
+    project_config = (
+        load_project_config_file_from_state_dir(state_dir)
+        if state_dir
+        else {}
+    )
+    compiler.spine_template = str(project_config.get("spine_template") or "drama")
     try:
         if asset_kind == "scene":
             scene_menu, new_count = await compiler.compile_episode_scenes(episode, on_log=log_fn)
@@ -173,6 +188,7 @@ async def _enqueue_episode_asset_planner(
     task_scope = _episode_asset_task_scope(asset_kind, episode_num)
     queued = await get_task_backend().enqueue_project_task(
         resolved.ctx,
+        product_surface="mainline",
         task_type=task_type,
         queue_kind="default",
         episode=episode_num,
@@ -182,6 +198,7 @@ async def _enqueue_episode_asset_planner(
     return {
         "ok": True,
         "task_type": task_type,
+        "scope": task_scope,
         "task_id": queued.task_state.task_id,
         "task_key": project_task_state_key(
             task_type,
@@ -245,8 +262,11 @@ async def plan_episodes(project: str, body: EpisodePlanRequest, user: dict = Dep
     }
 
     if ctx is not None:
+        if not has_imported_novel(resolved.project_dir):
+            return novel_import_required_response()
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="build_episodes",
             queue_kind="default",
             episode=0,
@@ -460,6 +480,7 @@ async def plan_episode_identities(
     if resolved.ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             resolved.ctx,
+            product_surface="mainline",
             task_type="identity_planner",
             queue_kind="default",
             episode=episode_num,
@@ -608,7 +629,11 @@ async def update_episode(
 
 
 @router.get("/projects/{project}/chapters")
-async def detect_chapters(project: str, user: dict = Depends(get_api_user)):
+async def detect_chapters(
+    project: str,
+    spine_template: Literal["drama", "narrated"] | None = None,
+    user: dict = Depends(get_api_user),
+):
     """检测已上传小说的章节结构。"""
     resolved = await resolve_project_scope(project, user, required_role="viewer")
 
@@ -621,7 +646,22 @@ async def detect_chapters(project: str, user: dict = Depends(get_api_user)):
     if not novel_text:
         return {"ok": False, "error": "No novel file found. Upload a novel first."}
 
-    return {
-        "ok": True,
-        "data": build_chapter_preview(novel_text),
-    }
+    config = load_project_config_file_from_state_dir(resolved.state_dir)
+    requested_spine_template = spine_template or str(
+        config.get("spine_template") or "drama"
+    ).strip()
+    preview = build_chapter_preview(
+        novel_text,
+        include_scene_blocks=requested_spine_template != "narrated",
+    )
+    source_filename = resolve_uploaded_novel_filename(
+        resolved.project_dir,
+        novel_text,
+        preferred_filename=str(config.get("ingest_source_filename") or ""),
+    )
+    # Old projects may predate persistent source tracking and only retain the
+    # canonical parsed novel.  ``ingest/start`` recognizes this fallback and
+    # first copies it into uploads/, keeping subsequent retries durable.
+    preview["source_filename"] = source_filename or "novel.txt"
+
+    return {"ok": True, "data": preview}

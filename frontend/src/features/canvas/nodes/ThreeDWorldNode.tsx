@@ -12,13 +12,15 @@ import {
 import {
   Handle,
   Position,
+  useStore,
   useUpdateNodeInternals,
   type NodeProps,
 } from '@xyflow/react';
+import { isLowDetailZoom } from '@/features/canvas/application/canvasLod';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowRight, Loader2, Orbit } from 'lucide-react';
+import { ArrowUp, Loader2, Orbit } from 'lucide-react';
 
 import {
   uploadFreezoneImage,
@@ -26,7 +28,8 @@ import {
   type FreezoneImageTo3GSKind,
   type FreezoneGenerationHistoryRecord,
 } from '@/api/ops';
-import { awaitTaskCompletion, type TaskState } from '@/api/tasks';
+import { awaitTaskCompletion, isTaskPollTimeoutError, type TaskState } from '@/api/tasks';
+import { notifyTaskStillRunning } from '@/features/canvas/application/errorDialog';
 import { generationTaskDescriptor } from '@/features/canvas/application/resumeGeneration';
 import {
   uploadAndAutoCommitSelectedBackgroundCandidate,
@@ -83,7 +86,13 @@ import {
 import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import { NodeGenerationOverlay } from '@/features/canvas/ui/NodeGenerationOverlay';
 import { CANVAS_NODE_OPS_PANEL_CLASS, canvasNodeFrameClass } from '@/features/canvas/ui/nodeFrameStyles';
-import { NODE_INLINE_ERROR_MESSAGE_CLASS } from '@/features/canvas/ui/nodeControlStyles';
+import {
+  NODE_CREDIT_PILL_FLAT_CLASS,
+  NODE_GENERATE_BUTTON_BASE_CLASS,
+  NODE_GENERATE_BUTTON_DISABLED_CLASS,
+  NODE_GENERATE_BUTTON_ENABLED_CLASS,
+  NODE_INLINE_ERROR_MESSAGE_CLASS,
+} from '@/features/canvas/ui/nodeControlStyles';
 import {
   hasMainlineContexts,
   NodeContextBadges,
@@ -93,6 +102,12 @@ import { ReferenceDetachButton } from '@/features/canvas/nodes/shared/ReferenceD
 import { ReferenceTextChip } from '@/features/canvas/nodes/shared/ReferenceTextChip';
 import { useDetachUpstream } from '@/features/canvas/hooks/useDetachUpstream';
 import { readUrl } from '@/lib/url-params';
+import { BillingRuleNotConfiguredError } from '@/lib/api-errors';
+import { useGenerationCreditCost } from '@/lib/queries/generation-credit-cost';
+import {
+  CreditCostPill,
+  type CreditPromotionDisplay,
+} from '@/components/credits/credit-visual';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type ThreeDWorldNodeProps = NodeProps & {
@@ -599,6 +614,9 @@ function ReferenceImageThumb({
 interface OpsPanelProps {
   isGenerating: boolean;
   hasUpstream: boolean;
+  billingRuleMissing: boolean;
+  creditCostDisplay: string | null;
+  creditPromotion?: CreditPromotionDisplay | null;
   errorMessage?: string | null;
   sourceKind: DirectorImageSourceKind;
   referenceImages: ReferenceImageRef[];
@@ -618,6 +636,9 @@ interface OpsPanelProps {
 function OpsPanel({
   isGenerating,
   hasUpstream,
+  billingRuleMissing,
+  creditCostDisplay,
+  creditPromotion,
   errorMessage,
   sourceKind,
   referenceImages,
@@ -707,23 +728,39 @@ function OpsPanel({
             ))}
           </select>
         </label>
+        <CreditCostPill
+          display={creditCostDisplay}
+          promotion={creditPromotion}
+          disabled={isGenerating || !hasUpstream || billingRuleMissing}
+          className={NODE_CREDIT_PILL_FLAT_CLASS}
+        />
         <button
           type="button"
-          disabled={isGenerating || !hasUpstream}
+          disabled={isGenerating || !hasUpstream || billingRuleMissing}
           onClick={(event) => {
             event.stopPropagation();
             onSubmit();
           }}
           onPointerDown={(event) => event.stopPropagation()}
-          title={hasUpstream ? t('nodeToolbar.generateDirectorWorld') : t('nodeToolbar.connectImageSource')}
-          className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white px-2.5 text-[11px] font-medium text-bg-dark transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-text-muted"
+          title={
+            billingRuleMissing
+              ? t('common.billingRuleNotConfiguredShort')
+              : hasUpstream
+                ? t('nodeToolbar.generateDirectorWorld')
+                : t('nodeToolbar.connectImageSource')
+          }
+          aria-label={t('nodeToolbar.generateDirectorWorld')}
+          className={`${NODE_GENERATE_BUTTON_BASE_CLASS} ${
+            isGenerating || !hasUpstream || billingRuleMissing
+              ? NODE_GENERATE_BUTTON_DISABLED_CLASS
+              : NODE_GENERATE_BUTTON_ENABLED_CLASS
+          }`}
         >
           {isGenerating ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowUp className="h-4 w-4" />
           )}
-          {t('nodeToolbar.generateDirectorWorld')}
         </button>
       </div>
     </div>
@@ -772,7 +809,37 @@ function HistoryPanel({
 
 export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: ThreeDWorldNodeProps) => {
   const { t } = useTranslation();
+  const worldCreditCost = useGenerationCreditCost(
+    'feature',
+    'freezone.image_to_3gs',
+    {
+      surface: 'canvas',
+      params: {
+        operation:
+          data.plyKind === 'pano' || data.plyKind === 'master'
+            ? data.plyKind
+            : 'master',
+      },
+    },
+  );
+  const worldBillingRuleMissing =
+    worldCreditCost.error instanceof BillingRuleNotConfiguredError;
+  const worldCreditCostDisplay =
+    worldCreditCost.data?.data.display ??
+    (worldBillingRuleMissing
+      ? t('common.billingRuleNotConfiguredShort')
+      : null);
   const updateNodeInternals = useUpdateNodeInternals();
+  // 入口按钮的循环动效在低缩放档下只有几十像素宽，看不出是动的，却要每帧上传
+  // 一次视频纹理。选择器返回 boolean，只在跨过阈值那一次触发重渲染。
+  const lowDetailZoom = useStore((state) => isLowDetailZoom(state.transform[2]));
+  const entryMotionRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const video = entryMotionRef.current;
+    if (!video) return;
+    if (lowDetailZoom) video.pause();
+    else void video.play().catch(() => {});
+  }, [lowDetailZoom]);
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const addPanoCaptureGroup = useCanvasStore((state) => state.addPanoCaptureGroup);
@@ -1007,7 +1074,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         nodeId: id,
       });
       updateNodeData(id, { taskKey: ref.task_key, ...generationTaskDescriptor(ref) });
-      const completed = await awaitTaskCompletion(ref.task_key, projectId);
+      const completed = await awaitTaskCompletion(ref.task_key, projectId, { taskType: ref.task_type });
       const generatedSource = sourceFromImageTo3gsResult(completed.result, {
         id: `generated-sog:${sourceKind}:${Date.now()}`,
         sourceKind,
@@ -1033,6 +1100,12 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         errorMessage: null,
       });
     } catch (error) {
+      // 轮询超时 ≠ 生成失败：后端还在跑，节点上的任务句柄仍可续接。
+      // 写错误横幅会把一个还活着的任务标成失败，并清掉句柄。
+      if (isTaskPollTimeoutError(error)) {
+        notifyTaskStillRunning(t);
+        return;
+      }
       updateNodeData(id, {
         isGenerating: false,
         taskKey: null,
@@ -1048,6 +1121,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
     refreshHistory,
     selectedImageSourceKind,
     sourceNodeForGeneration,
+    t,
     updateNodeData,
     upstream,
   ]);
@@ -1343,10 +1417,11 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
             aria-label={directorBusy ? t('viewer.threeD.openingDirectorWorld') : t('viewer.threeD.enterDirectorWorld')}
           >
             <video
+              ref={entryMotionRef}
               src="/images/btnmotion.mp4"
               className="block h-auto select-none"
               style={{ width: '100%' }}
-              autoPlay
+              autoPlay={!lowDetailZoom}
               loop
               muted
               playsInline
@@ -1384,6 +1459,9 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
           <OpsPanel
             isGenerating={isGenerating}
             hasUpstream={hasUpstream}
+            billingRuleMissing={worldBillingRuleMissing}
+            creditCostDisplay={worldCreditCostDisplay}
+            creditPromotion={worldCreditCost.data?.data.promotion}
             errorMessage={data.errorMessage}
             sourceKind={selectedImageSourceKind}
             referenceImages={referenceImages}

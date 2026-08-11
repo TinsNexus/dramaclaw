@@ -17,6 +17,7 @@ import {
   Download,
   Image as ImageIcon,
   Languages,
+  Library,
   Loader2,
   Palette,
   Upload,
@@ -32,8 +33,13 @@ import {
   type ImageQuality,
   type ImageSize,
 } from '@/features/canvas/domain/canvasNodes';
+import { buildImageFeatureBillingParams } from '@/features/canvas/domain/imageBilling';
 import {
-  IMAGE_GENERATION_ASPECT_RATIOS,
+  resolveModelAspectOptions,
+  resolveModelQualityOptions,
+  resolveModelSizeOptions,
+} from '@/features/canvas/domain/mediaModelOptions';
+import {
   parseAspectRatio,
   pickClosestAspectRatio,
   resolveImageDisplayUrl,
@@ -84,6 +90,7 @@ import {
   fetchFreezoneTextTranslateResult,
   submitFreezoneGen,
   submitFreezoneTextTranslate,
+  type FreezoneProvider,
   uploadFreezoneImage,
 } from '@/api/ops';
 import {
@@ -97,19 +104,27 @@ import {
   type ThreeDDirectorCaptureMeta,
 } from '@/features/viewer-kit/three-d/ThreeDDirectorDialog';
 import type { DirectorStageManifest } from '@/features/viewer-kit/three-d/directorManifest';
-import { awaitTaskCompletion } from '@/api/tasks';
+import { awaitTaskCompletion, isTaskPollTimeoutError } from '@/api/tasks';
+import { notifyTaskStillRunning } from '@/features/canvas/application/errorDialog';
 import { generationTaskDescriptor } from '@/features/canvas/application/resumeGeneration';
-import { backendErrorToastMessage } from '@/lib/api-errors';
+import {
+  BillingRuleNotConfiguredError,
+  backendErrorToastMessage,
+} from '@/lib/api-errors';
 import { readUrl } from '@/lib/url-params';
 import {
-  DEFAULT_SHARED_MODEL_ID,
   ProviderModelPicker,
   SHARED_MODELS,
 } from '@/features/canvas/ui/ProviderModelPicker';
 import { extractRequestId } from '@/features/canvas/application/generationErrorReport';
 import { useFreezoneImageModels } from '@/features/canvas/hooks/useFreezoneImageModels';
 import { useNodeGenerationHistory } from '@/features/canvas/hooks/useNodeGenerationHistory';
+import { MediaModelParameterChip } from '@/features/canvas/ui/MediaModelParameterChip';
 import { ReferenceTextChip } from '@/features/canvas/nodes/shared/ReferenceTextChip';
+import {
+  AssetLibraryModal,
+  type AssetLibrarySelection,
+} from '@/features/canvas/ui/AssetLibraryModal';
 import {
   NodeGenerationHistory,
   hasCompletedHistoryRecords,
@@ -122,6 +137,7 @@ import {
 } from '@/features/canvas/nodes/CameraPickerPopover';
 import {
   buildImageGenerationSuccessPatch,
+  GENERATION_ERROR_CLEARED_PATCH,
   isStaleGenerationTask,
   shouldWriteGenerationError,
 } from '@/features/canvas/application/generationTaskArbitration';
@@ -145,7 +161,7 @@ import {
 } from '@/features/freezone/context/mainlineContext';
 import { RegenerateButton } from '@/features/canvas/ui/RegenerateButton';
 import { useGenerationCreditCost } from '@/lib/queries/generation-credit-cost';
-import { CreditCostPill, formatCreditCost } from '@/components/credits/credit-visual';
+import { CreditCostPill } from '@/components/credits/credit-visual';
 import {
   NODE_COUNT_POPOVER_CLASS,
   NODE_CREDIT_PILL_FLAT_CLASS,
@@ -193,6 +209,7 @@ const OPERATIONS_PANEL_MIN_WIDTH = 720;
 // 「放大」后的操作区尺寸：给提示词编辑区更舒适的高度与宽度。
 const OPERATIONS_PANEL_EXPANDED_HEIGHT = 560;
 const OPERATIONS_PANEL_EXPANDED_MIN_WIDTH = 960;
+const IMAGE_GENERATE_FEATURE_KEY = 'freezone.image_generate';
 
 const ASPECT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'auto', label: '自适应' },
@@ -232,12 +249,6 @@ const IMAGE_PARAM_ROW_CLASS = 'mb-4 flex gap-2';
 const NODE_COUNT_OPTION_BASE_CLASS =
   'flex w-full items-center justify-center rounded-[6px] px-3 py-1.5 text-xs transition-colors';
 
-// 「画质」选项只对 image2 系模型（DC-Image-2 / gpt-image-2 等）生效，
-// 后端也只在 gpt-image-2 上识别该字段。其余模型隐藏该选择器。
-function isImage2Model(apiModel: string | null | undefined): boolean {
-  return /image[-_]?2/i.test(apiModel ?? '');
-}
-
 function resolveOutputUrl(result: Record<string, unknown> | null | undefined): string | null {
   if (!result) return null;
   for (const key of ['output_url', 'image_url', 'url']) {
@@ -272,6 +283,10 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const isComposingRef = useRef(false);
   const hasUserEditedPromptRef = useRef(false);
   const submittingRef = useRef(false);
+  // A user-selected history image supersedes every still-settling request from
+  // the previous batch. Async completions must match this local generation
+  // attempt before they may write either a result or an error back to the node.
+  const generationAttemptRef = useRef(0);
   useEffect(() => {
     if (isComposingRef.current) return;
     setPromptDraft(externalPrompt);
@@ -281,7 +296,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const aspectRatio = typeof data.aspectRatio === 'string' && data.aspectRatio
     ? data.aspectRatio
     : '16:9';
-  const size = (data.size ?? '2K') as ImageSize;
+  const size = typeof data.size === 'string' && data.size.trim() ? data.size : '2K';
   const quality = (data.quality ?? DEFAULT_IMAGE_QUALITY) as ImageQuality;
   const count = (data.count ?? 1) as ImageGenCount;
   const autoCommitOnGenerate = data.autoCommitOnGenerate === true;
@@ -293,6 +308,10 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const generationError =
     typeof data.generationError === 'string' && data.generationError.length > 0
       ? data.generationError
+      : null;
+  const generationErrorDetails =
+    typeof data.generationErrorDetails === 'string' && data.generationErrorDetails.length > 0
+      ? data.generationErrorDetails
       : null;
   const generationErrorRequestId =
     typeof data.generationErrorRequestId === 'string' && data.generationErrorRequestId.length > 0
@@ -310,18 +329,21 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isTranslatingPrompt, setIsTranslatingPrompt] = useState(false);
-  const [requestIdCopied, setRequestIdCopied] = useState(false);
+  const [errorDetailsCopied, setErrorDetailsCopied] = useState(false);
 
-  const handleCopyRequestId = useCallback(async () => {
-    if (!generationErrorRequestId) return;
+  const handleCopyErrorDetails = useCallback(async () => {
+    // New failures keep the complete task/provider response in details. For
+    // older persisted nodes, generationError itself may still be the raw blob.
+    const copyText = generationErrorDetails || generationError || generationErrorRequestId;
+    if (!copyText) return;
     try {
-      await navigator.clipboard.writeText(generationErrorRequestId);
-      setRequestIdCopied(true);
-      window.setTimeout(() => setRequestIdCopied(false), 1200);
+      await navigator.clipboard.writeText(copyText);
+      setErrorDetailsCopied(true);
+      window.setTimeout(() => setErrorDetailsCopied(false), 1200);
     } catch (error) {
-      console.error('[image-gen] copy request id failed', error);
+      console.error('[image-gen] copy error details failed', error);
     }
-  }, [generationErrorRequestId]);
+  }, [generationError, generationErrorDetails, generationErrorRequestId]);
 
   const {
     models: availableModels,
@@ -352,6 +374,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         return;
       }
       setHistoryPreviewUrl(null);
+      generationAttemptRef.current += 1;
       updateNodeData(id, {
         imageUrl: url,
         previewImageUrl: url,
@@ -360,6 +383,8 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         // 恢复的是单张历史结果，旧批次画册已与主图脱钩（没有任何一张会命中
         // 「主图」标记，点画册格还会静默丢掉刚恢复的图）——一并清掉。
         generationBatch: null,
+        // 节点上已经换成历史里那张成功的图了，上一次失败的横幅不能再盖着。
+        ...GENERATION_ERROR_CLEARED_PATCH,
       });
     },
     [id, isGenerating, updateNodeData],
@@ -377,7 +402,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   // `DEFAULT_SHARED_MODEL_ID` (`huimeng/gpt-image-2`), which is normally NOT in
   // the live `/freezone/image/models` list. Trusting it blindly is the bug:
   // ProviderModelPicker silently falls back to showing `availableModels[0]`
-  // (e.g. DC-Image-2) when the id isn't found, while submit resolves the stale
+  // (e.g. LingShan-G2) when the id isn't found, while submit resolves the stale
   // id through SHARED_MODELS to `huimeng_gpt_image2` — display ≠ value sent.
   // Reconciling here keeps them in lockstep: an unknown persisted id falls back
   // to the first live model (exactly what the picker shows).
@@ -389,20 +414,65 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       ?? availableModels[0]
     );
   }, [data.model, availableModels]);
-  const modelId = selectedModel?.id ?? DEFAULT_SHARED_MODEL_ID;
-  const isImage2 = isImage2Model(selectedModel?.apiModel);
+  const modelId = selectedModel?.id ?? '';
+  const modelSizeOptions = useMemo(
+    () => resolveModelSizeOptions(selectedModel, SIZE_OPTIONS),
+    [selectedModel],
+  );
+  const modelAspectOptions = useMemo(
+    () =>
+      resolveModelAspectOptions(
+        selectedModel,
+        ASPECT_OPTIONS.map((item) => item.value),
+      ).map((value) => ({
+        value,
+        label: ASPECT_OPTIONS.find((item) => item.value === value)?.label ?? value,
+      })),
+    [selectedModel],
+  );
+  const effectiveImageSize = modelSizeOptions.includes(size) ? size : modelSizeOptions[0];
+  const effectiveAspectRatio = snapToAllowedAspectRatio(
+    aspectRatio,
+    modelAspectOptions.map((item) => item.value),
+    modelAspectOptions[0]?.value ?? '1:1',
+  );
+  const qualityOptions = useMemo(
+    () => resolveModelQualityOptions(selectedModel),
+    [selectedModel],
+  );
+  const supportsImageQuality = qualityOptions.length > 0;
+  const effectiveQuality =
+    qualityOptions.find((option) => option.toLowerCase() === quality.toLowerCase())
+    ?? qualityOptions.find((option) => option.toLowerCase() === DEFAULT_IMAGE_QUALITY)
+    ?? qualityOptions[0]
+    ?? DEFAULT_IMAGE_QUALITY;
   const imageSelectionForCost =
     imageModelsLoading || imageModelsFallback ? null : selectedModel?.apiModel ?? null;
-  const imageCreditCost = useGenerationCreditCost('image_selection', imageSelectionForCost, {
-    surface: 'canvas',
-    params: isImage2 ? { size, quality } : { size },
-    quantity: Math.min(Math.max(effectiveCount, 1), 4),
-  });
+  const imageQuantity = Math.min(Math.max(effectiveCount, 1), 4);
+  const imageCreditCost = useGenerationCreditCost(
+    'feature',
+    imageSelectionForCost ? IMAGE_GENERATE_FEATURE_KEY : null,
+    {
+      surface: 'canvas',
+      params: buildImageFeatureBillingParams(selectedModel, {
+        size: effectiveImageSize,
+        ...(supportsImageQuality ? { quality: effectiveQuality } : {}),
+        pricing_quantity: imageQuantity,
+      }),
+      quantity: imageQuantity,
+    },
+  );
+  const imageBillingRuleMissing =
+    imageCreditCost.error instanceof BillingRuleNotConfiguredError;
   const totalCreditCostDisplay = useMemo(() => {
-    const total = imageCreditCost.data?.data.cost;
-    if (typeof total !== 'number') return null;
-    return formatCreditCost(total);
-  }, [imageCreditCost.data?.data.cost]);
+    const display = imageCreditCost.data?.data.display;
+    if (!display) {
+      return imageBillingRuleMissing
+        ? t('common.billingRuleNotConfiguredShort')
+        : null;
+    }
+    return display;
+  }, [imageBillingRuleMissing, imageCreditCost.data?.data.display, t]);
   const { options: cameraOptions } = useFreezoneCameraOptions();
   const cameraSummary = describeCameraSelection(cameraSelection, cameraOptions);
   const { templates: styleTemplates } = useFreezoneStyleTemplates();
@@ -460,6 +530,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
     () => orderedReferenceUrlsWithOwnFirst(referenceImageUrl, upstreamReferenceUrls),
     [referenceImageUrl, upstreamReferenceUrls],
   );
+  // 图片节点没有模式选择器，模式完全由「有没有参考图」决定 —— 提交时
+  // freezoneAiGateway 也是按这个分流去 /freezone/gen 还是 /freezone/edit。
+  // 目录参数按 modes 过滤，缺了它声明了 modes 的参数在控件里根本不显示、
+  // 提交时又会被后端整批丢掉。
+  const generationMode = orderedReferenceUrls.length > 0 ? 'image_to_image' : 'text_to_image';
   // collectCandidateBindingsForNode 只关心连到 this node 的边。用 useShallow 只订阅
   // 本节点相连的边(逐元素比较),拖动无关节点时边引用稳定,本节点不再重渲染。
   const connectedEdges = useCanvasStore(
@@ -531,6 +606,48 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         .forEach((edge) => deleteEdge(edge.id));
     },
     [id, deleteEdge],
+  );
+
+  const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false);
+
+  // Spawn upload reference nodes from selected asset-library images — one per
+  // selection, stacked to the left of this node, then wired as upstream refs so
+  // they feed the multi-reference generation. Image-only here (the modal is
+  // opened with allowedMedia=['image']), but we still guard on media.
+  const spawnAssetLibraryReferences = useCallback(
+    (selections: ReadonlyArray<AssetLibrarySelection>) => {
+      const imageSelections = selections.filter((sel) => sel.media === 'image');
+      if (imageSelections.length === 0) return;
+      const state = useCanvasStore.getState();
+      const self = state.nodes.find((n) => n.id === id);
+      if (!self) return;
+      const UPLOAD_WIDTH = 320;
+      const UPLOAD_HEIGHT = 240;
+      const GAP_X = 40;
+      const GAP_Y = 24;
+      const baseX = self.position.x - UPLOAD_WIDTH - GAP_X;
+      const totalH =
+        UPLOAD_HEIGHT * imageSelections.length + GAP_Y * (imageSelections.length - 1);
+      const startY =
+        self.position.y + ((self.height ?? DEFAULT_HEIGHT) - totalH) / 2;
+      const newIds: string[] = [];
+      imageSelections.forEach((sel, idx) => {
+        const y = startY + idx * (UPLOAD_HEIGHT + GAP_Y);
+        const newId = addNodeAction(
+          CANVAS_NODE_TYPES.upload,
+          { x: baseX, y },
+          {
+            imageUrl: sel.url,
+            previewImageUrl: sel.url,
+            displayName: sel.name || undefined,
+          },
+        );
+        addEdgeAction(newId, id);
+        newIds.push(newId);
+      });
+      state.autoGroupSpawn(id, newIds, { label: '资产参考组' });
+    },
+    [addEdgeAction, addNodeAction, id],
   );
 
   // Hover preview state for the upstream image thumbnails in the OpsPanel
@@ -636,7 +753,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
 
   const handleSetAlbumMainImage = useCallback(
     (url: string) => {
-      updateNodeData(id, { imageUrl: url, previewImageUrl: url });
+      updateNodeData(id, {
+        imageUrl: url,
+        previewImageUrl: url,
+        ...GENERATION_ERROR_CLEARED_PATCH,
+      });
       setAlbumExpanded(false);
     },
     [id, updateNodeData],
@@ -715,14 +836,21 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       setIsUploading(true);
       try {
         const result = await uploadFreezoneImage(projectId, file, file.name);
-        updateNodeData(id, { referenceImageUrl: result.url });
+        // 参考图在显示优先级里排最后（previewImageUrl → imageUrl → referenceImageUrl），
+        // 只有节点还没有生成结果时它才会顶到主体上——这时旧的失败横幅盖的是新图，得清掉。
+        // 已经有生成图时主体不变，失败信息仍然对得上那张图，保留；等用户真正重新提交，
+        // handleSubmit 自己会清。
+        updateNodeData(id, {
+          referenceImageUrl: result.url,
+          ...(hasGeneratedResult ? {} : GENERATION_ERROR_CLEARED_PATCH),
+        });
       } catch (error) {
         console.error('[image-gen] upload failed', error);
       } finally {
         setIsUploading(false);
       }
     },
-    [id, updateNodeData],
+    [hasGeneratedResult, id, updateNodeData],
   );
 
   const handleClearReference = useCallback(() => {
@@ -762,7 +890,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         canvasId: readUrl().canvas ?? 'default',
         nodeId: id,
       });
-      await awaitTaskCompletion(ref.task_key, projectId);
+      await awaitTaskCompletion(ref.task_key, projectId, { taskType: ref.task_type });
       const result = await fetchFreezoneTextTranslateResult(projectId, ref.job_id);
       if (result.translated_text) {
         setPromptDraft(result.translated_text);
@@ -787,8 +915,17 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       upstreamTextJoined.length > 0 &&
       (!shouldInlineUpstreamTextAsPrompt || !hasUserEditedPromptRef.current)
     );
+  const selectedModelReferenceError =
+    selectedModel?.referenceImageMax != null &&
+    orderedReferenceUrls.length > selectedModel.referenceImageMax
+      ? `该模型最多支持 ${selectedModel.referenceImageMax} 张图片素材`
+      : null;
   const submitDisabled =
-    isGenerating || !hasEffectivePrompt;
+    isGenerating ||
+    !selectedModel ||
+    !hasEffectivePrompt ||
+    imageBillingRuleMissing ||
+    selectedModelReferenceError !== null;
 
   const handleSubmit = useCallback(async () => {
     if (submitDisabled || submittingRef.current) return;
@@ -799,6 +936,10 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       console.error('[image-gen] no project in URL');
       return;
     }
+    const generationAttempt = generationAttemptRef.current + 1;
+    generationAttemptRef.current = generationAttempt;
+    const isCurrentGenerationAttempt = () =>
+      generationAttemptRef.current === generationAttempt;
 
     // apiModel comes from the SAME reconciled model the picker displays, so the
     // backend always receives the model the user actually sees.
@@ -827,17 +968,16 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       prompt: effectivePrompt,
       // 后端只接受固定的几个比例；节点上的 aspectRatio 可能是图片自然尺寸约分出的
       // 非标准值（如 "43:24"）或 "auto"，提交前吸附到最接近的合法比例（auto→1:1）。
-      aspectRatio: snapToAllowedAspectRatio(
-        aspectRatio,
-        IMAGE_GENERATION_ASPECT_RATIOS,
-        '1:1',
-      ) as typeof aspectRatio,
-      imageSize: size,
-      // 画质仅对 image2 系模型生效，其余模型不下发该字段。
-      quality: isImage2 ? quality : null,
+      aspectRatio: effectiveAspectRatio as typeof aspectRatio,
+      imageSize: effectiveImageSize,
+      // 画质仅在媒体目录声明 qualityOptions 时下发。
+      quality: supportsImageQuality ? effectiveQuality : null,
       referenceUrls,
+      provider: selectedModel?.providerId as FreezoneProvider | undefined,
       model: apiModel,
-      modelId,
+      modelId: selectedModel?.catalogId ?? modelId,
+      modelParams: data.modelParams,
+      generationMode,
       camera: hasCamera
         ? {
             cameraBodyId: cameraSelection?.cameraBodyId ?? null,
@@ -860,6 +1000,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       isGenerating: true,
       generationStartedAt: Date.now(),
       generationError: null,
+      generationErrorDetails: null,
       generationErrorRequestId: null,
       generationBatch: null,
     });
@@ -884,7 +1025,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         if (runIndex === 0) {
           updateNodeData(id, generationTaskDescriptor(ref));
         }
-        const completed = await awaitTaskCompletion(ref.task_key, projectId);
+        const completed = await awaitTaskCompletion(ref.task_key, projectId, { taskType: ref.task_type });
         let url = resolveOutputUrl(completed.result as Record<string, unknown> | null);
         if (!url) {
           try {
@@ -895,6 +1036,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
           }
         }
         if (url) {
+          if (!isCurrentGenerationAttempt()) return;
           completedUrls.push(url);
           const isFirstCompleted = completedUrls.length === 1;
           updateNodeData(id, {
@@ -909,6 +1051,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             });
           }
         } else {
+          if (!isCurrentGenerationAttempt()) return;
           console.warn('[image-gen] generation completed without output url', completed);
           // 只有 run 0（任务句柄的归属者）且尚无任何成功时才终结 loading——
           // 非首个任务先「无 URL 完成」不能把还在跑的整体 loading 提前掐掉。
@@ -917,10 +1060,18 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
           }
         }
       } catch (error) {
+        if (!isCurrentGenerationAttempt()) return;
         console.error('[image-gen] generation failed', error);
         // 已有同批其它图完成（主图已落）时不覆盖成功态为错误——部分失败只
         // 影响画册张数。
         if (completedUrls.length > 0) return;
+        // 轮询超时 ≠ 生成失败：后端还在跑，节点上的任务句柄仍可续接（刷新后
+        // resumeNodeGeneration 会重新接上）。写错误横幅只会把一个还活着的任务
+        // 标成失败、并清掉可续接的句柄。
+        if (isTaskPollTimeoutError(error)) {
+          notifyTaskStillRunning(t);
+          return;
+        }
         // 任务仲裁（stale / shouldWrite）只对 run 0 有意义：节点上只持久化了
         // run 0 的任务句柄，其余 run 的 taskKey 必然对不上，套用仲裁会把
         // 它们的失败全部误判为「过期任务」而静默吞掉。
@@ -945,13 +1096,20 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         // submit — the request id is the handle support uses to trace it.
         // 只有 run 0 失败才终结 loading：非首 run 失败时 run 0 可能还在跑，
         // 它的成功补丁会清掉这里写的错误横幅。
+        const rawErrorMessage =
+          error instanceof Error && error.message
+            ? error.message
+            : String(error || t('common.error'));
         const displayErrorMessage = backendErrorToastMessage(error, t);
         updateNodeData(id, {
           ...(runIndex === 0
             ? { isGenerating: false, generationStartedAt: null }
             : {}),
           generationError: displayErrorMessage,
-          generationErrorRequestId: extractRequestId(displayErrorMessage),
+          // Keep the complete task/provider error for support copy. Only the
+          // concise provider `message` is rendered on the node.
+          generationErrorDetails: rawErrorMessage,
+          generationErrorRequestId: extractRequestId(rawErrorMessage),
         });
         // Re-throw so the caller can surface a single error dialog after all
         // concurrent attempts settle (rather than one dialog per failed image).
@@ -972,22 +1130,24 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       submittingRef.current = false;
     }
   }, [
-    aspectRatio,
     canAutoCommitOnGenerate,
     selectedModel,
     cameraSelection,
     count,
     effectiveCount,
+    effectiveAspectRatio,
+    effectiveImageSize,
     id,
-    isImage2,
+    effectiveQuality,
+    supportsImageQuality,
     modelId,
     orderedReferenceUrls,
     prompt,
     quality,
-    size,
     styleTemplateId,
     submitDisabled,
     shouldInlineUpstreamTextAsPrompt,
+    t,
     updateNodeData,
     upstreamTextJoined,
     refreshHistory,
@@ -1091,6 +1251,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
           episode: effectiveEpisode,
           beat: effectiveBeat,
         },
+        ...GENERATION_ERROR_CLEARED_PATCH,
       });
       canvasEventBus.publish('freezone/assets-updated', undefined);
     },
@@ -1427,7 +1588,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
           <div className="nodrag absolute inset-x-5 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center text-center">
             <div className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-red-200">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-300/90" />
-              <span>{t("canvas.imageNode.generationFailed")}</span>
+              <span>{t("node.imageNode.generationFailed")}</span>
             </div>
             <div
               className="mt-1 max-h-12 max-w-full overflow-y-auto break-words text-[11px] leading-4 text-red-100/76 [overflow-wrap:anywhere]"
@@ -1437,16 +1598,16 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             </div>
             {generationErrorRequestId && (
               <div className="mt-1 flex max-w-full items-center justify-center gap-1.5 text-[10px] text-text-muted/58">
-                <span className="shrink-0">{t("canvas.imageNode.requestId")}</span>
+                <span className="shrink-0">{t("node.imageNode.requestId")}</span>
                 <code className="min-w-0 max-w-[160px] truncate font-mono" title={generationErrorRequestId}>
                   {generationErrorRequestId}
                 </code>
                 <button
                   type="button"
-                  title={requestIdCopied ? t("canvas.imageNode.requestIdCopied") : t("canvas.imageNode.copyRequestId")}
+                  title={errorDetailsCopied ? t("nodeToolbar.copied") : t("nodeToolbar.copyErrorReport")}
                   onClick={(event) => {
                     event.stopPropagation();
-                    void handleCopyRequestId();
+                    void handleCopyErrorDetails();
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                   className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted/70 transition-colors hover:bg-white/10 hover:text-text-dark"
@@ -1650,6 +1811,18 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
               nodeId={id}
               onInsert={insertContextPaletteEntry}
             />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsAssetLibraryOpen(true);
+              }}
+              className={`${NODE_TEXT_CONTROL_TRIGGER_CLASS} group/asset px-1.5`}
+              title="从资产库选择参考图（人物 / 场景 / 道具）"
+            >
+              <Library className={`${NODE_TEXT_CONTROL_ICON_CLASS} group-hover/asset:text-text-dark`} />
+              <span>资产库</span>
+            </button>
             {upstreamTextContents.map((content) => (
               <ReferenceTextChip
                 key={content.nodeId}
@@ -1736,15 +1909,30 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             <div className="flex min-w-0 items-center gap-2">
               <ProviderModelPicker
                 selectedModelId={modelId}
-                onChange={(nextModelId) => updateNodeData(id, { model: nextModelId })}
+                onChange={(nextModelId) => updateNodeData(id, { model: nextModelId, modelParams: {} })}
                 popoverPlacement="top"
+                getOptionDisabledReason={(model) =>
+                  model.referenceImageMax != null &&
+                  orderedReferenceUrls.length > model.referenceImageMax
+                    ? `该模型最多支持 ${model.referenceImageMax} 张图片素材`
+                    : null
+                }
               />
               <AspectSizeChip
                 aspectRatio={aspectRatio}
-                size={size}
-                quality={quality}
-                showQuality={isImage2}
+                size={effectiveImageSize}
+                sizeOptions={modelSizeOptions}
+                aspectOptions={modelAspectOptions}
+                quality={effectiveQuality}
+                qualityOptions={qualityOptions}
+                showQuality={supportsImageQuality}
                 onChange={(patch) => updateNodeData(id, patch)}
+              />
+              <MediaModelParameterChip
+                parameters={selectedModel?.request?.parameters}
+                values={data.modelParams}
+                mode={generationMode}
+                onChange={(modelParams) => updateNodeData(id, { modelParams })}
               />
               <CameraChip
                 selection={cameraSelection}
@@ -1781,13 +1969,14 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             <div className="flex shrink-0 items-center gap-2">
               <CreditCostPill
                 display={totalCreditCostDisplay}
+                promotion={imageCreditCost.data?.data.promotion}
                 disabled={submitDisabled}
                 className={NODE_CREDIT_PILL_FLAT_CLASS}
               />
               <button
                 type="button"
                 disabled={submitDisabled}
-                title="生成"
+                title={selectedModelReferenceError ?? "生成"}
                 onClick={(event) => {
                   event.stopPropagation();
                   void handleSubmit();
@@ -1891,6 +2080,13 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
           onSubmitDirectorCombined={handleDirectorCaptureCombined}
         />
       )}
+      <AssetLibraryModal
+        open={isAssetLibraryOpen}
+        project={readUrl().project ?? null}
+        allowedMedia={['image']}
+        onClose={() => setIsAssetLibraryOpen(false)}
+        onConfirm={(selections) => spawnAssetLibraryReferences(selections)}
+      />
     </div>
   );
 });
@@ -1900,10 +2096,13 @@ ImageGenNode.displayName = 'ImageGenNode';
 // 图片按自然尺寸算出的比例常是约分形式（如 21:9 会被约成 7:3），不在 ASPECT_OPTIONS 里，
 // 直接显示就会出现「7:3」这种列表外的标签。这里退回到「数值最接近的可选比例」（复用
 // imageData 的 pickClosestAspectRatio）——chip 标签与下拉里的高亮选项都基于它，保证两边一致。
-function resolveNearestAspectOption(aspectRatio: string): { value: string; label: string } {
-  const exact = ASPECT_OPTIONS.find((option) => option.value === aspectRatio);
+function resolveNearestAspectOption(
+  aspectRatio: string,
+  options = ASPECT_OPTIONS,
+): { value: string; label: string } {
+  const exact = options.find((option) => option.value === aspectRatio);
   if (exact) return exact;
-  const candidates = ASPECT_OPTIONS.filter((option) => option.value !== 'auto');
+  const candidates = options.filter((option) => option.value !== 'auto');
   const nearestValue = pickClosestAspectRatio(
     parseAspectRatio(aspectRatio),
     candidates.map((option) => option.value),
@@ -1916,14 +2115,17 @@ function resolveNearestAspectOption(aspectRatio: string): { value: string; label
 
 interface AspectSizeChipProps {
   aspectRatio: string;
-  size: ImageSize;
+  size: string;
+  sizeOptions: readonly string[];
+  aspectOptions: ReadonlyArray<{ value: string; label: string }>;
   quality: ImageQuality;
-  /** image2 系模型才显示「画质」选择器，并在标签里带上画质。 */
+  qualityOptions: readonly ImageQuality[];
+  /** 媒体目录声明图片质量选项时显示选择器，并在标签里带上画质。 */
   showQuality: boolean;
   onChange: (patch: Partial<ImageGenNodeData>) => void;
 }
 
-function AspectSizeChip({ aspectRatio, size, quality, showQuality, onChange }: AspectSizeChipProps) {
+function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality, qualityOptions, showQuality, onChange }: AspectSizeChipProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -1943,7 +2145,7 @@ function AspectSizeChip({ aspectRatio, size, quality, showQuality, onChange }: A
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [isOpen]);
 
-  const nearestAspect = resolveNearestAspectOption(aspectRatio);
+  const nearestAspect = resolveNearestAspectOption(aspectRatio, aspectOptions);
   const aspectLabel = nearestAspect.label;
   const qualityLabel = QUALITY_OPTIONS.find((option) => option.value === quality)?.label
     ?? quality;
@@ -1981,20 +2183,21 @@ function AspectSizeChip({ aspectRatio, size, quality, showQuality, onChange }: A
             <>
               <div className={IMAGE_PARAM_LABEL_CLASS}>画质</div>
               <div className={IMAGE_PARAM_ROW_CLASS}>
-                {QUALITY_OPTIONS.map((option) => {
-                  const isActive = quality === option.value;
+                {qualityOptions.map((value) => {
+                  const label = QUALITY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+                  const isActive = quality === value;
                   return (
                     <button
-                      key={option.value}
+                      key={value}
                       type="button"
-                      onClick={() => onChange({ quality: option.value })}
+                      onClick={() => onChange({ quality: value })}
                       className={`${IMAGE_PARAM_BUTTON_BASE_CLASS} flex-1 ${
                         isActive
                           ? IMAGE_PARAM_ACTIVE_BUTTON_CLASS
                           : IMAGE_PARAM_IDLE_BUTTON_CLASS
                       }`}
                     >
-                      {option.label}
+                      {label}
                     </button>
                   );
                 })}
@@ -2003,13 +2206,13 @@ function AspectSizeChip({ aspectRatio, size, quality, showQuality, onChange }: A
           )}
           <div className={IMAGE_PARAM_LABEL_CLASS}>分辨率</div>
           <div className={IMAGE_PARAM_ROW_CLASS}>
-            {SIZE_OPTIONS.map((option) => {
+            {sizeOptions.map((option) => {
               const isActive = size === option;
               return (
                 <button
                   key={option}
                   type="button"
-                  onClick={() => onChange({ size: option })}
+                      onClick={() => onChange({ size: option as ImageSize })}
                   className={`${IMAGE_PARAM_BUTTON_BASE_CLASS} flex-1 ${
                     isActive
                       ? IMAGE_PARAM_ACTIVE_BUTTON_CLASS
@@ -2024,7 +2227,7 @@ function AspectSizeChip({ aspectRatio, size, quality, showQuality, onChange }: A
 
           <div className={IMAGE_PARAM_LABEL_CLASS}>比例</div>
           <div className="grid grid-cols-4 gap-2">
-            {ASPECT_OPTIONS.map((option) => {
+            {aspectOptions.map((option) => {
               const isActive = nearestAspect.value === option.value;
               return (
                 <button

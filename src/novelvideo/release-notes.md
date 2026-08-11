@@ -1,21 +1,30 @@
 ---
-version: 1.0.6
+version: 1.3.2
 attention: low
 ---
-# v1.0.6
+# v1.3.2
 
 ## User-facing Highlights (zh)
 
-- **原生桌面运行更完整**: Windows 和 macOS 原生运行路径补齐,自部署不再只依赖 Docker 场景。
-- **画布创作更顺手**: 连线拖拽反馈、多选按连线排列和历史资产模型/模式记忆让图像与视频节点编排更稳定。
-- **登录页和站点呈现升级**: 猎魈人主题入口、主行动按钮和搜索分享信息完成收口,公开站点展示更统一。
+- **本地 ComfyUI 配置更简单**: MiniMax H3 现在以单一模型接入多个 Workflow，由虾驿根据文生视频、首帧或全能参考模式自动选择流程，并支持一键清理本地配置。
+- **视频生成模式更准确**: 画布选择的首帧、首尾帧等业务模式会在校验、计费、任务执行和历史恢复中保持一致，不再根据素材数量被静默改写。
+- **主线生成默认值优化**: 场景参考图提升为中等质量，主线视频模型列表加入 Seedance 2.0 Mini 并精简不推荐选项，同时将新小说上传上限调整为 512KB。
 
 ## User-facing Highlights (en)
 
-- **More complete native desktop support**: Windows and macOS native runtime paths are now covered, so self-hosting is no longer limited to Docker-first workflows.
-- **Smoother canvas creation**: Connection feedback, connection-aware multi-selection layout, and history asset model/mode memory make image and video node workflows more predictable.
-- **Refined login and site presentation**: The Liexiaoren themed entry, primary action buttons, and search/social metadata now present a more consistent public experience.
+- **Simpler local ComfyUI setup**: MiniMax H3 now uses one model entry for multiple workflows, with RelayClaw selecting the appropriate text-to-video, first-frame, or all-reference workflow and an option to clear local configuration in one action.
+- **More accurate video generation modes**: Canvas selections such as first-frame and first/last-frame now remain consistent through validation, billing, task execution, and history restoration instead of being silently changed based on reference count.
+- **Improved mainline defaults**: Scene reference images now use medium quality, Seedance 2.0 Mini is available while less suitable mainline choices are hidden, and the new novel upload limit is set to 512KB.
 
-## Fixes
+## New Features
 
-- 其余修复与内部改动见 GitHub Release 页的 Bug Fixes 与 What's Changed。
+- 简化本地 ComfyUI 配置，使用单一 MiniMax-H3-local 模型承载多个 Workflow，并支持一键清理配置 (#277).
+- 主线视频模型新增 Seedance 2.0 Mini，并保留已有项目和任务对旧模型的执行兼容性 (#267).
+
+## Bug Fixes
+
+- 修复首帧、首尾帧等视频生成模式会因参考图片数量而被错误改写的问题 (#273).
+
+## Improvements
+
+- 将场景参考图质量提升为 medium，并同步实际请求的计费参数；新小说上传限制调整为 512KB (#267).

@@ -42,6 +42,8 @@ class FakeBucket:
 
 @pytest.fixture(autouse=True)
 def fake_oss2(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ST_EDITION", "ce")
+    monkeypatch.delenv("ST_CONTROL_PLANE_DSN", raising=False)
     FakeBucket.instances.clear()
     fake_module = types.SimpleNamespace(Auth=FakeAuth, Bucket=FakeBucket)
     monkeypatch.setitem(sys.modules, "oss2", fake_module)
@@ -77,6 +79,14 @@ def test_aliyun_oss_relay_requires_credentials() -> None:
         )
 
     assert "OSS_RELAY_AK" in str(exc_info.value)
+
+
+def test_media_relay_ttl_seconds_applies_floor_without_shortening_config(monkeypatch) -> None:
+    monkeypatch.setattr(media_relay, "_default_media_relay_ttl_seconds", lambda: 1800)
+    assert media_relay.media_relay_ttl_seconds(minimum=7200) == 7200
+
+    monkeypatch.setattr(media_relay, "_default_media_relay_ttl_seconds", lambda: 10800)
+    assert media_relay.media_relay_ttl_seconds(minimum=7200) == 10800
 
 
 def test_get_media_relay_uses_saved_runtime_oss_config(monkeypatch, tmp_path) -> None:
@@ -138,7 +148,21 @@ def test_get_media_relay_uses_saved_runtime_cloudinary_config(monkeypatch, tmp_p
     assert relay._folder == "dramaclaw-relay"
 
 
-def test_cloudinary_relay_uploads_bytes_with_basic_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("ext", "resource_type", "expected_path", "expected_content_type"),
+    [
+        ("PNG", "image", "/image/upload", "image/png"),
+        ("mp3", "video", "/video/upload", "audio/mpeg"),
+        ("mp4", "video", "/video/upload", "video/mp4"),
+    ],
+)
+def test_cloudinary_relay_uploads_bytes_with_basic_auth(
+    monkeypatch: pytest.MonkeyPatch,
+    ext: str,
+    resource_type: str,
+    expected_path: str,
+    expected_content_type: str,
+) -> None:
     calls: list[dict[str, object]] = []
 
     class FakeResponse:
@@ -172,16 +196,64 @@ def test_cloudinary_relay_uploads_bytes_with_basic_auth(monkeypatch: pytest.Monk
         folder="dramaclaw-relay",
     )
 
-    url = relay.upload_bytes(b"image-bytes", ext="PNG", ttl=900)
+    url = relay.upload_bytes(
+        b"image-bytes",
+        ext=ext,
+        ttl=900,
+        resource_type=resource_type,
+    )
 
     assert url == "https://res.cloudinary.com/demo/image/upload/abc.png"
-    assert calls[0]["url"] == "https://api.cloudinary.com/v1_1/demo-cloud/image/upload"
+    assert str(calls[0]["url"]).endswith(expected_path)
     assert calls[0]["data"] == {"folder": "dramaclaw-relay"}
     assert calls[0]["auth"] == ("api-key", "api-secret")
     filename, data, content_type = calls[0]["files"]["file"]
-    assert filename.endswith(".png")
+    assert filename.endswith(f".{ext.lower()}")
     assert data == b"image-bytes"
-    assert content_type == "image/png"
+    assert content_type == expected_content_type
+
+
+def test_cloudinary_relay_surfaces_safe_error_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    request = httpx.Request(
+        "POST", "https://api.cloudinary.com/v1_1/demo-cloud/video/upload"
+    )
+    response = httpx.Response(
+        400,
+        request=request,
+        json={"error": {"message": "Invalid video file"}},
+    )
+
+    class FakeClient:
+        def __init__(self, *, timeout: float) -> None:
+            self.timeout = timeout
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def post(self, *args, **kwargs):
+            return response
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    relay = media_relay.CloudinaryRelay(
+        cloud_name="demo-cloud",
+        api_key="api-key",
+        api_secret="api-secret",
+    )
+
+    with pytest.raises(media_relay.MediaRelayConfigError) as exc_info:
+        relay.upload_bytes(b"audio-bytes", ext="mp3", resource_type="video")
+
+    assert str(exc_info.value) == (
+        "Cloudinary media relay upload failed (HTTP 400): Invalid video file"
+    )
+    assert "api-secret" not in str(exc_info.value)
 
 
 class CaptureRelay:
@@ -189,7 +261,14 @@ class CaptureRelay:
         self.uploaded_bytes: list[tuple[bytes, str, int]] = []
         self.uploaded_files: list[tuple[Path, int]] = []
 
-    def upload_bytes(self, data: bytes, *, ext: str = "png", ttl: int = 1800) -> str:
+    def upload_bytes(
+        self,
+        data: bytes,
+        *,
+        ext: str = "png",
+        ttl: int = 1800,
+        resource_type: str = "image",
+    ) -> str:
         self.uploaded_bytes.append((data, ext, ttl))
         return f"https://relay.test/bytes.{ext}?ttl={ttl}"
 

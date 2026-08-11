@@ -414,6 +414,7 @@ async def test_plan_episode_identities_enqueues_celery_task(monkeypatch):
     assert calls == [
         {
             "ctx": ctx,
+            "product_surface": "mainline",
             "task_type": "identity_planner",
             "queue_kind": "default",
             "episode": 1,
@@ -466,6 +467,7 @@ async def test_plan_episode_scenes_enqueues_celery_task(monkeypatch):
     assert response == {
         "ok": True,
         "task_type": "episode_scene_planner",
+        "scope": "scene_run_test",
         "task_id": "task-123",
         "task_key": "task:episode_scene_planner:project:proj_123:4:scene_run_test",
         "backend": "celery",
@@ -476,6 +478,7 @@ async def test_plan_episode_scenes_enqueues_celery_task(monkeypatch):
     assert calls == [
         {
             "ctx": calls[0]["ctx"],
+            "product_surface": "mainline",
             "task_type": "episode_scene_planner",
             "queue_kind": "default",
             "episode": 4,
@@ -543,6 +546,7 @@ async def test_plan_episode_props_enqueues_celery_task(monkeypatch):
     assert response == {
         "ok": True,
         "task_type": "episode_prop_planner",
+        "scope": "prop_run_test",
         "task_id": "task-123",
         "task_key": "task:episode_prop_planner:project:proj_123:4:prop_run_test",
         "backend": "celery",
@@ -553,6 +557,7 @@ async def test_plan_episode_props_enqueues_celery_task(monkeypatch):
     assert calls == [
         {
             "ctx": calls[0]["ctx"],
+            "product_surface": "mainline",
             "task_type": "episode_prop_planner",
             "queue_kind": "default",
             "episode": 4,

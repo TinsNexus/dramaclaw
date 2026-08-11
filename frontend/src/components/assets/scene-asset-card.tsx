@@ -23,8 +23,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { UsageCountBadge } from "@/components/assets/usage-count-badge";
+import { ASSET_CARD_META_BADGE_CLASS } from "@/components/assets/asset-card-styles";
 import { CopyAssetLinkButton } from "@/components/assets/copy-asset-link-button";
 import { CreditCostInline } from "@/components/credit-cost-inline";
+import type { CreditPromotionDisplay } from "@/components/credits/credit-visual";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { sceneTypeLabel } from "@/lib/scene-type";
 import { cn } from "@/lib/utils";
@@ -46,8 +48,11 @@ interface SceneAssetCardProps {
   reversePlyRunning?: boolean;
   panoPlyRunning?: boolean;
   masterCost?: string;
+  masterPromotion?: CreditPromotionDisplay | null;
   reverseCost?: string;
+  reversePromotion?: CreditPromotionDisplay | null;
   panoCost?: string;
+  panoPromotion?: CreditPromotionDisplay | null;
   customUploading?: boolean;
   customDeleting?: boolean;
   onEdit: () => void;
@@ -167,8 +172,11 @@ export function SceneAssetCard({
   reversePlyRunning = false,
   panoPlyRunning = false,
   masterCost,
+  masterPromotion,
   reverseCost,
+  reversePromotion,
   panoCost,
+  panoPromotion,
   customUploading = false,
   customDeleting = false,
   onEdit,
@@ -224,24 +232,29 @@ export function SceneAssetCard({
               {/* Compact status chips inline with title */}
               <div className="flex shrink-0 flex-wrap items-center gap-1">
                 {scene.scene_type && (
-                  <span className="rounded-[4px] border border-border bg-background/40 px-1 py-0 text-[10px] text-muted-foreground">
+                  <span className={ASSET_CARD_META_BADGE_CLASS}>
                     {sceneTypeLabel(scene.scene_type)}
                   </span>
                 )}
                 {derivedBase && (
-                  <span className="rounded-[4px] border border-sky-500/30 bg-sky-500/10 px-1 py-0 text-[10px] text-sky-700 dark:text-sky-300">
+                  <span
+                    className={cn(
+                      ASSET_CARD_META_BADGE_CLASS,
+                      "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                    )}
+                  >
                     {t("assets.scenes.derivedFrom", { base: derivedBase })}
                   </span>
                 )}
-                <span className="rounded-[4px] border border-border bg-background/40 px-1 py-0 text-[10px] text-muted-foreground">
+                <span className={ASSET_CARD_META_BADGE_CLASS}>
                   {t("assets.scenes.master")}{" "}
                   {hasMaster ? t("assets.common.generated") : t("assets.common.missing")}
                 </span>
-                <span className="rounded-[4px] border border-border bg-background/40 px-1 py-0 text-[10px] text-muted-foreground">
+                <span className={ASSET_CARD_META_BADGE_CLASS}>
                   {t("assets.scenes.reverse")}{" "}
                   {hasReverse ? t("assets.common.generated") : t("assets.common.missing")}
                 </span>
-                <span className="rounded-[4px] border border-border bg-background/40 px-1 py-0 text-[10px] text-muted-foreground">
+                <span className={ASSET_CARD_META_BADGE_CLASS}>
                   {t("assets.scenes.pano")}{" "}
                   {hasPano ? t("assets.common.generated") : t("assets.common.missing")}
                 </span>
@@ -340,7 +353,10 @@ export function SceneAssetCard({
                 {hasMaster
                   ? t("assets.scenes.regenerateMaster")
                   : t("assets.scenes.generateMaster")}
-                <CreditCostInline display={masterCost} />
+                <CreditCostInline
+                  display={masterCost}
+                  promotion={masterPromotion}
+                />
               </Button>
             </div>
           </div>
@@ -371,7 +387,10 @@ export function SceneAssetCard({
                 {hasReverse
                   ? t("assets.scenes.regenerateReverse")
                   : t("assets.scenes.generateReverse")}
-                <CreditCostInline display={reverseCost} />
+                <CreditCostInline
+                  display={reverseCost}
+                  promotion={reversePromotion}
+                />
               </Button>
             </div>
           </div>
@@ -413,7 +432,10 @@ export function SceneAssetCard({
                   <ImageIcon className="size-3" />
                 )}
                 {panoGenerateLabel}
-                <CreditCostInline display={panoCost} />
+                <CreditCostInline
+                  display={panoCost}
+                  promotion={panoPromotion}
+                />
               </Button>
               <Button
                 type="button"

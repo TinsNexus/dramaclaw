@@ -21,6 +21,7 @@ from novelvideo.api.schemas import (
     PanoViewerCorrection,
     SceneCreate,
     ScenePanoGenerateRequest,
+    SceneReferenceGenerateRequest,
     SceneUpdate,
 )
 from novelvideo.api.viewer_manifests import (
@@ -33,12 +34,13 @@ from novelvideo.models import (
     build_scene_effective_prompt,
     resolve_scene_plate_from_records,
 )
+from novelvideo.novel_source import has_imported_novel, novel_import_required_response
+from novelvideo.ports import get_task_backend
 from novelvideo.project_config import load_project_config_file
 from novelvideo.project_context import ProjectContext, resolve_project_context
 from novelvideo.sqlite_store import SQLiteStore
-from novelvideo.ports import get_task_backend
-from novelvideo.task_scopes import scene_reference_asset_scope, stage_asset_scope
 from novelvideo.task_identity import project_task_state_key
+from novelvideo.task_scopes import scene_reference_asset_scope, stage_asset_scope
 from novelvideo.utils.derived_scenes import (
     compose_derived_scene_name,
 )
@@ -120,6 +122,7 @@ async def _start_or_enqueue_stage_asset(
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="stage_asset",
             queue_kind="world",
             episode=0,
@@ -141,6 +144,106 @@ async def _start_or_enqueue_stage_asset(
         }
 
     raise RuntimeError("片场资产生成需要 project context")
+
+
+def _scene_reference_billing_metadata(model_selection: str) -> dict[str, Any]:
+    from novelvideo.api.routes.model_credits import _fixed_image_billing_params
+    from novelvideo.config import (
+        IMAGE_GENERATION_SELECTIONS,
+        normalize_image_generation_selection,
+    )
+
+    selection = normalize_image_generation_selection(model_selection)
+    model_config = IMAGE_GENERATION_SELECTIONS.get(selection) or {}
+    pricing_model = str(model_config.get("model") or "").strip()
+    if not pricing_model:
+        return {}
+    return {
+        "image_selection": selection,
+        "pricing_kind": "image",
+        "pricing_model": pricing_model,
+        "pricing_params": _fixed_image_billing_params(
+            "scene_master",
+            model=pricing_model,
+        ),
+        "pricing_model_selection": selection,
+        "pricing_model_label": str(model_config.get("label") or selection),
+    }
+
+
+def _scene_pano_billing_metadata(params: dict[str, Any]) -> dict[str, Any]:
+    import os
+
+    from novelvideo.stage_asset_tasks import (
+        _scene_360_credit_billing_params,
+        resolve_scene_360_image_model,
+        resolve_scene_360_image_provider,
+    )
+
+    provider = resolve_scene_360_image_provider(str(params.get("provider") or ""))
+    pricing_model = resolve_scene_360_image_model(
+        provider=provider,
+        model=str(params.get("model") or ""),
+    )
+    if not pricing_model:
+        return {}
+    image_size = str(
+        params.get("image_size") or os.environ.get("SCENE_360_IMAGE_SIZE") or "2K"
+    )
+    quality = str(
+        params.get("quality")
+        or os.environ.get("SCENE_360_IMAGE_QUALITY")
+        or os.environ.get("HUIMENG_IMAGE_QUALITY")
+        or "medium"
+    )
+    return {
+        "pricing_kind": "image",
+        "pricing_model": pricing_model,
+        "pricing_params": _scene_360_credit_billing_params(
+            image_size=image_size,
+            quality=quality,
+        ),
+        "pricing_model_selection": str(params.get("model") or pricing_model),
+        "pricing_model_label": pricing_model,
+        "provider": provider,
+    }
+
+
+async def _start_or_enqueue_scene_pano(
+    *,
+    ctx: ProjectContext | None,
+    project_dir: Path,
+    scene_name: str,
+    step: str,
+    params: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    if ctx is None:
+        raise RuntimeError("场景全景生成需要 project context")
+
+    scope = stage_asset_scope(scene_name, step)
+    queued = await get_task_backend().enqueue_project_task(
+        ctx,
+        product_surface="mainline",
+        task_type="scene_pano_generation",
+        queue_kind="world",
+        episode=0,
+        scope=scope,
+        payload={
+            "scene_name": scene_name,
+            "step": step,
+            "params": params,
+            "project_dir": str(project_dir),
+            "billing": _scene_pano_billing_metadata(params),
+        },
+    )
+    return scope, {
+        "task_id": queued.task_state.task_id,
+        "task_key": project_task_state_key(
+            "scene_pano_generation", ctx.project_id, 0, scope=scope
+        ),
+        "backend": queued.backend,
+        "queue": queued.queue,
+    }
 
 
 def _scene_360_description(scene: NovelScene) -> str:
@@ -898,7 +1001,7 @@ async def delete_scene(
 
 @router.post("/projects/{project}/scenes/build")
 async def build_scenes(project: str, user: dict = Depends(get_api_user)):
-    ctx, username, project_name, _project_dir, output_dir, store = (
+    ctx, username, project_name, project_dir, output_dir, store = (
         await _resolve_scene_project(
             project,
             user,
@@ -906,8 +1009,11 @@ async def build_scenes(project: str, user: dict = Depends(get_api_user)):
         )
     )
     if ctx is not None:
+        if not has_imported_novel(project_dir):
+            return novel_import_required_response()
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="build_scenes",
             queue_kind="default",
             episode=0,
@@ -987,12 +1093,14 @@ async def delete_scene_master(
 async def generate_scene_master(
     project: str,
     name: str,
+    body: SceneReferenceGenerateRequest | None = None,
     user: dict = Depends(get_api_user),
 ):
     return await _start_scene_reference_task(
         project=project,
         name=name,
         kind="master",
+        model=body.model if body else None,
         user=user,
     )
 
@@ -1001,12 +1109,14 @@ async def generate_scene_master(
 async def generate_scene_reverse_master(
     project: str,
     name: str,
+    body: SceneReferenceGenerateRequest | None = None,
     user: dict = Depends(get_api_user),
 ):
     return await _start_scene_reference_task(
         project=project,
         name=name,
         kind="reverse_master",
+        model=body.model if body else None,
         user=user,
     )
 
@@ -1016,6 +1126,7 @@ async def _start_scene_reference_task(
     project: str,
     name: str,
     kind: str,
+    model: str | None = None,
     user: dict,
     store: SQLiteStore | None = None,
 ):
@@ -1034,8 +1145,10 @@ async def _start_scene_reference_task(
 
     scope = scene_reference_asset_scope(scene.name, kind)
     if ctx is not None:
+        model_selection = str(model or "").strip()
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="scene_reference_asset",
             queue_kind="default",
             episode=0,
@@ -1043,8 +1156,10 @@ async def _start_scene_reference_task(
             payload={
                 "scene_name": scene.name,
                 "kind": kind,
+                "model": model_selection,
                 "style": _project_style(username, project_name),
                 "output_dir": output_dir,
+                "billing": _scene_reference_billing_metadata(model_selection),
             },
         )
         return {
@@ -1416,12 +1531,9 @@ async def generate_scene_pano(
             params[key] = value
 
     try:
-        scope, queued = await _start_or_enqueue_stage_asset(
+        scope, queued = await _start_or_enqueue_scene_pano(
             ctx=ctx,
-            username=username,
-            project=project_name,
             project_dir=project_dir,
-            output_dir=output_dir,
             scene_name=scene.name,
             step=step,
             params=params,
@@ -1431,7 +1543,7 @@ async def generate_scene_pano(
 
     return {
         "ok": True,
-        "task_type": "stage_asset",
+        "task_type": "scene_pano_generation",
         "scope": scope,
         "source": source,
         **(queued or {}),

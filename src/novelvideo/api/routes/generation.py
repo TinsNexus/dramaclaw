@@ -70,7 +70,7 @@ from novelvideo.seedance2_i2v.pipeline import (
 from novelvideo.seedance2_i2v.voice_clone import normalize_seedance2_audio_type
 from novelvideo.project_config import load_project_config, save_project_config
 from novelvideo.project_context import ProjectContext
-from novelvideo.ports import get_task_backend, get_usage_meter
+from novelvideo.ports import get_credit_quote, get_task_backend, get_usage_meter
 from novelvideo.task_identity import project_task_state_key
 from novelvideo.models import beat_scene_id
 from novelvideo.services.background_anchor_service import (
@@ -80,14 +80,39 @@ from novelvideo.services.background_anchor_service import (
     save_uploaded_background_anchor_image,
     select_background_anchor,
 )
-from novelvideo.utils.path_resolver import compute_identity_path, compute_portrait_path
+from novelvideo.utils.path_resolver import PathResolver, compute_identity_path, compute_portrait_path
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-AI_IDENTITY_DETECTION_FEATURE_KEY = "ai_identity_detection"
+AI_IDENTITY_DETECTION_TASK_TYPE = "ai_identity_detection"
+AI_IDENTITY_DETECTION_FEATURE_KEY = "mainline.ai_identity_detection"
 MODEL_CALL_CREDIT_POLICY_FEATURE_INCLUDED = "feature_included"
+
+
+def _single_render_mode_from_sketch(
+    output_dir: str,
+    episode: int,
+    beat_indices: list[int],
+) -> str | None:
+    """Choose a single-render mode from the canonical upstream sketch."""
+    if len(beat_indices) != 1:
+        return None
+
+    from PIL import Image
+
+    sketch_path = PathResolver(output_dir, episode).sketch(int(beat_indices[0]))
+    try:
+        with Image.open(sketch_path) as image:
+            width, height = image.size
+    except Exception:
+        return None
+    if width <= 0 or height <= 0:
+        return None
+
+    ratio = width / height
+    return "1x1_16-9" if abs(ratio - 16 / 9) < abs(ratio - 2 / 3) else "1x1_2-3"
 
 
 async def _resolve_generation_project(project: str, user: dict, required_role: str = "editor"):
@@ -183,6 +208,72 @@ def _resolve_sketch_image_selection(
     return normalize_image_generation_selection(
         requested_selection or project_config.get("sketch_image_selection"),
         fallback=DEFAULT_SKETCH_IMAGE_SELECTION,
+    )
+
+
+def _image_selection_billing_metadata(
+    image_selection: str,
+    mode_key: str,
+    *,
+    image_role: str,
+) -> dict:
+    from novelvideo.config import (
+        IMAGE_GENERATION_SELECTIONS,
+        normalize_image_generation_selection,
+    )
+    from novelvideo.api.routes.model_credits import _image_selection_billing_params
+
+    selection = normalize_image_generation_selection(image_selection)
+    model_cfg = IMAGE_GENERATION_SELECTIONS.get(selection) or {}
+    pricing_model = str(model_cfg.get("model") or "").strip()
+    if not pricing_model:
+        return {}
+    pricing_params = _image_selection_billing_params(
+        model=pricing_model,
+        mode_key=mode_key,
+        image_role=image_role,
+    )
+    return {
+        "image_selection": selection,
+        "pricing_kind": "image",
+        "pricing_model": pricing_model,
+        "pricing_params": pricing_params,
+        "pricing_model_selection": selection,
+        "pricing_model_label": str(model_cfg.get("label") or selection),
+    }
+
+
+def _sketch_regen_billing_metadata(image_selection: str, mode_key: str) -> dict:
+    return _image_selection_billing_metadata(
+        image_selection,
+        mode_key,
+        image_role="sketch",
+    )
+
+
+def _render_regen_billing_metadata(image_selection: str, mode_key: str) -> dict:
+    return _image_selection_billing_metadata(
+        image_selection,
+        mode_key,
+        image_role="render",
+    )
+
+
+def _single_video_billing_metadata(
+    video_backend: str,
+    *,
+    resolution: str | None,
+    duration: int | float | str | None,
+) -> dict:
+    from novelvideo.api.routes.model_credits import (
+        _video_backend_feature_billing_params,
+    )
+    return _video_backend_feature_billing_params(
+        {
+            "video_backend": video_backend,
+            "resolution": str(resolution or "").strip(),
+            "pricing_quantity": duration,
+        }
     )
 
 
@@ -1479,8 +1570,18 @@ def _api_video_backend_options() -> list[VideoBackendOption]:
         parse_newapi_video_backend,
     )
 
-    options = newapi_video_backend_options(include_seedance2_variants=True)
-    options.setdefault("newapi_happyhorse-1.0", "HappyHorse 1.0")
+    hidden_mainline_backends = {
+        "newapi_seedance-2.0-value",
+        "newapi_seedance-2.0-fast-value",
+        "newapi_happyhorse-1.0",
+    }
+    options = {
+        value: label
+        for value, label in newapi_video_backend_options(
+            include_seedance2_variants=True
+        ).items()
+        if value not in hidden_mainline_backends
+    }
     duration_bounds = NewApiVideoGenerator._parse_duration_bounds_config(
         NEWAPI_VIDEO_DURATION_BOUNDS
     )
@@ -1489,6 +1590,8 @@ def _api_video_backend_options() -> list[VideoBackendOption]:
     for value, label in options.items():
         model = parse_newapi_video_backend(value)
         bounds = duration_bounds.get(model or "")
+        if model == "seedance-2.0-mini" and not bounds:
+            bounds = (4, 15)
         if model == "happyhorse-1.0" and not bounds:
             bounds = (3, 15)
         if model == "grok-video-channel" and not bounds:
@@ -1828,6 +1931,7 @@ async def compose_video(
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="compose_episode",
             queue_kind="ffmpeg",
             episode=episode_num,
@@ -1945,15 +2049,25 @@ async def generate_sketches(
         return {"ok": False, "error": f"No beats found for episode {episode_num}"}
 
     # 提前验证 grid_index，避免异步任务内才报错
-    from novelvideo.generators.nanobanana_grid import sketch_grid_split, sketch_scene_grid_split
+    from novelvideo.generators.nanobanana_grid import (
+        get_sketch_nxn_modes,
+        sketch_grid_split,
+        sketch_scene_grid_split,
+    )
 
     use_scene_grouping = body.sketch_scene_grouping
     if use_scene_grouping:
         loc_plan = sketch_scene_grid_split(beats, aspect_ratio=body.aspect_ratio)
         grid_plan = [(p["rows"], p["cols"]) for p in loc_plan]
+        billing_mode_keys = [str(p["mode_key"]) for p in loc_plan]
     else:
         loc_plan = None
         grid_plan = sketch_grid_split(len(beats))
+        mode_by_shape = {
+            (rows, cols): mode_key
+            for _capacity, mode_key, rows, cols in get_sketch_nxn_modes(body.aspect_ratio)
+        }
+        billing_mode_keys = [mode_by_shape[(rows, cols)] for rows, cols in grid_plan]
 
     generate_all_grids = body.grid_index == -1
     if body.grid_index < -1 or body.grid_index >= len(grid_plan):
@@ -2009,9 +2123,14 @@ async def generate_sketches(
         queued_tasks = []
         for grid_index in dispatch_grid_indices:
             scope = f"grid_{grid_index}"
+            billing = _sketch_regen_billing_metadata(
+                sketch_image_selection,
+                billing_mode_keys[grid_index],
+            )
             queued = await get_task_backend().enqueue_project_task(
                 ctx,
-                task_type="sketch_generation",
+                product_surface="mainline",
+                task_type="sketch_grid_generation",
                 queue_kind="default",
                 episode=episode_num,
                 scope=scope,
@@ -2019,6 +2138,7 @@ async def generate_sketches(
                     "episode": episode_num,
                     "output_dir": output_dir,
                     "config": {**base_config, "grid_index": grid_index},
+                    "billing": billing,
                 },
             )
             queued_tasks.append(
@@ -2027,7 +2147,7 @@ async def generate_sketches(
                     "scope": scope,
                     "task_id": queued.task_state.task_id,
                     "task_key": project_task_state_key(
-                        "sketch_generation",
+                        "sketch_grid_generation",
                         ctx.project_id,
                         episode_num,
                         scope=scope,
@@ -2040,7 +2160,7 @@ async def generate_sketches(
             grid_labels = " + ".join(f"{r}x{c}" for r, c in grid_plan)
             return {
                 "ok": True,
-                "task_type": "sketch_generation",
+                "task_type": "sketch_grid_generation",
                 "backend": queued_tasks[0]["backend"] if queued_tasks else "inline",
                 "data": {
                     "dispatched": len(dispatch_grid_indices),
@@ -2052,7 +2172,7 @@ async def generate_sketches(
 
         return {
             "ok": True,
-            "task_type": "sketch_generation",
+            "task_type": "sketch_grid_generation",
             "backend": queued_tasks[0]["backend"],
             "task_id": queued_tasks[0]["task_id"],
             "task_key": queued_tasks[0]["task_key"],
@@ -2095,6 +2215,84 @@ async def _collect_audio_prereq_errors(
         return []
 
 
+async def _audio_generation_plan(
+    *,
+    store,
+    username: str,
+    project: str,
+    episode: int,
+    beat_numbers,
+    mode: str,
+) -> tuple[list[int], list[str], int]:
+    from novelvideo.audio.indextts2_beat_audio_task import (
+        build_indextts2_audio_generation_plan,
+    )
+
+    try:
+        plan = await build_indextts2_audio_generation_plan(
+            store=store,
+            username=username,
+            project=project,
+            episode=episode,
+            beat_numbers=beat_numbers,
+            mode=mode,
+        )
+        return (
+            list(plan.beat_numbers),
+            list(plan.errors),
+            int(getattr(plan, "billable_chars", 0) or 0),
+        )
+    except AttributeError:
+        # Narrow route-test stores do not expose the voice and audio-state
+        # surfaces used by the production planner.
+        beats = await store.get_beats_as_dicts(episode)
+        selected = {int(value) for value in beat_numbers or [] if int(value) > 0}
+        planned = [
+            int(beat.get("beat_number") or 0)
+            for beat in beats
+            if int(beat.get("beat_number") or 0) > 0
+            and (not selected or int(beat.get("beat_number") or 0) in selected)
+        ]
+        from novelvideo.seedance2_i2v.voice_clone import (
+            dialogue_text,
+            narration_beat_text,
+            normalize_seedance2_audio_type,
+        )
+        from novelvideo.utils.document_parsers import count_billable_text_chars
+
+        planned_set = set(planned)
+        billable_chars = 0
+        for beat in beats:
+            if int(beat.get("beat_number") or 0) not in planned_set:
+                continue
+            audio_type = normalize_seedance2_audio_type(beat)
+            text = (
+                narration_beat_text(beat)
+                if audio_type == "narration"
+                else dialogue_text(beat)
+            )
+            billable_chars += count_billable_text_chars(text)
+        return planned, [], billable_chars
+
+
+def _audio_billing_payload(
+    beat_numbers: list[int],
+    *,
+    billable_chars: int = 0,
+) -> dict:
+    from novelvideo.audio.indextts2_beat_audio_task import (
+        indextts2_audio_billing_params,
+    )
+
+    return {
+        **indextts2_audio_billing_params(
+            len(beat_numbers),
+            billable_chars=billable_chars,
+        ),
+        "beat_numbers": list(beat_numbers),
+    }
+
+
 def _voice_prereq_error_response(errors: list[str]) -> dict:
     preview = "；".join(errors[:5])
     suffix = " ..." if len(errors) > 5 else ""
@@ -2102,6 +2300,78 @@ def _voice_prereq_error_response(errors: list[str]) -> dict:
         "ok": False,
         "code": "voice_prereq_required",
         "error": f"{preview}{suffix}",
+    }
+
+
+@router.post("/projects/{project}/episodes/{episode_num}/audio/billing-quote")
+async def audio_generation_billing_quote(
+    project: str,
+    episode_num: int,
+    body: TTSGenerateRequest = TTSGenerateRequest(),
+    user: dict = Depends(get_api_user),
+):
+    """Quote the exact set of Beat audio model calls for an audio action."""
+    resolved = await _resolve_generation_project(project, user, required_role="viewer")
+    store = (
+        await make_sqlite_store_for_context(resolved.ctx)
+        if resolved.ctx
+        else await make_sqlite_store(resolved.username, resolved.project_name)
+    )
+    mode = body.mode or "sync_changed"
+    beat_numbers, errors, billable_chars = await _audio_generation_plan(
+        store=store,
+        username=resolved.username,
+        project=resolved.project_name,
+        episode=episode_num,
+        beat_numbers=body.beat_numbers,
+        mode=mode,
+    )
+    quantity = len(beat_numbers)
+    if quantity <= 0:
+        return {
+            "ok": True,
+            "data": {
+                "beat_numbers": [],
+                "quantity": 0,
+                "unit_cost": 0,
+                "cost": 0,
+                "display": "",
+                "prereq_errors": errors,
+            },
+        }
+    quote_args = {
+        "kind": "feature",
+        "model": "mainline.beat_audio_generation",
+        "params": _audio_billing_payload(
+            beat_numbers,
+            billable_chars=billable_chars,
+        ),
+        "quantity": quantity,
+        "product_surface": "mainline",
+    }
+    quote = await get_credit_quote().generation_credit_quote(
+        **quote_args,
+        user_id=str(user.get("id") or user.get("user_id") or ""),
+    )
+    return {
+        "ok": True,
+        "data": {
+            "beat_numbers": beat_numbers,
+            "quantity": quantity,
+            "unit_cost": quote.unit_cost,
+            "cost": quote.total_cost,
+            "display": quote.display,
+            "prereq_errors": errors,
+            **(
+                {
+                    "original_cost": getattr(quote, "original_total_cost", None),
+                    "discount_amount": getattr(quote, "discount_amount", None),
+                    "promotion": getattr(quote, "promotion", None),
+                }
+                if getattr(quote, "promotion", None)
+                else {}
+            ),
+        },
     }
 
 
@@ -2130,7 +2400,7 @@ async def generate_audio(
         return {"ok": False, "error": f"No beats found for episode {episode_num}"}
 
     mode = body.mode or "sync_changed"
-    missing_voice = await _collect_audio_prereq_errors(
+    billable_beat_numbers, missing_voice, billable_chars = await _audio_generation_plan(
         store=store,
         username=username,
         project=project_name,
@@ -2140,19 +2410,30 @@ async def generate_audio(
     )
     if missing_voice:
         return _voice_prereq_error_response(missing_voice)
+    if not billable_beat_numbers:
+        return {
+            "ok": False,
+            "code": "audio_generation_not_required",
+            "error": "没有需要生成的音频",
+        }
 
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="audio_generation_indextts2",
             queue_kind="default",
             episode=episode_num,
             payload={
                 "episode": episode_num,
                 "mode": mode,
-                "beat_numbers": body.beat_numbers,
+                "beat_numbers": billable_beat_numbers,
                 "output_dir": output_dir,
                 "state_dir": state_dir,
+                "billing": _audio_billing_payload(
+                    billable_beat_numbers,
+                    billable_chars=billable_chars,
+                ),
             },
         )
         return {
@@ -2174,6 +2455,94 @@ async def generate_audio(
 
 
 # ── 视频优化 ──────────────────────────────────────────────────────────────────
+
+
+def _global_optimize_billable_beat_numbers(
+    *, output_dir: str, episode_num: int, beats: list[dict]
+) -> list[int]:
+    """Return Beat numbers with a canonical sketch, matching the worker path."""
+    from novelvideo.utils.path_resolver import PathResolver
+
+    sketches_dir = PathResolver(output_dir, episode_num).sketches_dir()
+    billable: list[int] = []
+    for beat in beats:
+        beat_num = int(beat.get("beat_number") or 0)
+        if beat_num <= 0:
+            continue
+        if any(
+            (sketches_dir / f"beat_{beat_num:02d}.{ext}").exists()
+            for ext in ("png", "jpg")
+        ):
+            billable.append(beat_num)
+    return billable
+
+
+@router.get("/projects/{project}/episodes/{episode_num}/optimize/video-global/billing-quote")
+async def global_optimize_video_billing_quote(
+    project: str,
+    episode_num: int,
+    user: dict = Depends(get_api_user),
+):
+    """Return the number of Beat prompt generations the batch action can run."""
+    resolved = await _resolve_generation_project(project, user, required_role="viewer")
+    store = (
+        await make_sqlite_store_for_context(resolved.ctx)
+        if resolved.ctx
+        else await make_sqlite_store(resolved.username, resolved.project_name)
+    )
+    beats = await store.get_beats_as_dicts(episode_num)
+    beat_numbers = _global_optimize_billable_beat_numbers(
+        output_dir=resolved.output_dir,
+        episode_num=episode_num,
+        beats=beats,
+    )
+    quantity = len(beat_numbers)
+    if quantity <= 0:
+        return {
+            "ok": True,
+            "data": {
+                "beat_numbers": [],
+                "quantity": 0,
+                "unit_cost": 0,
+                "cost": 0,
+                "display": "",
+            },
+        }
+    quote_args = {
+        "kind": "feature",
+        "model": "mainline.beat_video_prompt",
+        "params": {
+            "pricing_metrics": {
+                "call_count": quantity,
+                "item_count": quantity,
+            }
+        },
+        "quantity": quantity,
+        "product_surface": "mainline",
+    }
+    quote = await get_credit_quote().generation_credit_quote(
+        **quote_args,
+        user_id=str(user.get("id") or user.get("user_id") or ""),
+    )
+    return {
+        "ok": True,
+        "data": {
+            "beat_numbers": beat_numbers,
+            "quantity": quantity,
+            "unit_cost": quote.unit_cost,
+            "cost": quote.total_cost,
+            "display": quote.display,
+            **(
+                {
+                    "original_cost": getattr(quote, "original_total_cost", None),
+                    "discount_amount": getattr(quote, "discount_amount", None),
+                    "promotion": getattr(quote, "promotion", None),
+                }
+                if getattr(quote, "promotion", None)
+                else {}
+            ),
+        },
+    }
 
 
 @router.post("/projects/{project}/episodes/{episode_num}/optimize/video-global")
@@ -2204,12 +2573,14 @@ async def global_optimize_video(
     if not beats:
         return {"ok": False, "error": f"No beats found for episode {episode_num}"}
 
-    # 预检：确认有草图存在
-    from novelvideo.utils.path_resolver import PathResolver
-
-    resolver = PathResolver(output_dir, episode_num)
-    sketches_dir = resolver.sketches_dir()
-    if not sketches_dir.exists() or not any(sketches_dir.glob("beat_*.png")):
+    # 预检和报价必须使用同一统计口径。
+    billable_beat_numbers = _global_optimize_billable_beat_numbers(
+        output_dir=output_dir,
+        episode_num=episode_num,
+        beats=beats,
+    )
+    billable_beat_count = len(billable_beat_numbers)
+    if billable_beat_count <= 0:
         return {"ok": False, "error": "没有草图，请先生成草图再执行全局优化"}
 
     characters = store.get_all_characters()
@@ -2228,6 +2599,7 @@ async def global_optimize_video(
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="global_optimize_video",
             queue_kind="default",
             episode=episode_num,
@@ -2237,6 +2609,15 @@ async def global_optimize_video(
                 "characters": char_list,
                 "output_dir": output_dir,
                 "language": body.language,
+                "billing": {
+                    "items": billable_beat_count,
+                    "beat_numbers": billable_beat_numbers,
+                    "pricing_metrics": {
+                        "call_count": billable_beat_count,
+                        "item_count": billable_beat_count,
+                    },
+                },
+                "beat_numbers": billable_beat_numbers,
             },
         )
         return {
@@ -2317,6 +2698,7 @@ async def regenerate_grid(
                 ),
             }
         selected_beat_numbers = [int(beat) for beat in char_plan[grid_index].get("beat_numbers", [])]
+        billing_mode_key = str(char_plan[grid_index]["mode_key"])
     elif body.scene_grouping:
         from novelvideo.generators.nanobanana_grid import scene_grid_split
 
@@ -2333,6 +2715,7 @@ async def regenerate_grid(
                 ),
             }
         selected_beat_numbers = [int(beat) for beat in loc_plan[grid_index].get("beat_numbers", [])]
+        billing_mode_key = str(loc_plan[grid_index]["mode_key"])
     else:
         from novelvideo.generators.nanobanana_grid import (
             perfect_grid_split,
@@ -2352,6 +2735,7 @@ async def regenerate_grid(
             }
         start_offset = sum(_RMC[mk]["capacity"] for mk in grid_plan[:grid_index])
         capacity = _RMC[grid_plan[grid_index]]["capacity"]
+        billing_mode_key = str(grid_plan[grid_index])
         selected_beat_numbers = [
             int(beat.get("beat_number", index + 1))
             for index, beat in enumerate(beats[start_offset : start_offset + capacity], start_offset)
@@ -2381,8 +2765,13 @@ async def regenerate_grid(
 
     scope = f"grid_{grid_index}"
     if ctx is not None:
+        billing = _render_regen_billing_metadata(
+            render_image_selection,
+            billing_mode_key,
+        )
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="grid_regenerate",
             queue_kind="default",
             episode=episode_num,
@@ -2392,6 +2781,7 @@ async def regenerate_grid(
                 "grid_index": grid_index,
                 "output_dir": output_dir,
                 "config": config,
+                "billing": billing,
             },
         )
         return {
@@ -2688,8 +3078,13 @@ async def render_execute(
         for entry in execution_plan:
             entry_beats = [int(beat) for beat in entry.beat_numbers]
             entry_scope = selection_scope(entry.mode_key, entry_beats)
+            billing = _render_regen_billing_metadata(
+                render_image_selection,
+                entry.mode_key,
+            )
             queued = await get_task_backend().enqueue_project_task(
                 ctx,
+                product_surface="mainline",
                 task_type="selected_regen",
                 queue_kind="default",
                 episode=episode_num,
@@ -2703,6 +3098,7 @@ async def render_execute(
                         "mode_key": entry.mode_key,
                         "selected_beat_numbers": entry_beats,
                     },
+                    "billing": billing,
                 },
             )
             dispatched_task_ids.append(queued.task_state.task_id)
@@ -2785,9 +3181,15 @@ async def regenerate_beats(
         use_detected_identities=True,
     )
 
-    mode_key = body.mode_key
+    # The selected sketch is the source of truth for a single Render. The
+    # client mode remains a compatibility fallback for missing legacy assets.
+    mode_key = (
+        _single_render_mode_from_sketch(output_dir, episode_num, body.beat_indices)
+        or body.mode_key
+    )
     episode_obj = _episode_from_store_or_none(store, episode_num)
     prop_menu = await _runtime_prop_menu_with_global_props(store, episode_obj, beats)
+    billing = _render_regen_billing_metadata(render_image_selection, mode_key)
     config = {
         "beats": beats,
         "character_map": character_map,
@@ -2812,6 +3214,7 @@ async def regenerate_beats(
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="selected_regen",
             queue_kind="default",
             episode=episode_num,
@@ -2821,6 +3224,7 @@ async def regenerate_beats(
                 "mode_key": mode_key,
                 "output_dir": output_dir,
                 "config": {**config, "mode_key": mode_key},
+                "billing": billing,
             },
         )
         return {
@@ -2892,6 +3296,7 @@ async def regenerate_sketches(
         proj_config,
         body.image_generation_selection,
     )
+    billing = _sketch_regen_billing_metadata(sketch_image_selection, mode_key)
     config = {
         "beats": beats,
         "character_map": character_map,
@@ -2910,6 +3315,7 @@ async def regenerate_sketches(
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="sketch_regen",
             queue_kind="default",
             episode=episode_num,
@@ -2919,6 +3325,7 @@ async def regenerate_sketches(
                 "mode_key": mode_key,
                 "output_dir": output_dir,
                 "config": {**config, "mode_key": mode_key},
+                "billing": billing,
             },
         )
         return {
@@ -2966,11 +3373,19 @@ def _director_control_payload(
     episode_num: int,
     beat_num: int,
 ) -> dict[str, Any]:
+    from novelvideo.director_world.control_frame_to_sketch import _director_control_mode_key
     from novelvideo.utils.path_resolver import PathResolver
 
     paths = PathResolver(str(project_dir), int(episode_num))
     control_frame = paths.director_render(int(beat_num))
     ready = control_frame.exists()
+    mode_key = ""
+    if ready:
+        mode_key, _aspect_ratio = _director_control_mode_key(
+            control_frame=control_frame,
+            requested_mode_key="",
+            requested_aspect_ratio="",
+        )
     rel_path = None
     url = None
     if ready:
@@ -2987,6 +3402,7 @@ def _director_control_payload(
         "rel_path": rel_path,
         "url": url,
         "scope": _director_control_scope(episode_num, beat_num),
+        "mode_key": mode_key,
     }
 
 
@@ -3708,10 +4124,16 @@ async def director_control_to_sketch(
             "data": payload,
         }
 
+    project_config = load_project_config(username, project_name)
+    sketch_image_selection = _resolve_sketch_image_selection(project_config)
+    mode_key = str(payload.get("mode_key") or "1x1_2-3_sketch")
+    billing = _sketch_regen_billing_metadata(sketch_image_selection, mode_key)
+
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
-            task_type="sketch_generation",
+            product_surface="mainline",
+            task_type="director_control_to_sketch",
             queue_kind="default",
             episode=int(episode_num),
             beat_num=int(beat_num),
@@ -3722,15 +4144,17 @@ async def director_control_to_sketch(
                 "beat_num": int(beat_num),
                 "output_dir": str(project_dir),
                 "state_dir": state_dir,
+                "mode_key": mode_key,
+                "billing": billing,
             },
         )
         return {
             "ok": True,
-            "task_type": "sketch_generation",
+            "task_type": "director_control_to_sketch",
             "scope": payload["scope"],
             "task_id": queued.task_state.task_id,
             "task_key": project_task_state_key(
-                "sketch_generation",
+                "director_control_to_sketch",
                 ctx.project_id,
                 int(episode_num),
                 beat_num=int(beat_num),
@@ -3765,7 +4189,7 @@ async def director_control_to_sketch(
 
     return {
         "ok": True,
-        "task_type": "sketch_generation",
+        "task_type": "director_control_to_sketch",
         "scope": payload["scope"],
         "message": f"Beat {int(beat_num)} Direct Render 转草图任务已启动",
         "data": payload,
@@ -4038,6 +4462,7 @@ async def generate_missing_manual_sketches(
         if ctx is not None:
             await get_task_backend().enqueue_project_task(
                 ctx,
+                product_surface="mainline",
                 task_type="sketch_regen",
                 queue_kind="default",
                 episode=episode_num,
@@ -4182,6 +4607,11 @@ async def generate_single_video(
         frame_path = Path(prepared.image_path) if prepared.image_path else frame_path
         last_frame_path = prepared.last_frame_path
         seedance2_config_json = prepared.seedance2_config_json
+        from novelvideo.seedance2_i2v.models import parse_seedance2_config
+
+        single_video_resolution = parse_seedance2_config(
+            seedance2_config_json
+        ).resolution
         video_mode = "keyframe" if prepared.last_frame_path else "first_frame"
     elif is_happyhorse:
         try:
@@ -4295,6 +4725,13 @@ async def generate_single_video(
                 body.video_backend, body.resolution
             )
 
+    from novelvideo.video_duration import normalize_video_duration_for_backend
+
+    video_duration = normalize_video_duration_for_backend(
+        body.video_backend,
+        video_duration,
+    )
+
     config = {
         "beat": dict(beat),
         "frame_path": str(frame_path) if frame_path else None,
@@ -4319,14 +4756,25 @@ async def generate_single_video(
         config["ratio"] = _grok_video_ratio_for_backend(grok_video_ratio)
         config["references"] = grok_video_references
 
+    billing_resolution = single_video_resolution or _seedance2_resolution_for_backend(
+        body.video_backend,
+        body.resolution,
+    )
+    billing = _single_video_billing_metadata(
+        body.video_backend,
+        resolution=billing_resolution,
+        duration=video_duration,
+    )
+
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="single_video",
             queue_kind="video",
             episode=episode_num,
             beat_num=beat_num,
-            payload={"config": config, "output_dir": output_dir},
+            payload={"config": config, "output_dir": output_dir, "billing": billing},
         )
         return {
             "ok": True,
@@ -4862,7 +5310,7 @@ async def regenerate_beat_audio(
         else:
             return {"ok": False, "error": f"Beat {beat_num} not found"}
 
-    missing_voice = await _collect_audio_prereq_errors(
+    billable_beat_numbers, missing_voice, billable_chars = await _audio_generation_plan(
         store=store,
         username=username,
         project=project_name,
@@ -4872,19 +5320,30 @@ async def regenerate_beat_audio(
     )
     if missing_voice:
         return _voice_prereq_error_response(missing_voice)
+    if not billable_beat_numbers:
+        return {
+            "ok": False,
+            "code": "audio_generation_not_required",
+            "error": "当前 Beat 没有需要生成的音频",
+        }
 
     if ctx is not None:
         queued = await get_task_backend().enqueue_project_task(
             ctx,
+            product_surface="mainline",
             task_type="audio_generation_indextts2",
             queue_kind="default",
             episode=episode_num,
             payload={
                 "episode": episode_num,
                 "mode": "redo_selected",
-                "beat_numbers": [beat_num],
+                "beat_numbers": billable_beat_numbers,
                 "output_dir": output_dir,
                 "state_dir": state_dir,
+                "billing": _audio_billing_payload(
+                    billable_beat_numbers,
+                    billable_chars=billable_chars,
+                ),
             },
         )
         return {
@@ -5583,9 +6042,10 @@ async def detect_sketch_identities(
     reservation = await usage_meter.reserve_feature_start_credits(
         user_id=_requester_user_id_for_billing(resolved, user),
         feature_key=AI_IDENTITY_DETECTION_FEATURE_KEY,
+        product_surface="mainline",
         project_id=project_id,
         resource_kind="sketch",
-        task_type=AI_IDENTITY_DETECTION_FEATURE_KEY,
+        task_type=AI_IDENTITY_DETECTION_TASK_TYPE,
         metadata={
             "source": "sync_api",
             "endpoint": "detect_sketch_identities",
@@ -5662,9 +6122,31 @@ async def detect_sketch_identities(
         await store.set_beat_detected_identities(episode_num, identity_detections)
         await store.set_beat_detected_props(episode_num, prop_detections)
 
+    except Exception as e:
         if reservation_id:
-            await usage_meter.confirm_feature_credit_reservation(
+            try:
+                await usage_meter.settle_cancelled_feature_credit_reservation(
+                    reservation_id,
+                    metadata={
+                        "source": "sync_api",
+                        "endpoint": "detect_sketch_identities",
+                        "episode": episode_num,
+                        "error": str(e),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to settle interrupted AI identity detection feature credit reservation"
+                )
+        return {"ok": False, "error": f"AI detection failed: {e}"}
+    finally:
+        usage_meter.clear_llm_usage_context()
+
+    if reservation_id:
+        try:
+            await usage_meter.settle_feature_credit_reservation(
                 reservation_id,
+                action="confirm",
                 metadata={
                     "source": "sync_api",
                     "endpoint": "detect_sketch_identities",
@@ -5679,25 +6161,10 @@ async def detect_sketch_identities(
                     ),
                 },
             )
-    except Exception as e:
-        if reservation_id:
-            try:
-                await usage_meter.refund_feature_credit_reservation(
-                    reservation_id,
-                    metadata={
-                        "source": "sync_api",
-                        "endpoint": "detect_sketch_identities",
-                        "episode": episode_num,
-                        "error": str(e),
-                    },
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to refund AI identity detection feature credit reservation"
-                )
-        return {"ok": False, "error": f"AI detection failed: {e}"}
-    finally:
-        usage_meter.clear_llm_usage_context()
+        except Exception:
+            logger.exception(
+                "AI identity detection succeeded but credit confirmation remains pending"
+            )
 
     # 转换 key 为字符串（JSON 兼容）
     str_identity_detections = {str(k): v for k, v in identity_detections.items()}

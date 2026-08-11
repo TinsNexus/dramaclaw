@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
 import { queryKeys } from "@/lib/query-keys";
-import { api } from "@/lib/api";
+import { api, handleSessionExpired } from "@/lib/api";
 import { createEventBus } from "./event-bus";
 import { EventBusContext } from "./event-bus-context";
 import { createStreamClient } from "./stream-client";
@@ -130,8 +130,7 @@ function invalidateCompletedAssetQueries(
 
   if (
     task.task_type === "build_props" ||
-    task.task_type === "prop_reference_asset" ||
-    task.task_type === "batch_prop_ref"
+    task.task_type === "prop_reference_asset"
   ) {
     queryClient.invalidateQueries({ queryKey: queryKeys.props(projectId) });
     return;
@@ -155,6 +154,11 @@ function invalidateCompletedAssetQueries(
       queryKey: queryKeys.episodeDetail(projectId, task.episode),
     });
   }
+}
+
+function invalidateCreditQueries(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: queryKeys.creditSummary() });
+  queryClient.invalidateQueries({ queryKey: ["credits", "transactions"] });
 }
 
 function isTypingInForm(target: EventTarget | null): boolean {
@@ -270,6 +274,22 @@ export function TaskCenterProvider({
       client = createStreamClient({
         streamPath: `/api/v1/projects/${encodeURIComponent(projectId)}/tasks/stream`,
         snapshotQueryParam: true,
+        checkSession: async () => {
+          try {
+            const response = await api.get("api/v1/auth/me", {
+              cache: "no-store",
+              retry: 0,
+              throwHttpErrors: false,
+            });
+            if (response.status === 401 || response.status === 403) {
+              await handleSessionExpired();
+              return false;
+            }
+            return response.ok ? true : null;
+          } catch {
+            return null;
+          }
+        },
         onUnrecoverable: () => {
           // Cold-start SSE failure (likely auth). Force one hydrate via ky so
           // the global 401 handler observes the rejected credential and
@@ -309,6 +329,17 @@ export function TaskCenterProvider({
             Date.now() - completedAt < TOAST_FRESHNESS_MS;
           const sawRunning = prev !== null && !isTerminal(prev);
           const firstFreshObservation = isFresh && prev === null;
+
+          // A newly submitted task has already reserved credits. A terminal
+          // transition confirms or refunds that reservation. Refresh the
+          // user-facing balance at those lifecycle boundaries without
+          // refetching on every progress update or historical snapshot row.
+          if (
+            (source !== "snapshot" && prev === null)
+            || (sawRunning && isTerminal(task))
+          ) {
+            invalidateCreditQueries(queryClient);
+          }
 
           // Invalidate asset queries for any genuinely-new completion, even
           // when it arrives via a reconnect/hydration snapshot — otherwise an

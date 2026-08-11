@@ -71,31 +71,45 @@ import {
   isPresetManagedNode,
 } from '@/features/canvas/domain/mainlineNodeFlags';
 import { prepareNodeImage } from '@/features/canvas/application/imageData';
-import { isVideoFile } from '@/features/canvas/application/videoFileTypes';
+import {
+  CANVAS_LOW_DETAIL_CLASS,
+  CANVAS_PANNING_CLASS,
+  PANNING_CLASS_RELEASE_DELAY_MS,
+  isLowDetailZoom,
+  setCanvasGestureActive,
+  setCanvasLowDetail,
+} from '@/features/canvas/application/canvasLod';
+import { isSupportedMediaFile } from '@/features/canvas/application/videoFileTypes';
 import { uploadLocalImageToBackend } from '@/features/canvas/application/uploadToolOutput';
 import {
   buildGenerationErrorReport,
   CURRENT_RUNTIME_SESSION_ID,
   extractRequestId,
 } from '@/features/canvas/application/generationErrorReport';
-import { showErrorDialog } from '@/features/canvas/application/errorDialog';
+import { notifyTaskStillRunning, showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
+  DETACHED_GENERATION_PATCH,
   nodeNeedsGenerationResume,
+  nodeOwnsLiveGenerationJob,
   resumeNodeGeneration,
+  staleGenerationJobPatch,
 } from '@/features/canvas/application/resumeGeneration';
 import { readUrl } from '@/lib/url-params';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchEpisodeBeats, prefetchEpisodeDetail } from '@/lib/queries/episodes';
 import {
-  getConnectMenuNodeTypes,
   getDownstreamSpawnTypes,
+  getUpstreamSpawnTypes,
+  getAllowedDownstreamTargetTypes,
   getAllowedUpstreamSourceTypes,
-  isUpstreamConnectionAllowed,
+  isManualConnectionAllowed,
   nodeHasSourceHandle,
   nodeHasTargetHandle,
 } from '@/features/canvas/domain/nodeRegistry';
 import { nodeCatalog } from '@/features/canvas/application/nodeCatalog';
 import { applySkillRoleBindingConnection } from '@/features/canvas/domain/skillConnectionEdges';
+import { videoReferenceConnectionRejection } from '@/features/canvas/domain/videoReferenceLimits';
+import { videoReferenceEnvelopeForNode } from '@/features/canvas/application/videoReferenceEnvelope';
 import { embedStoryboardImageMetadata } from '@/commands/image';
 import { nodeTypes as canvasNodeTypes } from './nodes';
 import { edgeTypes as canvasEdgeTypes } from './edges';
@@ -112,12 +126,15 @@ import { NodeToolDialog } from './ui/NodeToolDialog';
 import { ImageViewerModal } from './ui/ImageViewerModal';
 import { VideoViewerModal } from './ui/VideoViewerModal';
 import { CanvasZoomControl } from './ui/CanvasZoomControl';
+import { useEdgeVisibilityStore } from './ui/edgeVisibilityStore';
 import { CanvasQuickActionBar } from './ui/CanvasQuickActionBar';
 import { BackToNodesHint } from './ui/BackToNodesHint';
 import { CanvasMinimapButton } from './ui/CanvasMinimapButton';
 import { CanvasFpsMeter } from './ui/CanvasFpsMeter';
 import { CanvasSnapAlignButton } from './snap-align/CanvasSnapAlignButton';
 import { useTrackpadPanStore } from './trackpad-pan/trackpadPanStore';
+import { useSmoothMinimapPan } from './hooks/useSmoothMinimapPan';
+import { useCanvasToolStore } from './ui/canvasToolStore';
 import { SnapAlignGuides } from './snap-align/SnapAlignGuides';
 import { useSnapAlignStore } from './snap-align/snapAlignStore';
 import {
@@ -147,7 +164,12 @@ const PAN_ACTIVATION_KEY_CODE = 'Space';
 // (button 1). Left drag (0) runs the custom marquee box-select on the empty pane;
 // right click (2) opens the canvas context menu.
 const PAN_ON_DRAG_BUTTONS = [1];
+// 抓手工具（H）下左键也平移。ReactFlow 见到数组里有 0 会给 pane 挂 .draggable，
+// 抓手光标由它自带的样式负责。
+const PAN_ON_DRAG_BUTTONS_HAND = [0, 1];
 const NODE_SPAWN_PLUS_HIDE_DELAY_MS = 400;
+/** 小地图 hover 离开后的收起延迟，见 setMinimapHover 处的注释。 */
+const MINIMAP_HIDE_DELAY_MS = 180;
 
 function resolveCenteredViewport(
   container: HTMLElement | null,
@@ -463,71 +485,26 @@ function resolveClipboardImageFile(event: ClipboardEvent): File | null {
   return null;
 }
 
-// 从一次 OS 文件拖放里挑出图片 / 视频 / 音频文件，保持与 UploadNode 的媒体识别
-// 口径一致（按 MIME 前缀）。非媒体文件被忽略。
+// 从一次 OS 文件拖放里挑出图片 / 视频 / 音频文件，口径见 isSupportedMediaFile
+// （与 UploadNode 的媒体分流一致）。非媒体文件被忽略。
 function collectDroppedMediaFiles(dataTransfer: DataTransfer): File[] {
   const files = dataTransfer.files;
   if (!files || files.length === 0) {
     return [];
   }
-  return Array.from(files).filter(
-    (file) =>
-      file.type.startsWith('image/') ||
-      // isVideoFile 兜住 .mxf 等 file.type 为空串的专业容器（后续 ffmpeg 转码）。
-      isVideoFile(file) ||
-      file.type.startsWith('audio/')
-  );
+  return Array.from(files).filter(isSupportedMediaFile);
 }
 
 function resolveAllowedNodeTypes(
   handleType: HandleType,
   originNodeType?: CanvasNodeType,
 ): CanvasNodeType[] {
-  // 拖线落空时弹出的「创建新节点」菜单，与 NodeSpawnPlusOverlay 的 + 菜单
-  // 共用同一份白名单：source 端用 getDownstreamSpawnTypes(originType)。
-  if (handleType === 'source') {
-    return getDownstreamSpawnTypes(originNodeType);
-  }
-  const base = getConnectMenuNodeTypes(handleType);
-  // 3D 世界节点的上游仅允许文本 / 图片节点（Phase 1）。
-  if (originNodeType === CANVAS_NODE_TYPES.threeDWorld && handleType === 'target') {
-    const allowed = new Set<CanvasNodeType>([
-      CANVAS_NODE_TYPES.textAnnotation,
-      CANVAS_NODE_TYPES.imageGen,
-    ]);
-    return base.filter((type) => allowed.has(type));
-  }
-  // 图片节点的上游仅允许 文本（textAnnotation / script）+ 图片（upload）
-  // —— 不收音频 / 视频 / 3D 世界。这里不沿用 base 过滤，因为 base 只看
-  // `fromTarget: true`，textAnnotation / imageGen 等 fromTarget 默认为 false
-  // 会被错杀；我们对 imageGen target 直接重写候选集。
-  if (originNodeType === CANVAS_NODE_TYPES.imageGen && handleType === 'target') {
-    return [
-      CANVAS_NODE_TYPES.textAnnotation,
-      CANVAS_NODE_TYPES.script,
-      CANVAS_NODE_TYPES.upload,
-    ];
-  }
-  // 视频节点的上游仅允许 文本 / 图片（imageGen） / 音频 —— 跟
-  // NodeSpawnPlusOverlay 左侧「+」按钮的白名单保持一致。
-  if (originNodeType === CANVAS_NODE_TYPES.video && handleType === 'target') {
-    return [
-      CANVAS_NODE_TYPES.textAnnotation,
-      CANVAS_NODE_TYPES.imageGen,
-      CANVAS_NODE_TYPES.audio,
-    ];
-  }
-  // 受上游类型白名单约束的目标（如音频←文本）：直接返回领域层白名单，保证连线
-  // 菜单、手动拖线、isValidConnection、store 建边收口共用同一份规则。这里不沿用
-  // base 过滤——base 只看 connectMenu.fromTarget，textAnnotation 的 fromTarget
-  // 为 false 会被错杀。
-  if (handleType === 'target' && originNodeType) {
-    const allowedUpstream = getAllowedUpstreamSourceTypes(originNodeType);
-    if (allowedUpstream) {
-      return [...allowedUpstream];
-    }
-  }
-  return base;
+  // 拖线落空时弹出的「创建新节点」菜单，与 NodeSpawnPlusOverlay 的 + 菜单共用
+  // 同一份产品白名单，两侧都住在 nodeRegistry 里（连同建边规则一起，便于测试
+  // 「菜单候选 vs 建边规则」是否打架）。
+  return handleType === 'source'
+    ? getDownstreamSpawnTypes(originNodeType)
+    : getUpstreamSpawnTypes(originNodeType);
 }
 
 // 3D 世界节点的目标允许的手动拖线源：任何可以承载图片或文本结果的节点。
@@ -558,9 +535,14 @@ function canNodeTypeBeManualConnectionSource(
   if (type === CANVAS_NODE_TYPES.pano360Viewer) {
     return targetType ? PANO_360_DOWNSTREAM_IMAGE_TYPES.has(targetType) : true;
   }
-  // 受上游类型白名单约束的目标（如音频←文本）走领域层统一规则。
-  if (targetType && getAllowedUpstreamSourceTypes(targetType)) {
-    return isUpstreamConnectionAllowed(type, targetType);
+  // 受类型白名单约束的连接（音频←文本、音频→视频/视频合成）走领域层统一规则。
+  // 这里查的是「手工」建边规则：视频→音频那条溯源边由「人声/背景音分离」程序建立，
+  // 建边收口放行，但不该让用户自己拖出来。
+  if (
+    targetType &&
+    (getAllowedUpstreamSourceTypes(targetType) || getAllowedDownstreamTargetTypes(type))
+  ) {
+    return isManualConnectionAllowed(type, targetType);
   }
   // 只要 getDownstreamSpawnTypes 给这种类型留了至少一个合法下游，就允许从右侧
   // source handle 拖线创建 —— 这样 + 菜单和拖线菜单始终对齐，新增节点类型时
@@ -766,7 +748,11 @@ export function Canvas({
 
   const [minimapPinned, setMinimapPinned] = useState(false);
   const [minimapHovered, setMinimapHovered] = useState(false);
-  const minimapVisible = minimapPinned || minimapHovered;
+  // 小地图拖动期间必须钉住不卸载：非固定模式下指针一拖出小地图就会触发
+  // onMouseLeave → 180ms 后 minimapVisible 变 false → MiniMap 卸载 →
+  // useSmoothMinimapPan 的清理函数摘掉 window 监听，拖动直接断在半路。
+  const [minimapPanning, setMinimapPanning] = useState(false);
+  const minimapVisible = minimapPinned || minimapHovered || minimapPanning;
   // 小地图弹层（含上方的书签数字行）靠 hover 显示。数字行是小地图上方、隔着间隙的
   // 独立 DOM 子树:鼠标从小地图移到数字按钮的途中会先离开小地图,若立即把
   // minimapHovered 置 false,整个 overlay 会在点到按钮前卸载,导致「点不了」。
@@ -784,9 +770,28 @@ export function Canvas({
       minimapHideTimerRef.current = window.setTimeout(() => {
         setMinimapHovered(false);
         minimapHideTimerRef.current = null;
-      }, 180);
+      }, MINIMAP_HIDE_DELAY_MS);
     }
   }, []);
+  // 小地图缓动期间，onMoveEnd 的逐帧视口提交要跳过 —— 见 handleMoveEnd 的注释。
+  // 用 ref 而不是读 minimapPanning：handleMoveEnd 每帧都跑，不该跟着状态换身份。
+  const minimapPanCommitSuppressedRef = useRef(false);
+  const handleMinimapPanStart = useCallback(() => {
+    minimapPanCommitSuppressedRef.current = true;
+    setMinimapPanning(true);
+  }, []);
+  // 这里的「结束」是 hook 保证的「松手且缓动已收敛」，不是 pointerup 那一刻，
+  // 所以可以直接解除挂载保护，不需要再赌一个固定延时（收敛耗时随剩余距离变化，
+  // 180ms 盖不住，会把缓动掐断在半路）。
+  const handleMinimapPanEnd = useCallback(
+    (pointerInsideMinimap: boolean) => {
+      minimapPanCommitSuppressedRef.current = false;
+      setMinimapPanning(false);
+      // 松手在小地图内 ⇒ 继续显示；在外 ⇒ 走 hover 的同一节奏收起。
+      setMinimapHover(pointerInsideMinimap);
+    },
+    [setMinimapHover],
+  );
   useEffect(
     () => () => {
       if (minimapHideTimerRef.current !== null) {
@@ -976,6 +981,9 @@ export function Canvas({
 
   const nodes = useCanvasStore((state) => state.nodes);
   const edges = useCanvasStore((state) => state.edges);
+  // 连线可见性：隐藏时只给 ReactFlow 的边打 `hidden`，真实 edges 一动不动（见
+  // edgeVisibilityStore）。持久化/自动布局/导出全部照用 store 里的真实连线。
+  const edgesHidden = useEdgeVisibilityStore((state) => state.hidden);
 
   // 预取 beat-context 节点引用到的剧集 beats/episode-detail,焐热缓存。配合 BeatContextNode
   // 里「仅选中时才查询」的门控,避免视口虚拟化下节点挂载即请求、卸载即被取消的 499 循环。
@@ -1010,6 +1018,8 @@ export function Canvas({
   // 触控板平移开关：开启后用 ReactFlow 的 panOnScroll（两指滑动平移、捏合缩放），
   // 关闭则回到默认的滚轮缩放。
   const trackpadPanEnabled = useTrackpadPanStore((state) => state.enabled);
+  // 指针工具：抓手（H）下左键拖动 = 平移画布。
+  const handToolActive = useCanvasToolStore((state) => state.tool === 'hand');
   // 底部任务中心面板展开时，让出底部空间——隐藏画布快捷操作栏，避免与面板重叠。
   const taskPanelOpen = useAppStore((state) => state.taskPanelOpen);
   // Stable signatures of the nodes that need polling / resume, so those effects
@@ -1018,15 +1028,23 @@ export function Canvas({
   const pendingJobNodeKey = useCanvasStore(
     useShallow((state) =>
       state.nodes
-        .filter((node) => {
-          if (node.type !== CANVAS_NODE_TYPES.exportImage) return false;
-          const data = node.data as Record<string, unknown>;
-          return (
-            data.isGenerating === true &&
-            typeof data.generationJobId === 'string' &&
-            (data.generationJobId as string).length > 0
-          );
-        })
+        .filter(
+          (node) =>
+            node.type === CANVAS_NODE_TYPES.exportImage && nodeOwnsLiveGenerationJob(node),
+        )
+        .map((node) => node.id),
+    ),
+  );
+  // 上个会话遗留的 generationJobId（刷新前任务还没 detached）。这些节点不能进
+  // 轮询循环——gateway 的内存 Map 早空了，只会拿到 not_found 然后被写成失败，
+  // 抢在 descriptor resume 前面把恢复路径掐断。见 staleGenerationJobPatch。
+  const staleJobNodeKey = useCanvasStore(
+    useShallow((state) =>
+      state.nodes
+        .filter(
+          (node) =>
+            node.type === CANVAS_NODE_TYPES.exportImage && staleGenerationJobPatch(node) !== null,
+        )
         .map((node) => node.id),
     ),
   );
@@ -1045,6 +1063,7 @@ export function Canvas({
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const pendingFocusNodeId = useCanvasStore((state) => state.pendingFocusNodeId);
   const clearPendingFocus = useCanvasStore((state) => state.clearPendingFocus);
+  const requestFocusNode = useCanvasStore((state) => state.requestFocusNode);
   const deleteEdge = useCanvasStore((state) => state.deleteEdge);
   const deleteNode = useCanvasStore((state) => state.deleteNode);
   const deleteNodes = useCanvasStore((state) => state.deleteNodes);
@@ -1093,6 +1112,13 @@ export function Canvas({
       };
     });
   }, [nodes, placementConfirmNodeId]);
+
+  // 隐藏连线时给每条边补 `hidden: true`——ReactFlow 会跳过渲染但边仍在图里，
+  // 连接、reconnect、持久化都不受影响。显示时直接透传真实 edges，零额外分配。
+  const renderedEdges = useMemo(() => {
+    if (!edgesHidden) return edges;
+    return edges.map((edge) => (edge.hidden ? edge : { ...edge, hidden: true }));
+  }, [edges, edgesHidden]);
 
   const clearMarqueeSelection = useCallback(() => {
     marqueeSelectionRef.current = null;
@@ -1316,19 +1342,43 @@ export function Canvas({
     clearPendingFocus();
   }, [pendingFocusNodeId, nodes, reactFlowInstance, clearPendingFocus]);
 
+  // 低缩放档（10% 之类）下新节点在屏幕上只有几十像素、深色面板贴深色背景，
+  // 创建成功也近乎不可见，用户会以为「没创建上」。所有「凭空新建节点」的入口
+  // 都复用上面的聚焦机制：视口动画拉近到新节点（zoom 提到 ≥0.6），创建即所见、
+  // 且直接可编辑。常用工作缩放下不聚焦，避免打断用户的构图视角。
+  const focusNewNodeIfLowZoom = useCallback(
+    (nodeId: string) => {
+      if (isLowDetailZoom(reactFlowInstance.getZoom())) {
+        requestFocusNode(nodeId);
+      }
+    },
+    [reactFlowInstance, requestFocusNode],
+  );
+
   useEffect(() => {
     const sleep = (delayMs: number) =>
       new Promise<void>((resolve) => {
         window.setTimeout(resolve, delayMs);
       });
 
-    const pendingExportNodes = useCanvasStore.getState().nodes.filter((node) => {
+    // 先收拾上个会话遗留的 job id，再挑本次会话该轮询的。顺序要紧：清理这一步
+    // 会把带 descriptor 的节点从下面的候选集里摘掉（它的 generationJobId 被清
+    // 空），恢复交给 resumeNodeGeneration 一条路走。
+    for (const node of useCanvasStore.getState().nodes) {
       if (node.type !== CANVAS_NODE_TYPES.exportImage) {
-        return false;
+        continue;
       }
-      const data = node.data as Record<string, unknown>;
-      return data.isGenerating === true && typeof data.generationJobId === 'string' && data.generationJobId.length > 0;
-    });
+      const patch = staleGenerationJobPatch(node);
+      if (patch) {
+        updateNodeData(node.id, patch);
+      }
+    }
+
+    const pendingExportNodes = useCanvasStore
+      .getState()
+      .nodes.filter(
+        (node) => node.type === CANVAS_NODE_TYPES.exportImage && nodeOwnsLiveGenerationJob(node),
+      );
 
     for (const pendingNode of pendingExportNodes) {
       if (activeGenerationPollNodeIdsRef.current.has(pendingNode.id)) {
@@ -1414,8 +1464,27 @@ export function Canvas({
                 generationStoryboardMetadata: undefined,
                 generationError: null,
                 generationErrorDetails: null,
+                generationErrorRequestId: null,
                 generationDebugContext: undefined,
               });
+              break;
+            }
+
+            if (status.status === 'detached') {
+              // 前端不再跟这个任务了（后端长时间查不到），但它不是失败：不写
+              // generationError，也保留 generationRequestPayload，让「重新生成」
+              // 仍然可用；只给一个中性提示，避免把可能还在跑的任务标成失败。
+              //
+              // 补丁内容见 DETACHED_GENERATION_PATCH：只放掉进程内的 jobId，
+              // isGenerating 与句柄留着，刷新后 resume 扫描才接得回来。与
+              // 擦除/重绘路径（regenerateFreezoneRedrawNode）同口径。
+              const detachedSessionId = typeof currentData.generationClientSessionId === 'string'
+                ? currentData.generationClientSessionId
+                : '';
+              if (detachedSessionId === CURRENT_RUNTIME_SESSION_ID) {
+                notifyTaskStillRunning(t);
+              }
+              updateNodeData(pendingNode.id, DETACHED_GENERATION_PATCH);
               break;
             }
 
@@ -1454,7 +1523,7 @@ export function Canvas({
         }
       })();
     }
-  }, [pendingJobNodeKey, updateNodeData]);
+  }, [pendingJobNodeKey, staleJobNodeKey, t, updateNodeData]);
 
   // Resume task_key-based generations (image / video / audio / 3D / script / 反推提示词)
   // after a page refresh. The submit flows persist a GenerationTaskDescriptor on the
@@ -1767,11 +1836,26 @@ export function Canvas({
       if (!targetId) return true;
       const targetNode = nodes.find((node) => node.id === targetId);
       if (!targetNode) return true;
-      // 上游类型规则：拖线过程中即把不合法的源（如音频连音频）变灰、禁止落点。
+      // 类型规则：拖线过程中就把不合法的源（如音频连图片）变灰、禁止落点。刻意复用
+      // handleConnect 松手时那把尺子本身 —— 只查领域层的手工建边规则是不够的，那样
+      // 3D 世界 / 360° 全景的额外限制会漏在外面，表现成「拖过去高亮成合法、一松手
+      // 什么也没有」（视频→音频那条溯源边就是这样：建边规则放行，但不开放手工创建）。
       const sourceNode = connection.source
         ? nodes.find((node) => node.id === connection.source)
         : undefined;
-      if (sourceNode && !isUpstreamConnectionAllowed(sourceNode.type, targetNode.type)) {
+      if (sourceNode && !canNodeTypeBeManualConnectionSource(sourceNode.type, targetNode.type)) {
+        return false;
+      }
+      // 视频节点的素材已经满到能力包络（图 9 / 视频 3 / 音频 3 / 总数 12）时，
+      // 拖线落点变灰、不成边。与 store 的 onConnect 收口同一把尺子。
+      if (
+        videoReferenceConnectionRejection(
+          nodes,
+          edges,
+          connection,
+          videoReferenceEnvelopeForNode,
+        ) != null
+      ) {
         return false;
       }
       if (targetNode.type !== CANVAS_NODE_TYPES.threeDWorld) return true;
@@ -1786,16 +1870,78 @@ export function Canvas({
   // 重跑 selector(如 BackToNodesHint 的 O(n) 可见性判断)。这里节流到 ~8fps,并在
   // onMoveEnd 必定提交最终值,既消除每帧 store 风暴,又保证落库/可见性判断及时收敛。
   const lastViewportCommitRef = useRef(0);
+
+  // LOD 效果类一律走 classList 直改 DOM，不进 React state：平移期间每帧 setState
+  // 会把「省下来的光栅化时间」原样还给 render，得不偿失。
+  //
+  // lowDetailActive 是唯一的例外：它驱动 onlyRenderVisibleElements 的开关（低缩放
+  // 档全部节点都是轻量 shell，视口裁剪只剩挂载/卸载翻腾的坏处，索性关掉），必须是
+  // React state。setState 有值守卫，平移中每帧调用但值不变，不触发重渲染；只有
+  // 缩放跨过阈值那一次会让 Canvas 重渲染一遍。
+  const panningReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lowDetailActive, setLowDetailActive] = useState(() =>
+    isLowDetailZoom(initialViewportRef.current.zoom)
+  );
+  const applyLowDetailClass = useCallback((zoom: number) => {
+    const lowDetail = isLowDetailZoom(zoom);
+    wrapperRef.current?.classList.toggle(CANVAS_LOW_DETAIL_CLASS, lowDetail);
+    setCanvasLowDetail(lowDetail);
+    // 升档（退出低缩放）必须与 withLodShell 的 shell→full 交换落在同一次提交：
+    // 此刻裁剪若还停留在「低缩放档全量挂载」，302 个 shell 会同时换成完整组件
+    // （实测 ~960ms 冻结），随后 moveEnd 恢复裁剪又把 ~290 个刚挂上的整批卸掉
+    // （再冻 ~1s）。同一提交生效则裁剪先把可见集收窄到十几个，只有它们挂完整
+    // 组件（实测 ~90ms）。React 对同一事件里的 store 通知和 setState 统一批处理，
+    // 这里的 set 与交换必然同帧。降档方向相反——见 handleMoveEnd 的注释。
+    if (!lowDetail) {
+      setLowDetailActive(false);
+    }
+  }, []);
+
+  const handleMoveStart = useCallback(() => {
+    if (panningReleaseTimerRef.current) {
+      clearTimeout(panningReleaseTimerRef.current);
+      panningReleaseTimerRef.current = null;
+    }
+    wrapperRef.current?.classList.add(CANVAS_PANNING_CLASS);
+    setCanvasGestureActive(true);
+  }, []);
+
   const handleMoveEnd = useCallback(
     (_event: unknown, viewport: Viewport) => {
+      applyLowDetailClass(viewport.zoom);
+      // 降档（进入低缩放）的裁剪关闭只在手势结束时提交：全量挂载 ~240 个 shell 的
+      // 波放在缩放手势中途会有可感知的顿挫，推迟到松手后手势保持流畅；中途已跨档
+      // 的可见节点由 withLodShell 的 selector 先行换成 shell，不受此影响。升档方向
+      // 不能等到这里——见 applyLowDetailClass 的注释。
+      setLowDetailActive(isLowDetailZoom(viewport.zoom));
+      if (panningReleaseTimerRef.current) {
+        clearTimeout(panningReleaseTimerRef.current);
+      }
+      panningReleaseTimerRef.current = setTimeout(() => {
+        panningReleaseTimerRef.current = null;
+        wrapperRef.current?.classList.remove(CANVAS_PANNING_CLASS);
+        setCanvasGestureActive(false);
+      }, PANNING_CLASS_RELEASE_DELAY_MS);
+      // 小地图缓动是程序化平移：每帧一次 instance.setViewport，而 ReactFlow 对
+      // 每次 setViewport 都跑一遍 onMoveStart→onMove→onMoveEnd，结束事件只有
+      // panOnScroll 才有 150ms 合并（createPanZoomEndHandler 里写死
+      // `panOnScroll ? 150 : 0`）。用户关掉「触控板平移」后 panOnScroll=false，
+      // 合并消失，这里会变成每秒约 60 次 store 提交 —— 正是本次要消掉的东西。
+      // 跳过时连 lastViewportCommitRef 也不占，好让 handleMove 的 8fps 节流照常
+      // 供给可见性判断；最终值由 onViewportSettled 收敛时提交一次。
+      if (minimapPanCommitSuppressedRef.current) {
+        return;
+      }
       lastViewportCommitRef.current = Date.now();
       setViewportState(viewport);
     },
-    [setViewportState]
+    [applyLowDetailClass, setViewportState]
   );
 
   const handleMove = useCallback(
     (_event: unknown, viewport: Viewport) => {
+      // 缩放跨档要立刻生效（用户能看见节点内容切换），所以不受下面的节流限制。
+      applyLowDetailClass(viewport.zoom);
       const now = Date.now();
       if (now - lastViewportCommitRef.current < 120) {
         return;
@@ -1803,10 +1949,45 @@ export function Canvas({
       lastViewportCommitRef.current = now;
       setViewportState(viewport);
     },
+    [applyLowDetailClass, setViewportState]
+  );
+
+  const handleMinimapViewportSettled = useCallback(
+    (viewport: Viewport) => {
+      lastViewportCommitRef.current = Date.now();
+      setViewportState(viewport);
+    },
     [setViewportState]
   );
 
-  const handleMoveStart = useCallback(() => {}, []);
+  // 小地图拖动走自己的实现，不用 MiniMap 的 pannable —— 内置增益会随视口拖离
+  // 内容区而复利放大。见 useSmoothMinimapPan 的文件头注释。
+  // 接线放在 handleMoveEnd/handleMinimapViewportSettled 之后，它们依赖 store 的
+  // setViewportState，声明顺序不能倒过来。
+  useSmoothMinimapPan({
+    enabled: minimapVisible,
+    wrapperRef,
+    instance: reactFlowInstance,
+    onPanStart: handleMinimapPanStart,
+    onPanEnd: handleMinimapPanEnd,
+    onViewportSettled: handleMinimapViewportSettled,
+  });
+
+  // 首屏恢复的视口不会触发 onMove/onMoveEnd，低缩放档要在这里补一次。
+  useEffect(() => {
+    applyLowDetailClass(initialViewportRef.current.zoom);
+    setLowDetailActive(isLowDetailZoom(initialViewportRef.current.zoom));
+    return () => {
+      if (panningReleaseTimerRef.current) {
+        clearTimeout(panningReleaseTimerRef.current);
+        panningReleaseTimerRef.current = null;
+      }
+      // 模块级信号要跟着画布一起复位，否则卸载时若正在手势中，下一次挂载会
+      // 一直以为「还在平移」而永远不测量。
+      setCanvasGestureActive(false);
+      setCanvasLowDetail(false);
+    };
+  }, [applyLowDetailClass]);
 
   useEffect(() => {
     const wrapperElement = wrapperRef.current;
@@ -1968,6 +2149,7 @@ export function Canvas({
         pendingNodePlacement.initialData,
       );
       setSelectedNode(newNodeId);
+      focusNewNodeIfLowZoom(newNodeId);
       if (pendingNodePlacement.skill) {
         bindSingleBeatContextInput(newNodeId, pendingNodePlacement.skill);
       }
@@ -1981,6 +2163,7 @@ export function Canvas({
     [
       addNode,
       bindSingleBeatContextInput,
+      focusNewNodeIfLowZoom,
       pendingNodePlacement,
       reactFlowInstance,
       scheduleCanvasPersist,
@@ -2168,7 +2351,9 @@ export function Canvas({
       }
       // Space + left-drag is a pan gesture (React Flow's panActivationKeyCode).
       // Don't start a marquee on top of it, or a dashed box shows while panning.
-      if (spacePanActiveRef.current) {
+      // 抓手工具是同一回事，只是长按在工具上而不是空格上 —— 从 store 现读，免得
+      // 这个 effect 为了一个开关重新挂一遍 pointer 监听。
+      if (spacePanActiveRef.current || useCanvasToolStore.getState().tool === 'hand') {
         clearMarqueeSelection();
         return;
       }
@@ -2198,7 +2383,8 @@ export function Canvas({
       if (!gesture || event.pointerId !== gesture.pointerId) {
         return;
       }
-      if (spacePanActiveRef.current) {
+      // 拖到一半按下空格或 H 切到抓手：框选就地放弃，别让虚线框跟着平移一起走。
+      if (spacePanActiveRef.current || useCanvasToolStore.getState().tool === 'hand') {
         clearMarqueeSelection();
         return;
       }
@@ -2239,7 +2425,8 @@ export function Canvas({
       if (!gesture || event.pointerId !== gesture.pointerId) {
         return;
       }
-      if (spacePanActiveRef.current) {
+      // 拖到一半按下空格或 H 切到抓手：框选就地放弃，别让虚线框跟着平移一起走。
+      if (spacePanActiveRef.current || useCanvasToolStore.getState().tool === 'hand') {
         clearMarqueeSelection();
         return;
       }
@@ -2581,6 +2768,14 @@ export function Canvas({
         return;
       }
 
+      // V = 移动工具，H = 抓手（Figma / liblib 同款）。必须是光秃秃的按键：带上
+      // ⌘/Ctrl 的 V 是粘贴，带 Alt 的字母多半是系统输入法在组字。
+      if (!commandPressed && !event.altKey && !event.shiftKey && (key === 'v' || key === 'h')) {
+        event.preventDefault();
+        useCanvasToolStore.getState().setTool(key === 'v' ? 'move' : 'hand');
+        return;
+      }
+
       if (isCopy) {
         if (selectedNodeIds.length === 0) {
           return;
@@ -2862,11 +3057,14 @@ export function Canvas({
           y: basePosition.y + index * 36,
         };
         // File drops are user actions by definition — stamp user_spawned: true
-        // so the new node is correctly classified by `nodeMainlineFlags`
-        // (and survives `_merge_restored_preset_canvas` refresh). Without
-        // this, dropped uploads on a mainline preset canvas would be locked
-        // by the canvas-level fallback in `NodeActionToolbar`, breaking the
-        // mixed-canvas contract.
+        // so the new node is correctly classified by `nodeMainlineFlags` and
+        // survives `_merge_restored_preset_canvas` refresh (the backend's
+        // `_is_replaceable_projection_node` refuses to overwrite it).
+        //
+        // NB: this is NOT about unlocking. The canvas-level fallback that used
+        // to lock unmarked nodes on preset canvases is gone — NodeActionToolbar
+        // now locks on `isPresetManaged` alone, and an unmarked node classifies
+        // as "ordinary" (see system-managed-node-data.test.ts).
         const newNodeId = addNode(
           CANVAS_NODE_TYPES.upload,
           position,
@@ -2949,6 +3147,7 @@ export function Canvas({
         }
       }
 
+      focusNewNodeIfLowZoom(newNodeId);
       scheduleCanvasPersist(0);
       setShowNodeMenu(false);
       setMenuAllowedTypes(undefined);
@@ -2958,6 +3157,7 @@ export function Canvas({
     },
     [
       connectGraphNodes,
+      focusNewNodeIfLowZoom,
       pendingBatchConnectIds,
       pendingConnectStart,
       scheduleCanvasPersist,
@@ -3077,9 +3277,10 @@ export function Canvas({
     (type: CanvasNodeType) => {
       const newNodeId = addNode(type, spawnAtViewportCenter());
       setSelectedNode(newNodeId);
+      focusNewNodeIfLowZoom(newNodeId);
       scheduleCanvasPersist(0);
     },
-    [addNode, scheduleCanvasPersist, setSelectedNode, spawnAtViewportCenter],
+    [addNode, focusNewNodeIfLowZoom, scheduleCanvasPersist, setSelectedNode, spawnAtViewportCenter],
   );
 
   const handleQuickAddSkill = useCallback(
@@ -3090,10 +3291,18 @@ export function Canvas({
         displayName: skill.display_name,
       } as Partial<CanvasNodeData>);
       setSelectedNode(newNodeId);
+      focusNewNodeIfLowZoom(newNodeId);
       bindSingleBeatContextInput(newNodeId, skill);
       scheduleCanvasPersist(0);
     },
-    [addNode, bindSingleBeatContextInput, scheduleCanvasPersist, setSelectedNode, spawnAtViewportCenter],
+    [
+      addNode,
+      bindSingleBeatContextInput,
+      focusNewNodeIfLowZoom,
+      scheduleCanvasPersist,
+      setSelectedNode,
+      spawnAtViewportCenter,
+    ],
   );
 
   // 历史资产弹窗「使用」：把该资产作为新节点生成到视口中心（复用素材落点的 spawnAssetNode）。
@@ -3772,6 +3981,24 @@ export function Canvas({
     }
   }, []);
 
+  // 手动建边落到某个节点上时，这条边会不会把视频节点的素材撑过能力包络？非空即拒绝。
+  // 三条手动路径（React Flow 拖线松手、"+" 拖拽的落点高亮、"+" 松手建边）共用同一把
+  // 尺子——少一处就会出现「拖过去高亮成合法、一松手什么也没有」。
+  const manualDropReferenceRejection = useCallback(
+    (pending: PendingConnectStart, dropNodeId: string | null): string | null => {
+      if (!dropNodeId || dropNodeId === pending.nodeId) return null;
+      const sourceId = pending.handleType === 'source' ? pending.nodeId : dropNodeId;
+      const targetId = pending.handleType === 'source' ? dropNodeId : pending.nodeId;
+      return videoReferenceConnectionRejection(
+        nodes,
+        edges,
+        { source: sourceId, target: targetId },
+        videoReferenceEnvelopeForNode,
+      );
+    },
+    [edges, nodes],
+  );
+
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       if (connectionState.isValid || !pendingConnectStart) {
@@ -3796,6 +4023,21 @@ export function Canvas({
       const dropNodeId = dropNodeElement?.dataset?.id ?? null;
 
       if (dropNodeId && dropNodeId !== pendingConnectStart.nodeId) {
+        // 素材撑过能力包络：这条分支是 connectionState.isValid 为 false 才走到的
+        // 补救路径，**不看** isValidConnection，必须自己拦。不拦就会一路掉进下面
+        // 「拖到空白处 → 弹新建节点菜单」，用户明明松手在节点上却弹出个菜单。
+        // 顺带 toast 出原因——落点变灰本身不解释「为什么」。
+        const referenceRejection = manualDropReferenceRejection(
+          pendingConnectStart,
+          dropNodeId,
+        );
+        if (referenceRejection) {
+          toast.warning(referenceRejection);
+          setPendingConnectStart(null);
+          setPreviewConnectionVisual(null);
+          return;
+        }
+
         const sourceNode =
           pendingConnectStart.handleType === 'source'
             ? nodes.find((node) => node.id === pendingConnectStart.nodeId)
@@ -3916,6 +4158,7 @@ export function Canvas({
     },
     [
       connectGraphNodes,
+      manualDropReferenceRejection,
       nodes,
       pendingConnectStart,
       reactFlowInstance,
@@ -3990,6 +4233,9 @@ export function Canvas({
       const validate = (el: HTMLElement | null): HTMLElement | null => {
         const dropNodeId = el?.dataset?.id ?? null;
         if (!el || !dropNodeId || dropNodeId === pending.nodeId) return null;
+        // 素材已满的视频节点不高亮成落点（与拖线时落点变灰同一口径）；松手那一下
+        // 由 handlePlusConnectDragEnd 再 toast 出原因。
+        if (manualDropReferenceRejection(pending, dropNodeId)) return null;
         const sourceNode =
           pending.handleType === 'source'
             ? nodes.find((node) => node.id === pending.nodeId)
@@ -4048,7 +4294,7 @@ export function Canvas({
         });
       return best;
     },
-    [nodes],
+    [manualDropReferenceRejection, nodes],
   );
 
   const handlePlusConnectDragStart = useCallback((params: PlusConnectDragParams) => {
@@ -4138,6 +4384,23 @@ export function Canvas({
 
       const containerRect = wrapperRef.current?.getBoundingClientRect();
       if (!pending || !containerRect) {
+        setPendingConnectStart(null);
+        setPreviewConnectionVisual(null);
+        return;
+      }
+
+      // 素材已满的视频节点上面 resolveManualDropTargetEl 不会认作落点（不高亮），
+      // 松手就会掉进「拖到空白处 → 弹新建节点菜单」。所以先单独看光标正下方压着
+      // 谁：确实是被素材上限挡下的，就 toast 出原因并收工，别弹那个菜单。
+      const hoveredNodeId =
+        (
+          document
+            .elementFromPoint(params.clientPosition.x, params.clientPosition.y)
+            ?.closest?.('.react-flow__node[data-id]') as HTMLElement | null
+        )?.dataset?.id ?? null;
+      const hoveredRejection = manualDropReferenceRejection(pending, hoveredNodeId);
+      if (hoveredRejection) {
+        toast.warning(hoveredRejection);
         setPendingConnectStart(null);
         setPreviewConnectionVisual(null);
         return;
@@ -4235,6 +4498,7 @@ export function Canvas({
     },
     [
       connectGraphNodes,
+      manualDropReferenceRejection,
       nodes,
       reactFlowInstance,
       scheduleCanvasPersist,
@@ -4498,7 +4762,8 @@ export function Canvas({
     <CreditDisplayHiddenProvider value={isCeRuntime()}>
     <div
       ref={wrapperRef}
-      className="relative h-full w-full bg-background"
+      data-canvas-tool={handToolActive ? 'hand' : 'move'}
+      className="dc-canvas relative h-full w-full bg-background"
       onDragEnter={handleCanvasDragEnter}
       onDragOver={handleCanvasDragOver}
       onDragLeave={handleCanvasDragLeave}
@@ -4507,7 +4772,7 @@ export function Canvas({
     >
       <ReactFlow
         nodes={renderedNodes}
-        edges={edges}
+        edges={renderedEdges}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onEdgeClick={handleEdgeClick}
@@ -4536,10 +4801,13 @@ export function Canvas({
         connectionRadius={CONNECTION_SNAP_RADIUS}
         minZoom={0.1}
         maxZoom={8}
-        nodesDraggable
+        // 抓手工具下节点既不可拖也不可选：不可拖，左键落在节点上才会交给 pane 去平移；
+        // 不可选，否则一次「拖着节点平移」松手时还会顺手把它选中。
+        nodesDraggable={!handToolActive}
+        elementsSelectable={!handToolActive}
         nodesConnectable
         edgesReconnectable
-        panOnDrag={PAN_ON_DRAG_BUTTONS}
+        panOnDrag={handToolActive ? PAN_ON_DRAG_BUTTONS_HAND : PAN_ON_DRAG_BUTTONS}
         panOnScroll={trackpadPanEnabled}
         zoomOnScroll={!trackpadPanEnabled}
         panActivationKeyCode={PAN_ACTIVATION_KEY_CODE}
@@ -4547,7 +4815,10 @@ export function Canvas({
         multiSelectionKeyCode={MULTI_SELECTION_KEY_CODES}
         selectionKeyCode={null}
         deleteKeyCode={null}
-        onlyRenderVisibleElements
+        // 低缩放档关掉视口裁剪：此档所有节点都是轻量 shell（见 withLodShell），
+        // 全量挂载的渲染树很小；而裁剪在快速平移时每帧挂/卸边界节点，实测 4 秒
+        // 拖拽 800+ 次翻腾、p99 帧时 470ms——收益早已倒挂。高缩放档维持裁剪。
+        onlyRenderVisibleElements={!lowDetailActive}
         zoomOnDoubleClick={false}
         proOptions={REACT_FLOW_PRO_OPTIONS}
         className="bg-background"
@@ -4560,7 +4831,9 @@ export function Canvas({
             style={{ pointerEvents: 'all', zIndex: 10000 }}
             nodeColor="rgba(120, 120, 120, 0.92)"
             maskColor="rgba(0, 0, 0, 0.62)"
-            pannable
+            // 拖动由 useSmoothMinimapPan 接管：内置 pannable 的增益含当前视口框，
+            // 视口拖出内容区后会复利放大，越拖越快。
+            pannable={false}
             zoomable
             onMouseEnter={() => setMinimapHover(true)}
             onMouseLeave={() => setMinimapHover(false)}

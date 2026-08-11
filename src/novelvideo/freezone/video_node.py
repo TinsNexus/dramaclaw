@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from novelvideo.freezone.paths import freezone_root
+from novelvideo.video_duration import (
+    normalize_video_duration_for_backend as normalize_video_duration_for_backend,
+    video_duration_bounds_for_backend,
+)
 
 
 VIDEO_CAMERA_TEMPLATES: list[dict[str, str]] = [
@@ -112,8 +116,8 @@ FREEZONE_NEWAPI_VIDEO_BACKENDS = {
     "newapi_seedance-1.0-pro-fast",
     "newapi_seedance-1.5-pro",
     "newapi_happyhorse-1.0",
-    "newapi_grok-video-channel",
 }
+FREEZONE_DISABLED_VIDEO_BACKENDS = {"newapi_grok-video-channel"}
 
 
 def get_video_camera_templates() -> list[dict[str, str]]:
@@ -199,8 +203,28 @@ def normalize_freezone_seedance2_scene_optimize(
     return default_freezone_seedance2_scene_optimize(backend)
 
 
-def normalize_video_resolution_for_backend(backend: str | None, value: str | None) -> str:
+def normalize_video_resolution_for_backend(
+    backend: str | None, value: str | None,
+    configured_options: list[str] | tuple[str, ...] | None = None,
+) -> str:
     resolution = normalize_video_resolution(value)
+    configured = tuple(
+        str(option).strip()
+        for option in (configured_options or ())
+        if str(option).strip()
+    )
+    if configured:
+        matched = next(
+            (option for option in configured if option.lower() == resolution.lower()),
+            None,
+        )
+        if matched is not None:
+            return matched
+        preferred = next(
+            (option for option in configured if option.lower() == "720p"),
+            None,
+        )
+        return preferred or configured[0]
     options = freezone_video_resolution_options(backend)
     if resolution in options:
         return resolution
@@ -210,37 +234,7 @@ def normalize_video_resolution_for_backend(backend: str | None, value: str | Non
 
 
 def freezone_video_duration_bounds(backend: str | None) -> tuple[int | None, int | None]:
-    from novelvideo.config import NEWAPI_VIDEO_DURATION_BOUNDS
-    from novelvideo.generators.video_generator import (
-        NewApiVideoGenerator,
-        parse_newapi_video_backend,
-    )
-
-    model = parse_newapi_video_backend(backend) or _freezone_video_model_from_backend(backend)
-    bounds = NewApiVideoGenerator._parse_duration_bounds_config(NEWAPI_VIDEO_DURATION_BOUNDS).get(
-        model
-    )
-    if bounds:
-        return bounds
-    if model == "grok-video-channel":
-        return (6, 30)
-    if model == "happyhorse-1.0":
-        return (3, 15)
-    return (None, None)
-
-
-def normalize_video_duration_for_backend(backend: str | None, value: int | None) -> int:
-    try:
-        duration = int(value or 5)
-    except (TypeError, ValueError):
-        duration = 5
-    duration = max(duration, 1)
-    min_duration, max_duration = freezone_video_duration_bounds(backend)
-    if min_duration is not None:
-        duration = max(duration, min_duration)
-    if max_duration is not None:
-        duration = min(duration, max_duration)
-    return duration
+    return video_duration_bounds_for_backend(backend)
 
 
 def _freezone_newapi_video_options() -> dict[str, str]:
@@ -252,7 +246,6 @@ def _freezone_newapi_video_options() -> dict[str, str]:
         if key in FREEZONE_NEWAPI_VIDEO_BACKENDS
     }
     options.setdefault("newapi_happyhorse-1.0", "HappyHorse 1.0")
-    options.setdefault("newapi_grok-video-channel", "Grok Video Channel")
     if FREEZONE_DEFAULT_VIDEO_BACKEND not in options:
         return options
     ordered = {FREEZONE_DEFAULT_VIDEO_BACKEND: options[FREEZONE_DEFAULT_VIDEO_BACKEND]}
@@ -309,6 +302,8 @@ def resolve_freezone_video_backend(model: str | None) -> str:
         )
     if text in options:
         return text
+    if text in FREEZONE_DISABLED_VIDEO_BACKENDS:
+        raise ValueError(f"unknown video model: {text}")
 
     folded = text.casefold()
     for backend, label in options.items():
@@ -324,7 +319,7 @@ def resolve_freezone_video_backend(model: str | None) -> str:
 
     from novelvideo.generators.video_generator import parse_newapi_video_backend
 
-    if parse_newapi_video_backend(text):
+    if parse_newapi_video_backend(text) and text not in FREEZONE_DISABLED_VIDEO_BACKENDS:
         return text
     raise ValueError(f"unknown video model: {text}")
 
@@ -437,10 +432,11 @@ def build_freezone_image_to_video_prompt(
         )
     else:
         parts.append(
-            "首帧约束：严格继承输入图片中的主体、构图、服装、光线和场景信息，把输入图作为视频首帧参考。"
+            "图片参考约束：把输入图片作为主体、外观、色调、质感和整体风格参考，由提示词主导视频内容；"
+            "不要强制把输入图片锁定为视频第一帧。"
         )
     parts.append(
-        "输出要求：生成单条连贯视频镜头，动作自然，运动平滑，避免闪烁、变形、跳帧、主体身份漂移和首帧偏移。"
+        "输出要求：生成单条连贯视频镜头，动作自然，运动平滑，避免闪烁、变形、跳帧和主体身份漂移。"
     )
     return "\n".join(part for part in parts if part)
 
@@ -524,16 +520,130 @@ def summarize_omni_reference_counts(items: list[dict[str, Any]]) -> dict[str, in
     }
 
 
-def validate_omni_reference_limits(items: list[dict[str, Any]]) -> None:
+def validate_omni_reference_limits(
+    items: list[dict[str, Any]],
+    *,
+    image_max: int = 9,
+    video_max: int = 3,
+    audio_max: int = 3,
+    total_max: int = 12,
+) -> None:
     counts = summarize_omni_reference_counts(items)
-    if counts["total_count"] > 12:
-        raise ValueError("references total count must be <= 12")
-    if counts["image_count"] > 9:
-        raise ValueError("image references count must be <= 9")
-    if counts["video_count"] > 3:
-        raise ValueError("video references count must be <= 3")
-    if counts["audio_count"] > 3:
-        raise ValueError("audio references count must be <= 3")
+    if counts["total_count"] > total_max:
+        raise ValueError(f"references total count must be <= {total_max}")
+    if counts["image_count"] > image_max:
+        raise ValueError(f"image references count must be <= {image_max}")
+    if counts["video_count"] > video_max:
+        raise ValueError(f"video references count must be <= {video_max}")
+    if counts["audio_count"] > audio_max:
+        raise ValueError(f"audio references count must be <= {audio_max}")
+
+
+# 全能参考音频时长：厂商（doubao-seedance-2-0 / r2v）有**两条互相独立**的规则，
+# 两条都以 400 打回，只卡其中一条就等于没卡：
+#   1. 逐条：`[InvalidParameter.DurationTooShort] Duration must be between 1.8s and 15.2s`
+#   2. 总和：`the parameter audio total duration (seconds) specified in the request must
+#      be less than or equal to 15.2 for model doubao-seedance-2-0 in r2v`
+#
+# 第 2 条是 2026-08-06 从 3060 环境两次失败任务里实测抓到的
+# （freezone_video_gen/01KZ5R8ZZZY9M8T9F01H159RP7，gen_mode=allReference）。在那之前
+# 前后端都只按第 1 条判定，3 条各 6s 每条都合法、总计 18s 必被厂商拒——用户白等一轮。
+# 别再把总时长这条当成「我们自己臆想的规则」删掉。
+MIN_OMNI_REFERENCE_AUDIO_SECONDS = 1.8
+MAX_OMNI_REFERENCE_AUDIO_SECONDS = 15.2
+MAX_OMNI_REFERENCE_AUDIO_TOTAL_SECONDS = 15.2
+
+
+def _format_seconds(value: float) -> str:
+    """按毫秒精度展示，去掉无意义尾随 0：15.2 → `15.2`、6.0 → `6`、1.799 → `1.799`。
+
+    不能 `round(x, 1)`：15.201 显示成「15.2」时，用户看到的正好是合法边界值却被告知
+    越界，只会怀疑我们算错了。前端 `formatClipSeconds` 是同一口径。
+    """
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _exceeds(value: float, limit: float) -> bool:
+    """`value > limit`，但先归整到毫秒。
+
+    浮点和会自己漂出去：6 + 6 + 3.2 == 15.200000000000001，裸比较会把一组正好顶格
+    15.2s 的合法音频判成超限。
+    """
+    return round(value - limit, 3) > 0
+
+
+def validate_omni_reference_audio_durations(
+    durations: list[tuple[str, float | None]],
+    *,
+    min_seconds: float | None = MIN_OMNI_REFERENCE_AUDIO_SECONDS,
+    max_seconds: float | None = MAX_OMNI_REFERENCE_AUDIO_SECONDS,
+    total_min_seconds: float | None = None,
+    total_max_seconds: float | None = MAX_OMNI_REFERENCE_AUDIO_TOTAL_SECONDS,
+    media_label: str = "audio",
+) -> None:
+    """全能参考音频时长兜底校验，入参是 `(标签, 秒数)`，秒数 None = 探测不出。
+
+    探测不出的条目**不参与判定**：ffprobe 缺失 / 文件读不了时，宁可放过去让厂商判，
+    也不要凭空拦死一次正常提交。这让总和成为**下界**，但判定方向仍然安全——漏算只会
+    让和更小，所以「算出来超了」必定真超，不存在因此产生的误拦。
+
+    三个上限各自可以传 `None` = **这项不判定**。逐条边界（1.8~15.2s）是从 Seedance 2.0
+    的报文里实测出来的，只对它成立；管理员在目录里配了总时长、但模型不是 2.0 时，调用方
+    应当把 min/max 传 None ——拿 2.0 的数字去卡别家模型就是凭空 400。
+
+    太短 → 单条太长 → 总和太长，逐类上报；同时越界时报一类比混在一起列更好读。
+    """
+    measured = [
+        (label, float(seconds))
+        for label, seconds in durations
+        if isinstance(seconds, (int, float))
+        and not isinstance(seconds, bool)
+        and seconds > 0
+    ]
+    if not measured:
+        return
+
+    def _clips(items: list[tuple[str, float]]) -> str:
+        return ", ".join(f"{label} ({_format_seconds(value)}s)" for label, value in items)
+
+    too_short = (
+        [item for item in measured if _exceeds(min_seconds, item[1])]
+        if min_seconds is not None
+        else []
+    )
+    if too_short:
+        raise ValueError(
+            f"{media_label} reference duration must be >= {_format_seconds(min_seconds)}s: "
+            + _clips(too_short)
+        )
+    too_long = (
+        [item for item in measured if _exceeds(item[1], max_seconds)]
+        if max_seconds is not None
+        else []
+    )
+    if too_long:
+        raise ValueError(
+            f"{media_label} reference duration must be <= {_format_seconds(max_seconds)}s: "
+            + _clips(too_long)
+        )
+    total = sum(value for _, value in measured)
+    # 总时长下限只有在每一条素材都成功探测时才可判定；漏测会让和偏小，不能据此误拦。
+    if (
+        total_min_seconds is not None
+        and len(measured) == len(durations)
+        and _exceeds(total_min_seconds, total)
+    ):
+        raise ValueError(
+            f"{media_label} references total duration must be >= "
+            f"{_format_seconds(total_min_seconds)}s, got {_format_seconds(total)}s: "
+            + _clips(measured)
+        )
+    if total_max_seconds is not None and _exceeds(total, total_max_seconds):
+        raise ValueError(
+            f"{media_label} references total duration must be <= "
+            f"{_format_seconds(total_max_seconds)}s, got {_format_seconds(total)}s: "
+            + _clips(measured)
+        )
 
 
 def video_character_library_path(project_dir: Path) -> Path:
@@ -559,23 +669,80 @@ def save_video_character_library(project_dir: Path, items: list[dict[str, Any]])
     path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _upsert_library_item(
+    items: list[dict[str, Any]],
+    *,
+    name: str,
+    image_urls: list[str] | None,
+    media: str,
+    source: str,
+    video_url: str | None,
+    audio_url: str | None,
+    item_id: str | None,
+) -> dict[str, Any]:
+    """纯内存 upsert：按 id 就地更新或追加 ``items``，返回写入的条目。
+
+    不做任何磁盘 IO，供单条登记与批量同步复用（后者一次读、一次写即可）。
+    """
+    now = datetime.now().isoformat()
+    urls = list(image_urls or [])
+    if media == "video":
+        cover = video_url
+    elif media == "audio":
+        cover = None
+    else:
+        cover = urls[0] if urls else None
+    resolved_id = item_id or uuid.uuid4().hex[:12]
+    existing_idx = next(
+        (i for i, it in enumerate(items) if it.get("id") == resolved_id), None
+    )
+    existing = items[existing_idx] if existing_idx is not None else None
+    item = {
+        "id": resolved_id,
+        "name": name.strip(),
+        "media": media,
+        "source": source,
+        "image_urls": urls,
+        "video_url": video_url,
+        "audio_url": audio_url,
+        "cover_url": cover,
+        "created_at": existing.get("created_at") if existing else now,
+        "updated_at": now,
+    }
+    if existing_idx is not None:
+        items[existing_idx] = item
+    else:
+        items.append(item)
+    return item
+
+
 def add_video_character_library_item(
     project_dir: Path,
     *,
     name: str,
-    image_urls: list[str],
+    image_urls: list[str] | None = None,
+    media: str = "image",
+    source: str = "upload",
+    video_url: str | None = None,
+    audio_url: str | None = None,
+    item_id: str | None = None,
 ) -> dict[str, Any]:
+    """把一条素材登记到资产库。
+
+    图片走 ``image_urls``，视频/音频走 ``video_url`` / ``audio_url``。``item_id``
+    非空时按 id upsert（主线同步用稳定合成 id，重复同步是更新而非新增）。
+    """
     items = load_video_character_library(project_dir)
-    now = datetime.now().isoformat()
-    item = {
-        "id": uuid.uuid4().hex[:12],
-        "name": name.strip(),
-        "image_urls": list(image_urls),
-        "cover_url": image_urls[0] if image_urls else None,
-        "created_at": now,
-        "updated_at": now,
-    }
-    items.append(item)
+    item = _upsert_library_item(
+        items,
+        name=name,
+        image_urls=image_urls,
+        media=media,
+        source=source,
+        video_url=video_url,
+        audio_url=audio_url,
+        item_id=item_id,
+    )
     save_video_character_library(project_dir, items)
     return item
 
@@ -587,3 +754,39 @@ def delete_video_character_library_item(project_dir: Path, item_id: str) -> bool
         return False
     save_video_character_library(project_dir, kept)
     return True
+
+
+def sync_mainline_assets_into_library(
+    project_dir: Path,
+    *,
+    assets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """把主线资产（已解析好 name/url/media/source/id）幂等写进资产库。
+
+    ``assets`` 每项形如 ``{"id","name","media","source","url"}``。用稳定合成 id
+    upsert，因此重复同步只更新 URL、不产生重复条目。返回同步后的完整库。
+
+    整个批次只读一次、写一次库文件（内存里逐条 upsert），避免 N 条资产触发
+    N 次全量 load+save 的 O(N²) IO。
+    """
+    items = load_video_character_library(project_dir)
+    changed = False
+    for asset in assets:
+        media = str(asset.get("media") or "image")
+        url = asset.get("url") or ""
+        if not url:
+            continue
+        _upsert_library_item(
+            items,
+            name=str(asset.get("name") or ""),
+            media=media,
+            source=str(asset.get("source") or "upload"),
+            item_id=str(asset.get("id") or "") or None,
+            image_urls=[url] if media == "image" else None,
+            video_url=url if media == "video" else None,
+            audio_url=url if media == "audio" else None,
+        )
+        changed = True
+    if changed:
+        save_video_character_library(project_dir, items)
+    return items

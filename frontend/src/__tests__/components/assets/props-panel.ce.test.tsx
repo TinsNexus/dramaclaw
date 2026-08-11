@@ -32,6 +32,22 @@ vi.mock("@/lib/queries/generation-credit-cost", () => ({
   }),
 }));
 
+vi.mock("@/lib/queries/character-image-selection", () => ({
+  useAssetImageSourceSelection: () => ({
+    data: {
+      ok: true,
+      data: {
+        asset_kind: "prop",
+        image_source_selection: "newapi_gpt_image2",
+        options: { newapi_gpt_image2: "LingShan-G2" },
+      },
+    },
+    isLoading: false,
+    isFetching: false,
+  }),
+  useUpdateAssetImageSourceSelection: mutation,
+}));
+
 vi.mock("@/lib/queries/props", () => ({
   useProps: () => ({
     isLoading: false,
@@ -117,8 +133,6 @@ beforeAll(async () => {
               copyLink: "Copy link",
             },
             props: {
-              batchGenerate: "Batch generate refs",
-              batchStatusTitle: "Batch reference generation",
               newProp: "New prop",
               newPropHint: "Create a prop.",
               editProp: "Edit prop",
@@ -173,11 +187,10 @@ describe("PropsPanel CE generation credit gating", () => {
     toastErrorMock.mockClear();
   });
 
-  it("hides single and batch prop reference costs without credit styling or credit errors", async () => {
+  it("hides single prop reference costs without credit styling or credit errors", async () => {
     const { container } = renderPanel();
 
     expect(await screen.findByText("Moon Fan")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Batch generate refs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate reference" })).toBeInTheDocument();
 
     expect(screen.queryByText("12 credits")).not.toBeInTheDocument();

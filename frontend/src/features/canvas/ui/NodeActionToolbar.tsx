@@ -118,11 +118,15 @@ import {
   uploadFreezoneImage,
 } from "@/api/ops";
 import { openPresetProjectionInMyCanvas } from "@/features/freezone/openPresetProjection";
-import { awaitTaskCompletion } from "@/api/tasks";
+import { awaitTaskCompletion, isTaskPollTimeoutError } from "@/api/tasks";
+import { notifyTaskStillRunning } from "@/features/canvas/application/errorDialog";
 import { normalizeVideoStoryRows } from "@/features/canvas/application/videoStoryNormalizer";
 import { readUrl } from "@/lib/url-params";
 import { sanitizeStoryboardText } from "@/features/canvas/application/storyboardText";
 import { buildGenerationErrorReport } from "@/features/canvas/application/generationErrorReport";
+import { BillingRuleNotConfiguredError } from "@/lib/api-errors";
+import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
+import { CreditCostPill } from "@/components/credits/credit-visual";
 import {
   NODE_TOOLBAR_ALIGN,
   NODE_TOOLBAR_CLASS,
@@ -460,6 +464,21 @@ export const NodeActionToolbar = memo(
     onOpenRotate,
   }: NodeActionToolbarProps) => {
     const { t, i18n } = useTranslation();
+    const videoAnalyzeCreditCost = useGenerationCreditCost(
+      "feature",
+      isVideoNode(node) ? "freezone.video_analyze" : null,
+      {
+        surface: "canvas",
+        params: { operation: "video_story" },
+      },
+    );
+    const videoAnalyzeBillingRuleMissing =
+      videoAnalyzeCreditCost.error instanceof BillingRuleNotConfiguredError;
+    const videoAnalyzeCreditCostDisplay =
+      videoAnalyzeCreditCost.data?.data.display ??
+      (videoAnalyzeBillingRuleMissing
+        ? t("common.billingRuleNotConfiguredShort")
+        : null);
     const isImageEdit = isImageEditNode(node);
     // Plain (non-protected) group → eligible for ungroup. Captured up here as a
     // boolean + a plain id while `node` still has its full type: over-broad node
@@ -542,8 +561,10 @@ export const NodeActionToolbar = memo(
     const projectionStatus = useCanvasProjectionStatus(protectedProjectionKey);
     const projectionIsStale = projectionStatus?.stale === true;
     const extractableBeatContext = useMemo(() => beatContextFromNode(node), [node]);
+    const canExposeGenerationError =
+      isExportImageNode(node) || isImageGenNode(node);
     const generationError =
-      isExportImageNode(node) &&
+      canExposeGenerationError &&
       typeof (node.data as { generationError?: unknown }).generationError ===
         "string"
         ? (
@@ -551,7 +572,7 @@ export const NodeActionToolbar = memo(
           ).trim()
         : "";
     const generationErrorDetails =
-      isExportImageNode(node) &&
+      canExposeGenerationError &&
       typeof (node.data as { generationErrorDetails?: unknown })
         .generationErrorDetails === "string"
         ? (
@@ -560,16 +581,22 @@ export const NodeActionToolbar = memo(
           ).trim()
         : "";
     const canCopyGenerationError =
-      isExportImageNode(node) && generationError.length > 0;
+      canExposeGenerationError && generationError.length > 0;
     const generationErrorReport = useMemo(
-      () =>
-        buildGenerationErrorReport({
+      () => {
+        // ImageGen keeps the exact pre-normalization error in details: copy it
+        // verbatim. Export-image nodes retain their richer diagnostic report.
+        if (isImageGenNode(node)) {
+          return generationErrorDetails || generationError;
+        }
+        return buildGenerationErrorReport({
           errorMessage: generationError || t("ai.error"),
           errorDetails: generationErrorDetails || undefined,
           context: (node.data as { generationDebugContext?: unknown })
             .generationDebugContext,
-        }),
-      [generationError, generationErrorDetails, node.data, t],
+        });
+      },
+      [generationError, generationErrorDetails, node, t],
     );
 
     const closeDownloadMenu = useCallback(() => {}, []);
@@ -1744,7 +1771,7 @@ export const NodeActionToolbar = memo(
                       projectId,
                       { sourceUrl: videoUrl },
                     );
-                    const completed = await awaitTaskCompletion(ref.task_key, projectId);
+                    const completed = await awaitTaskCompletion(ref.task_key, projectId, { taskType: ref.task_type });
                     console.info(
                       "[audio-separate] task completed",
                       completed.result,
@@ -1953,7 +1980,18 @@ export const NodeActionToolbar = memo(
                     );
                     addEdge(node.id, silentNodeId);
                   } catch (error) {
-                    console.error("[audio-separate] failed", error);
+                    // 脱离监听 ≠ 分离失败。音视频分离不落节点句柄（结果是两个
+                    // 新节点，没有承载 taskKey 的宿主），所以这里只能明确告诉
+                    // 用户任务还在后台跑、结果去任务中心取，而不是静默收场。
+                    if (isTaskPollTimeoutError(error)) {
+                      console.warn("[audio-separate] detached from a still-running job", {
+                        taskKey: error.taskKey,
+                        idleMs: error.idleMs,
+                      });
+                      notifyTaskStillRunning(t);
+                    } else {
+                      console.error("[audio-separate] failed", error);
+                    }
                   } finally {
                     updateNodeData(node.id, { isSeparatingAv: false });
                   }
@@ -1998,14 +2036,21 @@ export const NodeActionToolbar = memo(
                     </UiChipButton>
                     <UiChipButton
                       key="video-analyze"
-                      className={`${stubButtonClass} ${!hasVideo ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`${stubButtonClass} ${
+                        !hasVideo || videoAnalyzeBillingRuleMissing
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
                       title={
                         !hasVideo
                           ? t("nodeToolbar.video.requiresVideo")
+                          : videoAnalyzeBillingRuleMissing
+                            ? t("common.billingRuleNotConfiguredShort")
                           : undefined
                       }
                       onClick={(event) => {
                         event.stopPropagation();
+                        if (videoAnalyzeBillingRuleMissing) return;
                         void handleVideoAnalyze();
                       }}
                     >
@@ -2015,6 +2060,11 @@ export const NodeActionToolbar = memo(
                         <Wand2 className="h-3.5 w-3.5" />
                       )}
                       {t("nodeToolbar.video.analyze")}
+                      <CreditCostPill
+                        display={videoAnalyzeCreditCostDisplay}
+                        promotion={videoAnalyzeCreditCost.data?.data.promotion}
+                        disabled={!hasVideo || isAnalyzing || videoAnalyzeBillingRuleMissing}
+                      />
                     </UiChipButton>
                     <DropdownMenu
                       onOpenChange={(open) => {

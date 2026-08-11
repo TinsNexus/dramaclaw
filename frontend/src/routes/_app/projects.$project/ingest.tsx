@@ -3,7 +3,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,8 +12,10 @@ import { motion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   FileText,
   FishSymbol,
+  Info,
   Loader2,
   Play,
   Plus,
@@ -25,15 +27,18 @@ import {
 import { useProject, useUpdateProject } from "@/lib/queries/projects";
 import {
   useChapters,
+  useKnowledgeGraph,
   useStartIngest,
   useUploadNovel,
   type FormatCheck,
   type UploadResult,
 } from "@/lib/queries/ingest";
 import { FormatCheckDetailsDialog } from "@/components/ingest/FormatCheckDetailsDialog";
+import { NovelFormatDialog } from "@/components/ingest/NovelFormatDialog";
+import { KnowledgeGraphVisualization } from "@/components/ingest/KnowledgeGraphVisualization";
+import { IngestElapsedTime } from "@/components/ingest/IngestElapsedTime";
 import { useStyles } from "@/lib/queries/styles";
-import { useCharacters } from "@/lib/queries/characters";
-import { useCancelTask } from "@/lib/queries/tasks";
+import { useCancelTask, useTasks } from "@/lib/queries/tasks";
 import { useGenerationCreditCost } from "@/lib/queries/generation-credit-cost";
 import { useTaskStream } from "@/hooks/use-task-stream";
 import { queryKeys } from "@/lib/query-keys";
@@ -42,6 +47,8 @@ import {
   BillingRuleNotConfiguredError,
 } from "@/lib/api-errors";
 import { CreditCostInline } from "@/components/credit-cost-inline";
+import type { CreditPromotionDisplay } from "@/components/credits/credit-visual";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -64,8 +71,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { ProjectConfig, SpineTemplate } from "@/types/project";
+import type { Chapter, ChapterSceneBlock } from "@/types/episode";
 
 // ─── form schema ─────────────────────────────────────────────────────────────
 
@@ -104,6 +119,52 @@ const VISUAL_STYLE_OPTIONS: { value: string; labelKey: string }[] = [
     labelKey: "ingest.visualStyles.republicanEraDrama",
   },
 ];
+
+function chapterContentSlice(
+  chapter: Chapter,
+  startLine: number,
+  endLine: number,
+): string {
+  const lines = (chapter.content ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
+  const start = Math.max(0, Math.min(startLine, lines.length));
+  const end = Math.max(start, Math.min(endLine, lines.length));
+  return lines.slice(start, end).join("\n").trim();
+}
+
+function sceneBodyFromChapter(
+  chapter: Chapter,
+  scene: ChapterSceneBlock,
+): string {
+  const legacyContent = scene.content?.trim();
+  if (legacyContent) return legacyContent;
+  if (
+    typeof scene.content_start_line !== "number" ||
+    typeof scene.content_end_line !== "number"
+  ) {
+    return "";
+  }
+  return chapterContentSlice(
+    chapter,
+    scene.content_start_line,
+    scene.content_end_line,
+  );
+}
+
+function unparsedBodyFromChapter(chapter: Chapter): string {
+  if (
+    typeof chapter.unparsed_content_start_line !== "number" ||
+    typeof chapter.unparsed_content_end_line !== "number"
+  ) {
+    return "";
+  }
+  return chapterContentSlice(
+    chapter,
+    chapter.unparsed_content_start_line,
+    chapter.unparsed_content_end_line,
+  );
+}
 
 const ETHNICITY_OPTIONS: { value: string; labelKey: string }[] = [
   { value: "Chinese", labelKey: "ingest.ethnicities.chinese" },
@@ -205,6 +266,15 @@ type IngestFileStatus =
   | "stopped"
   | "failed";
 
+// 一个 ingest_fast 任务处于这些状态 = 导入尚在进行，切走再回来要恢复进度视图。
+const ACTIVE_INGEST_STATUSES = new Set([
+  "submitting",
+  "queued",
+  "pending",
+  "starting",
+  "running",
+]);
+
 const PASTE_TEXT_MAX_LENGTH = 1000;
 const HIDDEN_IMPORTED_PREVIEW_KEY_PREFIX =
   "supertale-ingest-hidden-imported-preview:";
@@ -236,6 +306,68 @@ function formatSize(bytes: number): string {
 
 function countBillableNovelChars(text: string): number {
   return text ? text.replace(/[\s\u3000]+/g, "").length : 0;
+}
+
+function resolveFormatCheckForSpineTemplate(
+  formatCheck: FormatCheck | null | undefined,
+  spineTemplate: IngestSettingsValues["spine_template"],
+  t: (key: string) => string,
+): FormatCheck | null {
+  if (!formatCheck) return null;
+
+  if (spineTemplate === "narrated") {
+    const issues = (formatCheck.issues ?? []).filter(
+      (issue) =>
+        !["missing_scene_headers", "nonstandard_scene_headers"].includes(
+          issue.code,
+        ),
+    );
+    if (issues.length === 0 && formatCheck.level !== "blocking") {
+      return { ...formatCheck, level: "ok", issues };
+    }
+    return { ...formatCheck, issues };
+  }
+
+  if (formatCheck.scene_header_status === "missing") {
+    const issues = (formatCheck.issues ?? []).filter(
+      (issue) => issue.code !== "missing_scene_headers",
+    );
+    issues.unshift({
+      code: "missing_scene_headers",
+      line: null,
+      message: t("ingest.sceneHeaders.missing"),
+      fix: t("ingest.sceneHeaders.missingFix"),
+    });
+    return {
+      ...formatCheck,
+      level: "blocking",
+      summary: t("ingest.sceneHeaders.missing"),
+      issues,
+    };
+  }
+
+  if (
+    formatCheck.scene_header_status === "repairable" &&
+    formatCheck.level !== "blocking"
+  ) {
+    const issues = (formatCheck.issues ?? []).filter(
+      (issue) => issue.code !== "nonstandard_scene_headers",
+    );
+    issues.unshift({
+      code: "nonstandard_scene_headers",
+      line: null,
+      message: t("ingest.sceneHeaders.repairable"),
+      fix: t("ingest.sceneHeaders.repairableFix"),
+    });
+    return {
+      ...formatCheck,
+      level: "warning",
+      summary: t("ingest.sceneHeaders.repairable"),
+      issues,
+    };
+  }
+
+  return formatCheck;
 }
 
 function hiddenImportedPreviewKey(project: string): string {
@@ -332,10 +464,122 @@ function UploadZone({
         className="hidden"
         accept=".txt,.md,.docx"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
           if (file) onFile(file);
         }}
       />
+    </div>
+  );
+}
+
+// 全屏上传遮罩：网络慢时上传还在飞、用户一切菜单就卸载本页，upload 的 onSuccess
+// 便写不进 chapters 缓存，回来「刚上传的小说」就消失了。用 fixed inset-0 z-[1000]
+// 盖住整屏（含顶部菜单），上传期间挡住导航，逼用户等上传落地再离开。
+function UploadingOverlay() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="alertdialog"
+      aria-busy="true"
+      aria-live="assertive"
+      aria-label={t("ingest.uploadingTitle")}
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-background/80 px-6 text-foreground backdrop-blur-md"
+    >
+      <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-border/60 bg-card/95 px-8 py-10 text-center shadow-2xl shadow-black/50">
+        <div className="relative mb-6 flex size-14 items-center justify-center">
+          <span
+            className="absolute inset-0 animate-ping rounded-full bg-primary/10"
+            aria-hidden="true"
+          />
+          <span
+            className="absolute inset-0 rounded-full bg-primary/10"
+            aria-hidden="true"
+          />
+          <Loader2
+            className="relative size-7 animate-spin text-primary"
+            aria-hidden="true"
+          />
+        </div>
+        <h2 className="text-lg font-semibold tracking-tight">
+          {t("ingest.uploadingTitle")}
+        </h2>
+        <p className="mt-2.5 max-w-[17rem] text-[13px] leading-6 text-muted-foreground">
+          {t("ingest.uploadingHint")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// 格式风险常驻提示：warning 仅提示且允许导入，blocking 使用红色并阻止导入。
+// boxed = 富卡片提示条；plain = 上传表单提示行里的一行轻量文字。
+function FormatCheckWarning({
+  formatCheck,
+  onViewDetails,
+  variant = "boxed",
+  className,
+}: {
+  formatCheck: FormatCheck;
+  onViewDetails?: () => void;
+  variant?: "boxed" | "plain";
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  const detailsButton = onViewDetails && (
+    <button
+      type="button"
+      onClick={onViewDetails}
+      className={cn(
+        "ml-1.5 whitespace-nowrap font-medium underline underline-offset-2 transition-colors",
+        "text-foreground/80 hover:text-foreground",
+      )}
+    >
+      {t("aiAssistant.formatCheck.viewDetails")}
+    </button>
+  );
+
+  if (variant === "plain") {
+    return (
+      <div className={cn("flex items-start gap-1.5", className)}>
+        <AlertTriangle
+          className={cn(
+            "mt-px size-3.5 shrink-0",
+            formatCheck.level === "blocking"
+              ? "text-destructive"
+              : "text-foreground/45",
+          )}
+        />
+        <div className="min-w-0">
+          <span>{formatCheck.summary || t("aiAssistant.formatCheck.title")}</span>
+          {detailsButton}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-md border px-3 py-2",
+        formatCheck.level === "blocking"
+          ? "border-destructive/35 bg-destructive/10"
+          : "border-white/10 bg-white/[0.04]",
+        className,
+      )}
+    >
+      <AlertTriangle
+        className={cn(
+          "mt-0.5 size-3.5 shrink-0",
+          formatCheck.level === "blocking"
+            ? "text-destructive"
+            : "text-foreground/45",
+        )}
+      />
+      <div className="min-w-0 text-xs leading-5 text-foreground/70">
+        <span>{formatCheck.summary || t("aiAssistant.formatCheck.title")}</span>
+        {detailsButton}
+      </div>
     </div>
   );
 }
@@ -346,11 +590,16 @@ function UploadedFileCard({
   status,
   progress,
   currentTask,
+  startedAtMs,
   error,
+  formatCheck,
+  onViewFormatCheck,
   isIngesting,
   canStart,
   isStarting,
+  sourceLocked,
   ingestCostDisplay,
+  ingestPromotion,
   onStart,
   onCancel,
   isCancelling,
@@ -362,11 +611,16 @@ function UploadedFileCard({
   status: IngestFileStatus;
   progress: number;
   currentTask: string;
+  startedAtMs: number;
   error: string | null;
+  formatCheck?: FormatCheck | null;
+  onViewFormatCheck?: () => void;
   isIngesting: boolean;
   canStart: boolean;
   isStarting: boolean;
+  sourceLocked: boolean;
   ingestCostDisplay?: string | null;
+  ingestPromotion?: CreditPromotionDisplay | null;
   onStart: () => void;
   onCancel: () => void;
   isCancelling: boolean;
@@ -375,6 +629,9 @@ function UploadedFileCard({
 }) {
   const { t } = useTranslation();
   const percent = Math.round(progress * 100);
+  // 导入完成后风险提示已无行动价值，只在导入前/失败/中止时常驻展示。
+  const showFormatWarning =
+    formatCheck?.level !== "ok" && status !== "completed";
   const statusStyles: Record<IngestFileStatus, string> = {
     uploaded: "border-primary/30 bg-primary/10 text-primary",
     importing: "border-primary/30 bg-primary/10 text-primary",
@@ -424,6 +681,13 @@ function UploadedFileCard({
               {error}
             </p>
           )}
+          {showFormatWarning && formatCheck && (
+            <FormatCheckWarning
+              formatCheck={formatCheck}
+              onViewDetails={onViewFormatCheck}
+              className="mt-2"
+            />
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isIngesting ? (
@@ -455,25 +719,34 @@ function UploadedFileCard({
                   ) : (
                     <Play className="size-3.5 fill-current" />
                   )}
-                  {isStarting ? t("ingest.processing") : t("ingest.startIngest")}
-                  <CreditCostInline display={ingestCostDisplay} />
+                  {isStarting
+                    ? t("ingest.processing")
+                    : status === "failed" || status === "stopped"
+                      ? t("common.retry")
+                      : t("ingest.startIngest")}
+                  <CreditCostInline
+                    display={ingestCostDisplay}
+                    promotion={ingestPromotion}
+                  />
                 </Button>
               )}
-              {/* 导入完成后去掉「重新上传」「删除」：已导入的小说不再允许就地换文件
-                  或删除，避免误操作覆盖/清掉已建好的图谱；未导入（uploaded/stopped/
-                  failed）时保留这两个入口。 */}
-              {status !== "completed" && (
+              {/* 已锁定的重导入源只允许原文件重试；普通临时上传在失败或停止后
+                  仍允许换文件。删除只针对尚未完成导入的临时上传。 */}
+              {!sourceLocked && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={onReupload}
+                  disabled={isStarting}
                   className="gap-1.5"
                 >
                   <RefreshCw className="size-3.5" />
-                  {t("common.reupload")}
+                  {status === "completed"
+                    ? t("ingest.reimport")
+                    : t("common.reupload")}
                 </Button>
               )}
-              {status !== "completed" && (
+              {!sourceLocked && status !== "completed" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -494,6 +767,7 @@ function UploadedFileCard({
             <span className="min-w-0 flex-1 truncate">
               {currentTask || t("ingest.processing")}
             </span>
+            <IngestElapsedTime startedAtMs={startedAtMs} />
             <span className="shrink-0 font-mono tabular-nums">{percent}%</span>
           </div>
           <Progress value={percent} />
@@ -515,7 +789,7 @@ function SelectedFileCard({
   const { name, extension } = splitFilename(filename);
 
   return (
-    <div className="flex h-full items-center justify-center px-4">
+    <div className="flex h-full flex-col items-center justify-center px-4">
       <div className="relative w-full max-w-[320px] rounded-lg bg-sky-500/20 px-5 py-4 pr-12 text-left">
         <button
           type="button"
@@ -589,6 +863,55 @@ function InputModeToggle({
     </div>
   );
 }
+
+function IngestStartButton({
+  disabled,
+  isBusy,
+  costDisplay,
+  promotion,
+  onClick,
+}: {
+  disabled: boolean;
+  isBusy: boolean;
+  costDisplay?: string | null;
+  promotion?: CreditPromotionDisplay | null;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-auto min-h-8 min-w-[124px] rounded-[8px] bg-primary px-3 py-1 text-xs font-normal text-primary-foreground shadow-none transition-colors hover:bg-primary/85 active:bg-primary/75"
+    >
+      <span className="grid w-full grid-cols-[12px_52px_auto] items-center justify-center gap-1.5">
+        <Play className="size-3 fill-current" />
+        <span className="text-center">
+          {isBusy ? t("ingest.processing") : t("ingest.startIngest")}
+        </span>
+        <IngestCreditCostSlot display={costDisplay} promotion={promotion} />
+      </span>
+    </Button>
+  );
+}
+
+const IngestCreditCostSlot = memo(function IngestCreditCostSlot({
+  display,
+  promotion,
+}: {
+  display?: string | null;
+  promotion?: CreditPromotionDisplay | null;
+}) {
+  return (
+    <CreditCostInline
+      display={display}
+      promotion={promotion}
+      className="ml-0 text-primary-foreground"
+      iconClassName="text-primary-foreground drop-shadow-none [&_path]:fill-current"
+    />
+  );
+});
 
 function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -673,6 +996,7 @@ export function IngestPageContent({ project }: { project: string }) {
   const [uploadedFileSource, setUploadedFileSource] =
     useState<UploadedFileSource | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>("upload");
+  const [novelFormatOpen, setNovelFormatOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
   const [ingestSubmitted, setIngestSubmitted] = useState(false);
   const [hideImportedPreview, setHideImportedPreview] = useState(() =>
@@ -686,7 +1010,23 @@ export function IngestPageContent({ project }: { project: string }) {
     formatCheck: FormatCheck;
     filename: string;
   } | null>(null);
+  const [selectedChapterNumber, setSelectedChapterNumber] = useState<number | null>(
+    null,
+  );
   const logsScrollRef = useRef<HTMLDivElement>(null);
+  const replacementFileInputRef = useRef<HTMLInputElement>(null);
+
+  // The chapter preview representation depends on the currently selected
+  // project type, so initialize the form before creating that query.
+  const { data: projectRes } = useProject(project);
+  const config = projectRes?.data;
+  const normalizedDefaults = normalizeLegacyDefaults(config);
+  const { watch, setValue, getValues } = useForm<SettingsForm>({
+    resolver: zodResolver(settingsSchema),
+    values: normalizedDefaults,
+  });
+  const formValues = watch();
+  const settingsValues = resolveIngestSettings(formValues, normalizedDefaults);
 
   const uploadMutation = useUploadNovel(project);
   const startIngestMutation = useStartIngest(project);
@@ -699,42 +1039,71 @@ export function IngestPageContent({ project }: { project: string }) {
   // route changes. Upload filename/size is only local session metadata.
   const { data: chaptersRes, isFetching: chaptersFetching } = useChapters(
     project,
+    settingsValues.spine_template,
     true,
   );
   const chaptersData = chaptersRes?.data;
   const hasImportedContent = (chaptersData?.chapters?.length ?? 0) > 0;
+  const isUploadOnlyPreview = chaptersData?.preview_only === true;
 
-  // Re-import warning if characters already exist
-  const { data: charactersRes } = useCharacters(project);
-  const hasCharacters = (charactersRes?.data?.length ?? 0) > 0;
   const pastedBillableChars = useMemo(
     () => countBillableNovelChars(pastedText.trim()),
     [pastedText],
   );
+  const debouncedPastedBillableChars = useDebouncedValue(pastedBillableChars, 450);
   const billingBillableChars =
-    inputMode === "paste" && pastedBillableChars > 0
-      ? pastedBillableChars
+    inputMode === "paste" && debouncedPastedBillableChars > 0
+      ? debouncedPastedBillableChars
       : typeof uploadedFile?.billable_chars === "number"
         ? uploadedFile.billable_chars
         : typeof chaptersData?.billable_chars === "number"
           ? chaptersData.billable_chars
           : null;
-  const ingestFeatureCost = useGenerationCreditCost("feature", "ingest_fast", {
+  const hasBillableInput = inputMode === "paste"
+    ? pastedBillableChars > 0
+    : (billingBillableChars ?? 0) > 0;
+  const ingestFeatureCost = useGenerationCreditCost("feature", "mainline.ingest_fast", {
     quantity: billingBillableChars && billingBillableChars > 0
       ? billingBillableChars
       : undefined,
   });
   const ingestFeatureCostData = ingestFeatureCost.data?.data;
-  const ingestFeatureCostDisplay =
+  const queriedIngestFeatureCostDisplay =
     ingestFeatureCostData?.display ??
     (ingestFeatureCost.error instanceof BillingRuleNotConfiguredError
       ? t("common.billingRuleNotConfiguredShort")
       : null);
+  const lastStableIngestCostDisplayRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hasBillableInput) {
+      lastStableIngestCostDisplayRef.current = null;
+      return;
+    }
+    if (queriedIngestFeatureCostDisplay) {
+      lastStableIngestCostDisplayRef.current = queriedIngestFeatureCostDisplay;
+    }
+  }, [hasBillableInput, queriedIngestFeatureCostDisplay]);
+  const ingestFeatureCostDisplay = hasBillableInput
+    ? queriedIngestFeatureCostDisplay ?? lastStableIngestCostDisplayRef.current
+    : null;
 
   // SSE task streaming
   const [ingestStarted, setIngestStarted] = useState(false);
+  const [localIngestStartedAtMs, setLocalIngestStartedAtMs] = useState(() =>
+    Date.now(),
+  );
   const [reimporting, setReimporting] = useState(false);
   const [reuploadConfirmOpen, setReuploadConfirmOpen] = useState(false);
+  const [reimportSourceFilename, setReimportSourceFilename] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    setReimportSourceFilename(null);
+  }, [project]);
+  const knowledgeGraph = useKnowledgeGraph(
+    project,
+    hasImportedContent && !isUploadOnlyPreview && !ingestStarted,
+  );
   const cancelTask = useCancelTask();
   const taskStream = useTaskStream({
     taskType: "ingest_fast",
@@ -753,31 +1122,118 @@ export function IngestPageContent({ project }: { project: string }) {
       setIngestStarted(false);
       setIngestFileStatus("completed");
       setIngestError(null);
+      setReimportSourceFilename(null);
       await queryClient.refetchQueries({
         queryKey: queryKeys.chapters(project),
         type: "active",
       });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeGraph(project),
+      });
       toast.success(t("common.generate") + " ✓");
     },
-    onError: (error) => {
+    onError: async (error) => {
       setIngestStarted(false);
+      // 任务失败后允许直接用当前上传文件重试。上传文件由独立上传接口持久化，
+      // 不应因为 Cognee 的 LLM/Embedding 阶段失败而要求用户重新上传。
+      setIngestSubmitted(false);
       setIngestFileStatus("failed");
       setIngestError(error);
+      // rebuild 已让后端旧 novel.txt 失效；立即与服务端重新对账，避免旧
+      // chapters / graph 缓存继续把失败项目显示成“已导入”。
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.chapters(project),
+        type: "active",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeGraph(project),
+      });
     },
   });
 
+  // Mount reconcile：导入实际在服务端(celery)跑。用户导入中切走再回来，本地
+  // 的 ingestStarted/ingestSubmitted 全部重置、SSE 也不重连，而此时章节尚未
+  // 持久化(chapters 为空)，页面便退回空上传页——「导入中的虾料不见了」。
+  // 挂载时与服务端任务列表对账一次：若 ingest_fast 仍活跃，就重开进度视图，
+  // 让 useTaskStream 重连(后端会在连接时补发运行进度)。
+  //
+  // 两个坑：
+  //  1. tasks(project) 缓存是全局共享的(不含 episode、staleTime=0)，挂载时
+  //     React Query 会先同步吐旧缓存(可能是导入前的空列表)再后台 refetch。
+  //     必须用 isFetchedAfterMount 只认「本次挂载后刷到的新数据」，否则会拿旧
+  //     空列表对账一次就把 ref 锁死，等真数据回来时已早退，恢复被永久错过。
+  //  2. 按 project 记账(而非布尔 ref)，这样跨项目复用组件时切到新项目会重新
+  //     对账，不会被上一个项目的「已对账」状态卡住。
+  //
+  // 对账两个方向都要落地：活跃项目开进度视图；切到「无活跃 ingest_fast」的项目
+  // 则清掉可能从上一个项目残留的进度视图状态(ingestSubmitted/ingestStarted/
+  // ingestFileStatus)，否则组件被跨项目复用时会错显「Importing」卡片并让
+  // useTaskStream 去连一个不存在的 SSE。正常路由下父级会按 project remount 兜底，
+  // 单次挂载时 else 分支是无副作用的幂等重置(状态本就是初值)——纯防御。
+  const {
+    data: ingestTasksRes,
+    isFetchedAfterMount: ingestTasksFetchedAfterMount,
+  } = useTasks({ project, episode: 0 });
+  const activeIngestTask = (ingestTasksRes?.data ?? []).find(
+    (task) =>
+      task.task_type === "ingest_fast" &&
+      ACTIVE_INGEST_STATUSES.has(task.status),
+  );
+  const persistedIngestStartedAtMs = activeIngestTask?.created_at
+    ? Date.parse(activeIngestTask.created_at)
+    : Number.NaN;
+  const [rememberedIngestStart, setRememberedIngestStart] = useState<{
+    project: string;
+    startedAtMs: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!Number.isFinite(persistedIngestStartedAtMs)) return;
+    setRememberedIngestStart({
+      project,
+      startedAtMs: persistedIngestStartedAtMs,
+    });
+  }, [persistedIngestStartedAtMs, project]);
+  const rememberedIngestStartedAtMs =
+    rememberedIngestStart?.project === project
+      ? rememberedIngestStart.startedAtMs
+      : Number.NaN;
+  const ingestStartedAtMs = Number.isFinite(persistedIngestStartedAtMs)
+    ? persistedIngestStartedAtMs
+    : Number.isFinite(rememberedIngestStartedAtMs)
+      ? rememberedIngestStartedAtMs
+      : localIngestStartedAtMs;
+  const ingestReconciledProjectRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (ingestReconciledProjectRef.current === project) return;
+    if (!ingestTasksFetchedAfterMount) return;
+    if (ingestTasksRes === undefined) return;
+    ingestReconciledProjectRef.current = project;
+    if (activeIngestTask) {
+      setIngestSubmitted(true);
+      setIngestStarted(true);
+      setIngestFileStatus("importing");
+      setHideImportedPreview(false);
+    } else {
+      setIngestSubmitted(false);
+      setIngestStarted(false);
+      setIngestFileStatus("uploaded");
+    }
+  }, [activeIngestTask, ingestTasksRes, ingestTasksFetchedAfterMount, project]);
+
   const handleCancelIngest = useCallback(async () => {
-    setIngestStarted(false);
-    setIngestFileStatus("stopped");
     try {
-      await cancelTask.mutateAsync({
+      const result = await cancelTask.mutateAsync({
         type: "ingest_fast",
         project,
         episode: 0,
       });
+      if (!result.ok) return;
+      setIngestStarted(false);
+      setIngestFileStatus("stopped");
+      setIngestSubmitted(false);
       toast.success(t("ingest.stopped"));
     } catch {
-      // Already hidden locally; swallow.
+      // Keep the ingest progress visible when cancellation failed.
     }
   }, [cancelTask, project, t]);
 
@@ -803,11 +1259,8 @@ export function IngestPageContent({ project }: { project: string }) {
   }, [ingestLogs]);
 
   // Project config & form
-  const { data: projectRes } = useProject(project);
   const { data: stylesRes } = useStyles(project);
   const updateProject = useUpdateProject(project);
-  const config = projectRes?.data;
-  const normalizedDefaults = normalizeLegacyDefaults(config);
   const visualStyleOptions = useMemo(() => {
     const styles = stylesRes?.data ?? [];
     if (styles.length > 0) {
@@ -822,13 +1275,16 @@ export function IngestPageContent({ project }: { project: string }) {
     }));
   }, [stylesRes?.data, t]);
 
-  const { watch, setValue, getValues } = useForm<SettingsForm>({
-    resolver: zodResolver(settingsSchema),
-    values: normalizedDefaults,
-  });
-
-  const formValues = watch();
-  const settingsValues = resolveIngestSettings(formValues, normalizedDefaults);
+  const displayedFormatCheck = useMemo(
+    () =>
+      resolveFormatCheckForSpineTemplate(
+        uploadedFile?.format_check,
+        settingsValues.spine_template,
+        t,
+      ),
+    [settingsValues.spine_template, t, uploadedFile?.format_check],
+  );
+  const formatCheckBlocksImport = displayedFormatCheck?.level === "blocking";
   const settingsChanged =
     projectRes?.data !== undefined &&
     hasIngestSettingsChanges(settingsValues, config);
@@ -847,12 +1303,16 @@ export function IngestPageContent({ project }: { project: string }) {
     [setValue],
   );
 
-  // Surface a non-blocking format warning as a success+risk toast with a
-  // "view details" affordance. warning never blocks — upload already succeeded.
+  // Surface a non-blocking format warning as a toast with a "view details"
+  // affordance. warning never blocks — upload already succeeded. Only used by
+  // the paste flow: the upload flow shows a persistent banner inside
+  // SelectedFileCard instead, so the warning stays visible after the toast
+  // would have expired.
   const warnFormatCheck = useCallback(
     (formatCheck: FormatCheck | undefined, filename: string) => {
       if (!formatCheck || formatCheck.level !== "warning") return;
       toast.warning(formatCheck.summary || t("aiAssistant.formatCheck.title"), {
+        duration: 10000,
         action: {
           label: t("aiAssistant.formatCheck.viewDetails"),
           onClick: () => setFormatCheckDetails({ formatCheck, filename }),
@@ -866,33 +1326,47 @@ export function IngestPageContent({ project }: { project: string }) {
   const handleFile = useCallback(
     async (file: File) => {
       try {
-        const result = await uploadMutation.mutateAsync(file);
+        const result = await uploadMutation.mutateAsync({
+          file,
+          spineTemplate: settingsValues.spine_template,
+        });
         setUploadedFile(result.data);
         setUploadedFileSource("upload");
+        setHideImportedPreview(false);
+        writeHiddenImportedPreview(project, false);
         setIngestFileStatus("uploaded");
         setIngestError(null);
         toast.success(`${t("common.upload")} ✓ — ${result.data.filename}`);
-        warnFormatCheck(result.data.format_check, result.data.filename);
+        // 格式风险不再走 toast：SelectedFileCard 内有常驻警告条,文件在则警告在。
+        return true;
       } catch (error) {
         toast.error(backendErrorToastMessage(error, t));
+        return false;
       }
     },
-    [uploadMutation, t, warnFormatCheck],
+    [project, settingsValues.spine_template, uploadMutation, t],
   );
 
   const handleReupload = useCallback(() => {
-    setUploadedFile(null);
-    setUploadedFileSource(null);
-    setIngestSubmitted(false);
-    setReimporting(true);
-    // Transient-only: keep the upload form for the current view, but do NOT
-    // persist the "hide preview" intent. If the user navigates away without
-    // completing a new import, returning should restore the imported summary.
-    setHideImportedPreview(true);
-    setIngestFileStatus("uploaded");
-    setIngestError(null);
-    setIngestLogs([]);
+    replacementFileInputRef.current?.click();
   }, []);
+
+  const handleReplacementFile = useCallback(
+    async (file: File) => {
+      const uploaded = await handleFile(file);
+      if (!uploaded) return;
+
+      // Only replace the current preview after the new upload succeeds. Native
+      // file pickers do not emit a change event when cancelled, so preserving
+      // the old state here prevents a cancelled picker from blanking the page.
+      setIngestSubmitted(false);
+      setReimporting(true);
+      setIngestFileStatus("uploaded");
+      setIngestError(null);
+      setIngestLogs([]);
+    },
+    [handleFile],
+  );
 
   const handleDeleteFile = useCallback(() => {
     setUploadedFile(null);
@@ -920,14 +1394,30 @@ export function IngestPageContent({ project }: { project: string }) {
     const file = new File([text], "pasted-novel.txt", {
       type: "text/plain;charset=utf-8",
     });
-    const result = await uploadMutation.mutateAsync(file);
+    const result = await uploadMutation.mutateAsync({
+      file,
+      spineTemplate: settingsValues.spine_template,
+    });
     setUploadedFile(result.data);
     setUploadedFileSource("paste");
     setIngestFileStatus("uploaded");
     setIngestError(null);
-    warnFormatCheck(result.data.format_check, result.data.filename);
+    warnFormatCheck(
+      resolveFormatCheckForSpineTemplate(
+        result.data.format_check,
+        settingsValues.spine_template,
+        t,
+      ) ?? undefined,
+      result.data.filename,
+    );
     return result.data;
-  }, [pastedText, uploadMutation, warnFormatCheck]);
+  }, [
+    pastedText,
+    settingsValues.spine_template,
+    t,
+    uploadMutation,
+    warnFormatCheck,
+  ]);
 
   const saveProjectSettings = useCallback(async () => {
     const defaults = normalizeLegacyDefaults(config);
@@ -964,57 +1454,115 @@ export function IngestPageContent({ project }: { project: string }) {
     }
   }, [saveProjectSettings, t]);
 
-  // Save-on-import: persist settings (if changed), then kick off ingest
+  const startIngestFromFilename = useCallback(
+    async (filename: string, options?: { lockSource?: boolean }) => {
+      if (options?.lockSource) {
+        setReimportSourceFilename(filename);
+      } else {
+        setReimportSourceFilename(null);
+      }
+      try {
+        await saveProjectSettings();
+        setRememberedIngestStart(null);
+        setLocalIngestStartedAtMs(Date.now());
+        setIngestLogs([]);
+        setIngestError(null);
+        await startIngestMutation.mutateAsync({
+          filename,
+          rebuild: true,
+          spine_template: resolveIngestSettings(
+            getValues(),
+            normalizeLegacyDefaults(config),
+          ).spine_template,
+        });
+        setIngestSubmitted(true);
+        setHideImportedPreview(false);
+        writeHiddenImportedPreview(project, false);
+        setIngestStarted(true);
+        setReimporting(false);
+        setIngestFileStatus("importing");
+      } catch (error) {
+        setIngestFileStatus("failed");
+        const message = backendErrorToastMessage(error, t);
+        setIngestError(message);
+        toast.error(message);
+      }
+    },
+    [
+      saveProjectSettings,
+      startIngestMutation,
+      getValues,
+      config,
+      project,
+      t,
+    ],
+  );
+
+  // Save-on-import: persist settings (if changed), then kick off ingest.
   const handleStartIngest = useCallback(async () => {
-    try {
-      const sourceFile =
-        inputMode === "upload" ? uploadedFile : await uploadPastedText();
-      if (!sourceFile) return;
-      await saveProjectSettings();
-      setIngestLogs([]);
-      setIngestError(null);
-      await startIngestMutation.mutateAsync({
-        filename: sourceFile.filename,
-        rebuild: true,
-        spine_template: resolveIngestSettings(getValues(), normalizeLegacyDefaults(config))
-          .spine_template,
-      });
-      setIngestSubmitted(true);
-      setHideImportedPreview(false);
-      writeHiddenImportedPreview(project, false);
-      setIngestStarted(true);
-      setReimporting(false);
-      setIngestFileStatus("importing");
-    } catch (error) {
-      setIngestFileStatus("failed");
-      const message = backendErrorToastMessage(error, t);
-      setIngestError(message);
-      toast.error(message);
+    const sourceFile =
+      inputMode === "upload" ? uploadedFile : await uploadPastedText();
+    if (!sourceFile) return;
+    const formatCheck = resolveFormatCheckForSpineTemplate(
+      sourceFile.format_check,
+      settingsValues.spine_template,
+      t,
+    );
+    if (formatCheck?.level === "blocking") {
+      setFormatCheckDetails({ formatCheck, filename: sourceFile.filename });
+      toast.error(formatCheck.summary);
+      return;
     }
+    await startIngestFromFilename(sourceFile.filename);
   }, [
-    uploadedFile,
     inputMode,
-    uploadPastedText,
-    saveProjectSettings,
-    startIngestMutation,
-    getValues,
-    config,
-    project,
+    settingsValues.spine_template,
+    startIngestFromFilename,
     t,
+    uploadedFile,
+    uploadPastedText,
   ]);
 
+  const handleReimportExisting = useCallback(async () => {
+    setReuploadConfirmOpen(false);
+    const sourceFilename = chaptersData?.source_filename;
+    if (!sourceFilename) {
+      toast.error(t("ingest.reimportSourceMissing"));
+      return;
+    }
+    await startIngestFromFilename(sourceFilename, { lockSource: true });
+  }, [chaptersData?.source_filename, startIngestFromFilename, t]);
+
+  const handleRetryReimport = useCallback(async () => {
+    if (!reimportSourceFilename) return;
+    await startIngestFromFilename(reimportSourceFilename, { lockSource: true });
+  }, [reimportSourceFilename, startIngestFromFilename]);
+
   const chapters = chaptersData?.chapters ?? [];
+  const selectedChapter =
+    selectedChapterNumber == null
+      ? null
+      : chapters.find((chapter) => chapter.number === selectedChapterNumber) ?? null;
   const chapterCount = chapters.length;
   const shouldRestoreImportedPreview =
     hasImportedContent && !hideImportedPreview;
-  const shouldShowPreview = ingestSubmitted || shouldRestoreImportedPreview;
+  const shouldShowPreview =
+    ingestSubmitted || shouldRestoreImportedPreview || !!reimportSourceFilename;
   const previewFile =
     uploadedFile ??
-    (shouldRestoreImportedPreview
-      ? { filename: t("ingest.restoredFilename"), size: null }
-      : null);
+    (reimportSourceFilename
+      ? { filename: reimportSourceFilename, size: null }
+      : shouldRestoreImportedPreview || ingestSubmitted
+        ? {
+            filename:
+              chaptersData?.source_filename ?? t("ingest.restoredFilename"),
+            size: null,
+          }
+        : null);
   const previewStatus: IngestFileStatus =
-    uploadedFile || ingestSubmitted ? ingestFileStatus : "completed";
+    uploadedFile || ingestSubmitted || reimportSourceFilename
+      ? ingestFileStatus
+      : "completed";
   const totalChars =
     typeof chaptersData?.total_chars === "number"
       ? chaptersData.total_chars
@@ -1044,7 +1592,8 @@ export function IngestPageContent({ project }: { project: string }) {
   );
 
   const canStartFromCurrentInput =
-    inputMode === "upload" ? !!uploadedFile : pastedText.trim().length > 0;
+    (inputMode === "upload" ? !!uploadedFile : pastedText.trim().length > 0) &&
+    !formatCheckBlocksImport;
   const hasPastedText = pastedText.trim().length > 0;
   const hasUserUploadedFile = uploadedFileSource === "upload" && !!uploadedFile;
   const sourceHint =
@@ -1056,6 +1605,19 @@ export function IngestPageContent({ project }: { project: string }) {
 
   return (
     <div className="-m-6 flex h-[calc(100%+3rem)] flex-col overflow-hidden">
+      {uploadMutation.isPending && <UploadingOverlay />}
+      <input
+        ref={replacementFileInputRef}
+        type="file"
+        className="hidden"
+        accept=".txt,.md,.docx"
+        aria-label={t("common.reupload")}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void handleReplacementFile(file);
+        }}
+      />
       <div className="flex shrink-0 flex-col gap-3 border-b border-border/30 bg-background px-9 py-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -1142,8 +1704,22 @@ export function IngestPageContent({ project }: { project: string }) {
                 </div>
               </div>
               {inputMode === "upload" && (
-                <div className="mt-1.5 h-4 px-1 text-xs leading-4 text-muted-foreground/70">
-                  {sourceHint}
+                <div className="mt-1.5 min-h-4 px-1 text-xs leading-4 text-muted-foreground/70">
+                  {displayedFormatCheck && displayedFormatCheck.level !== "ok" ? (
+                    // 格式风险常驻在提示行（紧邻「开始导入」决策区），替代一闪而过的 toast。
+                    <FormatCheckWarning
+                      formatCheck={displayedFormatCheck}
+                      variant="plain"
+                      onViewDetails={() => {
+                        setFormatCheckDetails({
+                          formatCheck: displayedFormatCheck,
+                          filename: uploadedFile?.filename ?? "",
+                        });
+                      }}
+                    />
+                  ) : (
+                    sourceHint
+                  )}
                 </div>
               )}
               <div className="mt-2.5 grid grid-cols-2 gap-2.5 px-1 md:flex md:items-center md:gap-3">
@@ -1294,43 +1870,49 @@ export function IngestPageContent({ project }: { project: string }) {
                   </SelectContent>
                 </Select>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleSaveSettings}
-                  disabled={!settingsChanged || updateProject.isPending || ingestStarted}
-                  className="h-8 gap-1.5 rounded-[8px] border-white/10 bg-transparent px-3 text-xs font-normal shadow-none transition-colors hover:bg-white/8 md:ml-auto"
-                >
-                  {updateProject.isPending && !startIngestMutation.isPending ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="size-3" />
-                  )}
-                  {updateProject.isPending && !startIngestMutation.isPending
-                    ? t("ingest.processing")
-                    : t("ingest.saveSettings")}
-                </Button>
+                {/* 导入标准格式只对精品剧成立，解说剧走的是另一套解析。 */}
+                {settingsValues.spine_template === "drama" && (
+                  <button
+                    type="button"
+                    onClick={() => setNovelFormatOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[13px] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground [&:hover>span]:underline"
+                  >
+                    <Info className="size-3.5 shrink-0" />
+                    <span>{t("ingest.novelFormat.button")}</span>
+                  </button>
+                )}
 
-                <Button
-                  onClick={handleStartIngest}
-                  disabled={
-                    !canStartFromCurrentInput ||
-                    uploadMutation.isPending ||
-                    isStarting ||
-                    ingestStarted
-                  }
-                  className="h-8 gap-1.5 rounded-[8px] bg-primary px-4 text-xs font-normal text-primary-foreground shadow-none transition-colors hover:bg-primary/85 active:bg-primary/75"
-                >
-                  <Play className="size-3 fill-current" />
-                  {isStarting || ingestStarted
-                    ? t("ingest.processing")
-                    : t("ingest.startIngest")}
-                  <CreditCostInline
-                    display={ingestFeatureCostDisplay}
-                    className="text-primary-foreground"
-                    iconClassName="text-primary-foreground drop-shadow-none [&_path]:fill-current"
+                <div className="col-span-2 flex w-full shrink-0 items-center justify-end gap-3 md:ml-auto md:w-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSaveSettings}
+                    disabled={!settingsChanged || updateProject.isPending || ingestStarted}
+                    className="h-8 gap-1.5 rounded-[8px] border-white/10 bg-transparent px-3 text-xs font-normal shadow-none transition-colors hover:bg-white/8"
+                  >
+                    {updateProject.isPending && !startIngestMutation.isPending ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-3" />
+                    )}
+                    {updateProject.isPending && !startIngestMutation.isPending
+                      ? t("ingest.processing")
+                      : t("ingest.saveSettings")}
+                  </Button>
+
+                  <IngestStartButton
+                    onClick={handleStartIngest}
+                    disabled={
+                      !canStartFromCurrentInput ||
+                      uploadMutation.isPending ||
+                      isStarting ||
+                      ingestStarted
+                    }
+                    isBusy={isStarting || ingestStarted}
+                    costDisplay={ingestFeatureCostDisplay}
+                    promotion={ingestFeatureCostData?.promotion}
                   />
-                </Button>
+                </div>
               </div>
             </motion.section>
           ) : (
@@ -1343,15 +1925,43 @@ export function IngestPageContent({ project }: { project: string }) {
                   status={previewStatus}
                   progress={taskStream.progress}
                   currentTask={taskStream.currentTask}
+                  startedAtMs={ingestStartedAtMs}
                   error={ingestError}
+                  formatCheck={displayedFormatCheck}
+                  onViewFormatCheck={() => {
+                    if (!displayedFormatCheck) return;
+                    setFormatCheckDetails({
+                      formatCheck: displayedFormatCheck,
+                      filename: previewFile.filename,
+                    });
+                  }}
                   isIngesting={ingestStarted}
-                  canStart={!!uploadedFile && !ingestSubmitted}
+                  canStart={
+                    !ingestSubmitted &&
+                    !formatCheckBlocksImport &&
+                    (!!uploadedFile ||
+                      (!!reimportSourceFilename &&
+                        (previewStatus === "failed" ||
+                          previewStatus === "stopped")))
+                  }
                   isStarting={isStarting}
+                  sourceLocked={!!reimportSourceFilename}
                   ingestCostDisplay={ingestFeatureCostDisplay}
-                  onStart={handleStartIngest}
+                  ingestPromotion={ingestFeatureCostData?.promotion}
+                  onStart={
+                    reimportSourceFilename
+                      ? handleRetryReimport
+                      : handleStartIngest
+                  }
                   onCancel={handleCancelIngest}
                   isCancelling={cancelTask.isPending}
-                  onReupload={() => setReuploadConfirmOpen(true)}
+                  onReupload={() => {
+                    if (previewStatus === "completed") {
+                      setReuploadConfirmOpen(true);
+                    } else {
+                      handleReupload();
+                    }
+                  }}
                   onDelete={handleDeleteFile}
                 />
               )}
@@ -1373,24 +1983,13 @@ export function IngestPageContent({ project }: { project: string }) {
                     <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                     <AlertDialogAction
                       variant="destructive"
-                      onClick={() => {
-                        setReuploadConfirmOpen(false);
-                        handleReupload();
-                      }}
+                      onClick={handleReimportExisting}
                     >
                       {t("ingest.reuploadConfirm.confirm")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-
-              {/* Re-import warning */}
-              {previewFile && hasCharacters && (
-                <div className="flex items-center gap-2 rounded-md bg-amber-300/[0.04] px-3 py-2.5 text-xs text-amber-200/75">
-                  <AlertTriangle className="size-4 shrink-0 text-amber-200/70" />
-                  <span>{t("ingest.reimportWarning")}</span>
-                </div>
-              )}
 
               {/* Preview — loading placeholder */}
               {!chaptersData && chaptersFetching && <ChapterPreviewSkeleton />}
@@ -1405,6 +2004,48 @@ export function IngestPageContent({ project }: { project: string }) {
               {/* Preview — populated */}
               {chaptersData && chapterCount > 0 && (
                 <div className="space-y-4">
+                  {knowledgeGraph.isLoading && (
+                    <div className="h-[520px] overflow-hidden rounded-2xl border border-violet-300/10 bg-[#05050a] p-5">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="size-9 rounded-xl" />
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-2.5 w-40" />
+                        </div>
+                      </div>
+                      <Skeleton className="mx-auto mt-16 size-72 rounded-full opacity-40" />
+                    </div>
+                  )}
+
+                  {knowledgeGraph.data?.data.nodes.length ? (
+                    <KnowledgeGraphVisualization graph={knowledgeGraph.data.data} />
+                  ) : null}
+
+                  {knowledgeGraph.isError && (
+                    <div className="flex min-h-28 items-center justify-between gap-4 rounded-xl border border-amber-300/15 bg-amber-500/[0.04] p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {t("ingest.knowledgeGraph.loadFailed")}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t("ingest.knowledgeGraph.loadFailedHint")}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => knowledgeGraph.refetch()}
+                      >
+                        <RefreshCw className="size-3.5" />
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  )}
+
                   <h2 className="text-lg font-semibold text-foreground">
                     {t("ingest.previewHeading")}
                   </h2>
@@ -1517,30 +2158,58 @@ export function IngestPageContent({ project }: { project: string }) {
                       </span>
                     </div>
                     <div className="divide-y divide-white/[0.05]">
-                      {chapters.slice(0, 20).map((ch) => (
-                        <div
-                          key={ch.number}
-                          className="grid grid-cols-[4rem_1fr_5rem] items-center gap-2 px-4 py-2.5 text-xs"
-                        >
-                          <span className="tabular-nums text-muted-foreground">
-                            {ch.number}
-                          </span>
-                          <span className="truncate text-foreground">
-                            {chapterTitle(ch.number, ch.title, ch.content)}
-                          </span>
-                          <span className="text-right tabular-nums text-muted-foreground">
-                            {(() => {
-                              const count =
-                                ch.word_count ??
-                                ch.char_count ??
-                                ch.content?.length;
-                              return count != null
-                                ? count.toLocaleString()
-                                : "—";
-                            })()}
-                          </span>
-                        </div>
-                      ))}
+                      {chapters.slice(0, 20).map((ch) => {
+                        const isDramaChapter =
+                          settingsValues.spine_template === "drama";
+                        return (
+                          <button
+                            key={ch.number}
+                            type="button"
+                            onClick={() => setSelectedChapterNumber(ch.number)}
+                            className="grid w-full grid-cols-[4rem_1fr_5rem] items-center gap-2 px-4 py-2.5 text-left text-xs transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
+                            aria-label={t(
+                              isDramaChapter
+                                ? "ingest.sceneHeaders.open"
+                                : "ingest.chapterDetails.open",
+                              {
+                                chapter: chapterTitle(
+                                  ch.number,
+                                  ch.title,
+                                  ch.content,
+                                ),
+                              },
+                            )}
+                          >
+                            <span className="tabular-nums text-muted-foreground">
+                              {ch.number}
+                            </span>
+                            <span className="flex min-w-0 items-center gap-2 text-foreground">
+                              <span className="min-w-0 flex-1 truncate">
+                                {chapterTitle(ch.number, ch.title, ch.content)}
+                              </span>
+                              {isDramaChapter && (
+                                <span className="shrink-0 text-muted-foreground">
+                                  {t("ingest.sceneHeaders.rowCount", {
+                                    count: ch.scene_blocks?.length ?? 0,
+                                  })}
+                                </span>
+                              )}
+                              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                            </span>
+                            <span className="text-right tabular-nums text-muted-foreground">
+                              {(() => {
+                                const count =
+                                  ch.word_count ??
+                                  ch.char_count ??
+                                  ch.content?.length;
+                                return count != null
+                                  ? count.toLocaleString()
+                                  : "—";
+                              })()}
+                            </span>
+                          </button>
+                        );
+                      })}
                       {chapterCount > 20 && (
                         <div className="px-4 py-2.5 text-center text-xs text-muted-foreground">
                           {t("ingest.moreChapters", {
@@ -1550,6 +2219,157 @@ export function IngestPageContent({ project }: { project: string }) {
                       )}
                     </div>
                   </div>
+
+                  <Sheet
+                    open={selectedChapterNumber !== null && selectedChapter !== null}
+                    onOpenChange={(open) => {
+                      if (!open) setSelectedChapterNumber(null);
+                    }}
+                  >
+                    <SheetContent
+                      side="right"
+                      className="data-[side=right]:w-full border-border/50 sm:!max-w-[520px]"
+                    >
+                      <SheetHeader className="border-b border-border/50 px-6 py-5">
+                        <SheetTitle>
+                          {selectedChapter
+                            ? chapterTitle(
+                                selectedChapter.number,
+                                selectedChapter.title,
+                                selectedChapter.content,
+                              )
+                            : ""}
+                        </SheetTitle>
+                        <SheetDescription>
+                          {settingsValues.spine_template === "drama"
+                            ? t("ingest.sceneHeaders.count", {
+                                count:
+                                  selectedChapter?.scene_blocks?.length ?? 0,
+                              })
+                            : t("ingest.chapterDetails.description")}
+                        </SheetDescription>
+                      </SheetHeader>
+                      <ScrollArea className="min-h-0 flex-1">
+                        <div className="space-y-6 px-6 pb-8 pt-2">
+                          {settingsValues.spine_template === "drama" && (
+                            <section>
+                              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                {t("ingest.chapterDetails.sceneHeaders")}
+                              </h3>
+                              <div className="space-y-3">
+                                {selectedChapter?.scene_blocks?.length ? (
+                                  selectedChapter.scene_blocks.map(
+                                    (scene, index) => (
+                                      <div
+                                        key={`${index}-${scene.scene_no || "scene"}-${scene.header}`}
+                                        className="rounded-lg border border-border/50 bg-muted/20 p-4"
+                                      >
+                                        <div className="flex items-center justify-between gap-3">
+                                          <p className="text-sm font-medium text-foreground">
+                                            {scene.scene_no
+                                              ? t(
+                                                  "ingest.sceneHeaders.scene",
+                                                  {
+                                                    number: scene.scene_no,
+                                                  },
+                                                )
+                                              : t(
+                                                  "ingest.sceneHeaders.scene",
+                                                  {
+                                                    number: index + 1,
+                                                  },
+                                                )}
+                                          </p>
+                                          <span className="text-xs text-muted-foreground">
+                                            {[
+                                              scene.time_of_day,
+                                              scene.interior_exterior,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(" · ")}
+                                          </span>
+                                        </div>
+                                        <p className="mt-2 text-sm leading-6 text-foreground/80">
+                                          {scene.location ||
+                                            t(
+                                              "ingest.sceneHeaders.unknownLocation",
+                                            )}
+                                        </p>
+                                        {scene.characters?.length ? (
+                                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                                            {t(
+                                              "ingest.sceneHeaders.characters",
+                                            )}
+                                            :{" "}
+                                            {scene.characters.join(
+                                              t(
+                                                "ingest.sceneHeaders.characterSeparator",
+                                              ),
+                                            )}
+                                          </p>
+                                        ) : null}
+                                        <p className="mt-3 border-t border-border/40 pt-3 font-mono text-xs leading-5 text-muted-foreground">
+                                          {scene.header}
+                                        </p>
+                                        <div className="mt-3 whitespace-pre-wrap border-t border-border/40 pt-3 text-sm leading-7 text-foreground/85">
+                                          {sceneBodyFromChapter(
+                                            selectedChapter,
+                                            scene,
+                                          ) ||
+                                            t(
+                                              "ingest.chapterDetails.emptyScene",
+                                            )}
+                                        </div>
+                                      </div>
+                                    ),
+                                  )
+                                ) : selectedChapter?.content?.trim() ? (
+                                  <div
+                                    data-testid="chapter-body"
+                                    className="whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-sm leading-7 text-foreground/85"
+                                  >
+                                    {selectedChapter.content.trim()}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-lg border border-dashed border-border/50 px-4 py-10 text-center text-sm text-muted-foreground">
+                                    {t("ingest.sceneHeaders.empty")}
+                                  </div>
+                                )}
+                              </div>
+                            </section>
+                          )}
+
+                          {settingsValues.spine_template === "drama" &&
+                            selectedChapter &&
+                            unparsedBodyFromChapter(selectedChapter) && (
+                              <section>
+                                <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                  {t("ingest.sceneHeaders.unparsedBody")}
+                                </h3>
+                                <div className="whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-sm leading-7 text-foreground/85">
+                                  {unparsedBodyFromChapter(selectedChapter)}
+                                </div>
+                              </section>
+                            )}
+
+                          {settingsValues.spine_template !== "drama" && (
+                            <section>
+                              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                {t("ingest.chapterDetails.body")}
+                              </h3>
+                              <div
+                                data-testid="chapter-body"
+                                className="whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-sm leading-7 text-foreground/85"
+                              >
+                                {selectedChapter?.content?.trim() ||
+                                  t("ingest.chapterDetails.empty")}
+                              </div>
+                            </section>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </SheetContent>
+                  </Sheet>
                 </div>
               )}
 
@@ -1590,6 +2410,7 @@ export function IngestPageContent({ project }: { project: string }) {
           if (!next) setFormatCheckDetails(null);
         }}
       />
+      <NovelFormatDialog open={novelFormatOpen} onOpenChange={setNovelFormatOpen} />
     </div>
   );
 }
