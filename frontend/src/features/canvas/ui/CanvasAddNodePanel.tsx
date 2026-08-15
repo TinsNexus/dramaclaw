@@ -16,11 +16,11 @@ import {
   CANVAS_MENU_ROW_CLASS,
 } from '@/features/canvas/ui/canvas-node-menu-shared';
 
-const skillProviderLabels: Record<SkillProvider, string> = {
-  freezone_mainline: '主线技能',
-  agent: 'Agent 技能',
-  tool: '工具技能',
-  workflow: '工作流技能',
+const SKILL_PROVIDER_LABEL_KEYS: Record<SkillProvider, string> = {
+  freezone_mainline: 'node.skillNode.providerMainline',
+  agent: 'node.skillNode.providerAgent',
+  tool: 'node.skillNode.providerTool',
+  workflow: 'node.skillNode.providerWorkflow',
 };
 
 const skillProviderOrder: SkillProvider[] = ['freezone_mainline', 'agent', 'tool', 'workflow'];
@@ -175,10 +175,10 @@ export function CanvasAddNodePanel({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[14px] leading-5 text-white/82">
-                          {skillProviderLabels[group.provider]}
+                          {t(SKILL_PROVIDER_LABEL_KEYS[group.provider])}
                         </div>
                         <div className="text-[11px] leading-4 text-white/35">
-                          {group.items.length} 个技能
+                          {t('canvas.nodeSelectionMenu.skillCount', { count: group.items.length })}
                         </div>
                       </div>
                       <ChevronRight
@@ -200,7 +200,7 @@ export function CanvasAddNodePanel({
           onPointerLeave={scheduleSkillPanelClose}
         >
           <div className="px-5 pb-3 pt-5 text-[15px] font-semibold leading-none text-white/62">
-            {skillProviderLabels[activeSkillGroup.provider]}
+            {t(SKILL_PROVIDER_LABEL_KEYS[activeSkillGroup.provider])}
           </div>
           <div className="ui-scrollbar max-h-[420px] overflow-y-auto px-3 pb-4 [scrollbar-gutter:stable]">
             {activeSkillGroup.items.map((skill) => (

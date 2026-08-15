@@ -14,6 +14,16 @@ import {
 import { promoteToAsset } from "@/features/freezone/commit/promoteToAsset";
 import { assetToPushTarget, completeTarget, inferDefaultTarget } from "@/features/freezone/commit/pushTarget";
 
+// Vietnamese translation mapping for tests
+const viTranslations: Record<string, string> = {
+  "freezone.commit.dialog.heading.directorWorldState": "Trạng thái thế giới đạo diễn",
+  "freezone.commit.dialog.heading.manifestCommit": "Gửi manifest thế giới đạo diễn hiện tại",
+  "freezone.commit.dialog.label.scene": "Bối cảnh",
+  "freezone.commit.dialog.directorWorldSource.custom": "Thế giới 3D tùy chỉnh",
+};
+
+const translateVi = (key: string): string => viTranslations[key] ?? key;
+
 describe("CommitDialog target kinds", () => {
   it("hides deprecated and auxiliary scene asset kinds from user selection", () => {
     expect(isUserSelectableCommitKind("scene_360")).toBe(false);
@@ -65,8 +75,8 @@ describe("CommitDialog target kinds", () => {
 
     expect(source).toContain("commitSourceTitle");
     expect(source).toContain('target?.kind === "scene_director_world"');
-    expect(source).toContain("导演世界状态");
-    expect(source).toContain("提交当前导演世界 manifest");
+    expect(source).toContain('t("freezone.commit.dialog.heading.directorWorldState")');
+    expect(source).toContain('t("freezone.commit.dialog.heading.manifestCommit")');
   });
 
   it("shows model scene targets as scene selection instead of a raw scene_id-only field", () => {
@@ -76,7 +86,7 @@ describe("CommitDialog target kinds", () => {
     );
 
     expect(source).toContain("listScenes(project)");
-    expect(source).toContain('aria-label="场景"');
+    expect(source).toContain('t("freezone.commit.dialog.label.scene")');
     expect(source).toContain("sceneOptionLabel(scene)");
   });
 
@@ -103,7 +113,8 @@ describe("CommitDialog target kinds", () => {
       },
       "/static/u/p/freezone/generated/master_sharp.sog",
       "master_sharp.sog",
-    )).toBe("自定义 3D 世界");
+      translateVi,
+    )).toBe("Thế giới 3D tùy chỉnh");
   });
 
   it("does not allow scene director world through the file-copy commit route", async () => {

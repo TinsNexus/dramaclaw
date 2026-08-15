@@ -88,8 +88,8 @@ export function ContextPromptPaletteButton({
         ref={triggerRef}
         type="button"
         className={NODE_CONTEXT_CONTROL_TRIGGER_CLASS}
-        title={t("node.imageGen.contextPalette.button")}
-        aria-label={t("node.imageGen.contextPalette.button")}
+        title={t("node.contextPromptPalette.button")}
+        aria-label={t("node.contextPromptPalette.button")}
         aria-expanded={open}
         onClick={(event) => {
           event.stopPropagation();
@@ -97,7 +97,7 @@ export function ContextPromptPaletteButton({
         }}
       >
         <Palette className="h-3 w-3" />
-        <span>{t("node.imageGen.contextPalette.button")}</span>
+        <span>{t("node.contextPromptPalette.button")}</span>
         <ChevronDown
           className={`h-3 w-3 shrink-0 text-text-muted/90 transition-transform ${
             open ? "rotate-180" : ""
@@ -116,12 +116,12 @@ export function ContextPromptPaletteButton({
             onClick={(event) => event.stopPropagation()}
           >
             <PaletteSection
-              title={t("node.imageGen.contextPalette.actors")}
+              title={t("node.contextPromptPalette.actors")}
               entries={palette.actorEntries}
               onInsert={insertAndClose}
             />
             <PaletteSection
-              title={t("node.imageGen.contextPalette.props")}
+              title={t("node.contextPromptPalette.props")}
               entries={palette.propEntries}
               onInsert={insertAndClose}
             />

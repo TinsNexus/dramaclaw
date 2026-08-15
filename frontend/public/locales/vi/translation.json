@@ -393,7 +393,10 @@
     "settingsHint": "Tài khoản và đăng nhập do SuperTale quản lý. Cài đặt ở đây chỉ điều khiển hiển thị chat và hành vi tệp đính kèm.",
     "tool": "Công cụ",
     "historyTool": "Công cụ lịch sử",
-    "showStructuredSourceWhileStreaming": "Hiện JSON gốc khi phát trực tiếp"
+    "showStructuredSourceWhileStreaming": "Hiện JSON gốc khi phát trực tiếp",
+    "upgrading": "Xia Director đang được nâng cấp. Vui lòng chờ đợi!",
+    "waitingLongResponse": "Lần này xử lý lâu hơn bình thường, nhưng vẫn đang tiếp tục",
+    "waitingVeryLongResponse": "Vẫn đang chờ phản hồi. Bạn có thể tiếp tục chờ hoặc dừng"
   },
   "freezone": {
     "chat": {
@@ -482,6 +485,364 @@
       "removing": "Đang gỡ",
       "removeSuccess": "Đã gỡ hình chiếu mạch chính",
       "removeBlocked": "Canvas hiện tại chưa lưu thành công, hãy xử lý xung đột rồi gỡ hình chiếu"
+    },
+    "assetLibrary": {
+      "roleLabel": {
+        "sketch": "Phác thảo",
+        "frame": "Beat",
+        "video": "Video",
+        "audio": "Âm thanh",
+        "background": "Nền",
+        "directorComposite": "Dựng Director"
+      },
+      "tabLabel": {
+        "allBeats": "Tất cả Beats",
+        "episodeBeats": "Beats Tập này",
+        "currentBeat": "Beat Hiện tại",
+        "characters": "Nhân vật",
+        "scenes": "Bối cảnh",
+        "props": "Đạo cụ"
+      },
+      "emptyState": {
+        "noBeatContext": "Không có tư liệu ngữ cảnh Beat",
+        "noCanvasContext": "Canvas hiện tại không có ngữ cảnh Beat",
+        "noBeatAssets": "Không có tư liệu ngữ cảnh khả dụng cho Beat này",
+        "noAssets": "Không có tư liệu khả dụng trong danh mục này"
+      },
+      "toggle": {
+        "expand": "Mở rộng",
+        "collapse": "Thu gọn"
+      },
+      "ariaLabel": {
+        "expandDrawer": "Mở rộng ngăn tư liệu",
+        "collapseDrawer": "Thu gọn ngăn tư liệu"
+      },
+      "panelTab": {
+        "canvases": "Canvas Dự án",
+        "library": "Tư liệu Mạch chính"
+      },
+      "search": {
+        "placeholder": "Tìm kiếm tư liệu..."
+      },
+      "error": {
+        "assetLoadFailed": "Không thể tải tư liệu dự án: {{error}}"
+      },
+      "button": {
+        "add": "Thêm",
+        "addToCanvas": "Thêm vào canvas",
+        "confirm": "Thay thế",
+        "replacing": "Đang thay thế…",
+        "cancel": "Hủy"
+      },
+      "confirmation": {
+        "replaceAsset": "Thay thế \"{{label}}\" bằng node canvas?"
+      },
+      "sceneTypeBadge": {
+        "frontView": {
+          "label": "Hình Phía Trước",
+          "title": "Hình Phía Trước của Bối cảnh"
+        },
+        "backView": {
+          "label": "Hình Phía Sau",
+          "title": "Hình Phía Sau của Bối cảnh"
+        },
+        "pano360": {
+          "label": "Hình 360",
+          "title": "Toàn cảnh 360"
+        },
+        "directorWorld": {
+          "label": "Director World",
+          "title": "Director World Bối cảnh"
+        },
+        "frontWorldPly": {
+          "label": "Thế giới Phía Trước",
+          "title": "Director World 3D (Phía Trước)"
+        },
+        "backWorldPly": {
+          "label": "Thế giới Phía Sau",
+          "title": "Director World 3D (Phía Sau)"
+        },
+        "pano360Ply": {
+          "label": "Thế giới 360",
+          "title": "Director World 3D (360)"
+        },
+        "customWorld": {
+          "label": "Thế giới Tùy chỉnh",
+          "title": "Director World 3D (Tùy chỉnh)"
+        }
+      },
+      "sourceKindLabel": {
+        "pano360": "Hình 360",
+        "frontWorld": "Thế giới Phía Trước",
+        "backWorld": "Thế giới Phía Sau",
+        "pano360World": "Thế giới 360",
+        "customWorld": "Thế giới Tùy chỉnh",
+        "directorWorld": "Director World"
+      },
+      "groupLabel": {
+        "outputs": "Kết quả Hiện tại",
+        "director": "3GS / Điều khiển",
+        "characters": "Tham chiếu Nhân vật",
+        "scenes": "Tham chiếu Bối cảnh",
+        "props": "Tham chiếu Đạo cụ",
+        "other": "Ngữ cảnh Khác"
+      },
+      "assetLabel": {
+        "currentFrame": "Beat Hiện tại"
+      },
+      "episodeLabel": "Tập {{episode}}",
+      "episodeLabelUnknown": "Tập ?",
+      "toast": {
+        "submittedTo": "Đã gửi tới \"{{label}}\"",
+        "replaceFailed": "Thất bại thay thế \"{{label}}\": {{error}}",
+        "canvasNodeReplaced": "Đã thay thế \"{{label}}\" bằng nút canvas"
+      },
+      "directorWorldLabel": {
+        "title": "{{sceneLabel}} / Thế giới đạo diễn",
+        "subtitle": "Chứa {{count}} nguồn đạo diễn"
+      }
+    },
+    "canvasDebug": {
+      "title": "Bảng điều khiển gỡ lỗi Canvas (chỉ dev)",
+      "label": "Gỡ lỗi",
+      "interfaceNotAvailable": "Giao diện không khả dụng (endpoint lịch sử backend chưa được triển khai)",
+      "historyIdNotFound": "Không thể xác định ID của mục lịch sử này (không tìm thấy trường id / history_id / filename / name nào trong phản hồi danh sách). Kiểm tra console.",
+      "confirmRestore": "Xác nhận khôi phục sang {{historyId}}? Phiên bản hiện tại sẽ được lưu vào lịch sử trước tiên.",
+      "restoreInterfaceNotAvailable": "Giao diện không khả dụng (endpoint canvases/{id}/restore backend chưa được triển khai)",
+      "restoreFailed": "Khôi phục thất bại: {{message}}",
+      "remoteNotFetched": "Chưa tải xuống. Nhấp GET để truy vấn.",
+      "fetchButton": "Tải xuống",
+      "historyEmpty": "Trống (chưa có ảnh chụp lịch sử)",
+      "restoreThisVersion": "Khôi phục phiên bản này",
+      "restoreMissingId": "Thiếu history_id, không thể khôi phục",
+      "restoring": "Đang khôi phục",
+      "restore": "Khôi phục",
+      "footer": "Chỉ gỡ lỗi · Hiển thị \"giao diện không khả dụng\" khi endpoint lịch sử backend chưa được triển khai"
+    },
+    "canvasOutline": {
+      "filterTitle": "Bộ lọc: {{label}}",
+      "title": "Các phần tử Canvas",
+      "groupMembers": "{{count}} Node",
+      "empty": "Canvas hiện chưa có Node nào",
+      "duplicate": "Nhân bản",
+      "rename": "Đổi tên",
+      "download": "Tải xuống",
+      "locate": "Định vị trên Canvas",
+      "moreActions": "Thêm hành động",
+      "matched": "{{count}} kết quả khớp",
+      "expandAll": "Mở rộng tất cả nhóm",
+      "collapseAll": "Thu gọn tất cả nhóm",
+      "search": "Tìm kiếm Node",
+      "closeSearch": "Đóng tìm kiếm",
+      "filter": "Lọc theo loại",
+      "noMatch": "Không có Node nào khớp",
+      "types": {
+        "all": "Tất cả",
+        "text": "Văn bản",
+        "image": "Hình ảnh",
+        "video": "Video",
+        "storyboard": "Phân cảnh",
+        "beat": "Bối cảnh Beat",
+        "audio": "Âm thanh",
+        "script": "Kịch bản",
+        "world": "3D / Toàn cảnh",
+        "skill": "Kỹ năng"
+      }
+    },
+    "shell": {
+      "nodeNoCommittableContent": "Node hiện tại không có nội dung để nộp",
+      "sceneDirectorWorldCommitSuccess": "Director World đã nộp: {{path}}",
+      "commitSuccess": "Đã nộp tới {{path}}",
+      "directorWorldStateSynced": "; Trạng thái Director World đã được đồng bộ",
+      "writingBackgroundToast": "Đang ghi bối cảnh hiện tại…",
+      "nodeNoAutoCommitTarget": "Node hiện tại không có mục tiêu mạch chính để tự động nộp",
+      "maskEditComplete": "Chỉnh sửa mặt nạ hoàn tất — ảnh mới đã được thêm vào Canvas",
+      "mainlineSyncSuccess": "Chế độ xem mạch chính đã được đồng bộ theo dữ kiện hiện tại",
+      "conflictTitle": "Xung đột lưu Canvas",
+      "conflictDefaultMessage": "Canvas đã được sửa đổi bởi cửa sổ hoặc người dùng khác. Làm mới sẽ loại bỏ các thay đổi chưa lưu, trong khi lưu bản sao sẽ bảo tồn Canvas hiện tại.",
+      "conflictSnapshotInfo": "Các thay đổi chưa lưu đã được lưu trong bộ nhớ trình duyệt. Tải xuống bản sao lưu trước khi quyết định làm mới.",
+      "conflictRefresh": "Làm mới",
+      "conflictSavingCopy": "Đang lưu…",
+      "conflictSaveAsCopy": "Lưu dưới dạng bản sao",
+      "conflictDownloadTitle": "Tải xuống ảnh chụp các thay đổi cục bộ ({{nodes}} nút · {{edges}} kết nối)",
+      "conflictDownloadJson": "Tải xuống JSON cục bộ",
+      "backupFailed": "Sao lưu trên đám mây thất bại",
+      "backupPending": "Sao lưu trên đám mây đang diễn ra",
+      "backupFailedDetail": "Thay đổi cục bộ đã được lưu, nhưng sao lưu đám mây chưa hoàn tất. Vui lòng giữ trang mở; nó sẽ thử lại tự động.",
+      "backupPendingDetail": "Thay đổi cục bộ đã được lưu, sao lưu đám mây đang đồng bộ. Bạn có thể tiếp tục chỉnh sửa.",
+      "canvasLoading": "Đang tải Canvas…",
+      "canvasSyncFailed": "Đồng bộ Canvas thất bại",
+      "retry": "Thử lại"
+    },
+    "commit": {
+      "batch": {
+        "header": {
+          "title": "Gửi hàng loạt tới Tài sản chính",
+          "subtitle": "Dự án: {{project}} · {{total}} ảnh ({{pushable}} có thể gửi / {{skipped}} bỏ qua)"
+        },
+        "close": {
+          "label": "Đóng"
+        },
+        "description": "Mỗi ảnh được tự động gửi lại vào vị trí tài sản nguồn của nó (những ảnh được nhập từ quy trình chính được ghi lại vào vị trí ban đầu; những ảnh được tải lên/tạo/chỉnh sửa mà không có thông tin nguồn sẽ bị bỏ qua—sử dụng gửi một ảnh để chọn mục tiêu).",
+        "noSource": "Không có thông tin nguồn (bỏ qua)",
+        "onDoneMessage": "Gửi hàng loạt hoàn thành: {{succeeded}} thành công / {{failed}} thất bại / {{skipped}} bỏ qua",
+        "footer": {
+          "statusDone": "{{succeeded}} thành công · {{failed}} thất bại · {{skipped}} bỏ qua",
+          "statusPending": "Sẵn sàng gửi {{count}}"
+        },
+        "button": {
+          "cancel": "Hủy bỏ",
+          "done": "Hoàn thành",
+          "submit": "Gửi {{count}}",
+          "submitRunning": "Đang gửi ({{done}}/{{total}})...",
+          "retry": "Thử lại {{count}} thất bại"
+        },
+        "status": {
+          "pending": "Chờ xử lý",
+          "running": "Đang gửi...",
+          "success": "Hoàn thành",
+          "skipped": "Bỏ qua",
+          "failed": "Thất bại"
+        }
+      },
+      "dialog": {
+        "kind": {
+          "frame": "Khung đầu",
+          "sketch": "Phác thảo",
+          "directorRender": "Tài sản dựng video của đạo diễn",
+          "selectedBackground": "Nền hiện tại",
+          "identity": "Hình ảnh danh tính nhân vật",
+          "identityCostume": "Hình ảnh trang phục danh tính",
+          "identityPortrait": "Chân dung danh tính tuổi tác",
+          "portrait": "Chân dung nhân vật",
+          "sceneMaster": "Hình ảnh bối cảnh chính",
+          "sceneReverseMaster": "Hình ảnh bối cảnh phía sau",
+          "sceneDirectorWorld": "Thế giới của đạo diễn",
+          "sceneDirectorPano360": "Director Pano 360 (Toàn cảnh 3GS)",
+          "scene3gsActivePly": "Thế giới 3D (Lối vào hiện tại)",
+          "scene3gsMasterPly": "Thế giới 3D (Chính diện)",
+          "scene3gsReversePly": "Thế giới 3D (Phía sau)",
+          "scene3gsPanoPly": "Thế giới 3D (360)",
+          "scene3gsCustomScene": "Thế giới 3D (Bối cảnh tùy chỉnh)",
+          "scene3gsCollisionGlb": "Thế giới 3D va chạm",
+          "propRef": "Tham chiếu đạo cụ",
+          "video": "Video",
+          "beatAudio": "Âm thanh"
+        },
+        "mediaType": {
+          "video": "Video",
+          "audio": "Âm thanh",
+          "model": "Mô hình 3D",
+          "image": "Hình ảnh"
+        },
+        "directorWorldSource": {
+          "master": "Thế giới 3D chính diện",
+          "reverse": "Thế giới 3D phía sau",
+          "pano360": "Hình ảnh 360",
+          "panoPano": "Thế giới 3D 360",
+          "custom": "Thế giới 3D tùy chỉnh",
+          "uploaded": "Thế giới 3D được tải lên",
+          "default": "Thế giới 3D"
+        },
+        "error": {
+          "loadOptionsFailed": "Không thể tải các tùy chọn",
+          "loadIdentityIdFailed": "Không thể tải identity_id",
+          "targetIncomplete": "Mục tiêu không hoàn chỉnh",
+          "noDirectorWorldSource": "Không có nguồn khả dụng; vui lòng chuyển đổi sang nguồn thế giới cụ thể trước khi gửi đến khe chính.",
+          "noDirectorWorldSourceForSlot": "Thế giới 3D hiện tại không có tư liệu nào có thể được gửi đến khe này.",
+          "requireNodeData": "Gửi Thế giới Đạo diễn yêu cầu trạng thái nút canvas"
+        },
+        "success": {
+          "syncedDirectorWorldState": "; Trạng thái Thế giới Đạo diễn đã được đồng bộ hóa",
+          "directorRender": "Tài sản dựng video của đạo diễn đã được gửi: {{path}} (bao gồm nền sạch và siêu dữ liệu)",
+          "directorWorld": "Thế giới Đạo diễn đã được gửi: {{path}}",
+          "default": "Đã gửi đến {{path}}{{backup}}{{staleMarked}}",
+          "backup": "(tệp cũ được sao lưu đến {{path}})",
+          "staleMarked": "; đã đánh dấu {{count}} beat cần tạo lại"
+        },
+        "header": {
+          "title": "Gửi đến Tài sản Chính",
+          "projectLabel": "Dự án: ",
+          "closeButton": "Đóng"
+        },
+        "label": {
+          "targetKind": "Loại mục tiêu",
+          "targetLocation": "Vị trí mục tiêu",
+          "episode": "Tập phim",
+          "loadingBeats": "Đang tải beat…",
+          "noBeats": "Không có beat",
+          "character": "Nhân vật",
+          "loadingIdentityId": "Đang tải identity_id…",
+          "noIdentityId": "Nhân vật hiện tại không có identity_id",
+          "scene": "Bối cảnh",
+          "impactPreview": "Xem trước tác động",
+          "calculatingImpact": "Đang tính toán phạm vi tác động…",
+          "affectingBeats": "Sẽ ảnh hưởng {{count}} beat",
+          "moreBeatsNotShown": "{{count}} cái khác chưa được hiển thị",
+          "markStale": "Sau khi gửi, đánh dấu các beat này để tạo lại; quy trình chính có thể tạo lại theo dấu hiệu"
+        },
+        "placeholder": {
+          "sceneId": "scene_id, ví dụ: Quán mì Lanzhou",
+          "propId": "prop_id, ví dụ: Hộp văn phòng"
+        },
+        "hint": {
+          "sceneSlot": "Sẽ ghi vào khe tài sản bối cảnh này.",
+          "propSlot": "Sẽ ghi vào khe tài sản tham chiếu đạo cụ này."
+        },
+        "warning": {
+          "overwriteAsset": "Sẽ ghi đè tài sản hiện có \"{{targetLabel}}\"; tệp gốc sẽ được giữ trong lịch sử."
+        },
+        "targetLabel": {
+          "incomplete": "Mục tiêu không hoàn chỉnh"
+        },
+        "heading": {
+          "directorWorldState": "Trạng thái Thế giới Đạo diễn",
+          "manifestCommit": "Gửi bản kê khai Thế giới Đạo diễn hiện tại",
+          "modelSubmit": "Gửi Thế giới 3D hiện tại đến bối cảnh chính"
+        },
+        "button": {
+          "cancel": "Hủy",
+          "submitting": "Đang gửi",
+          "submit": "Gửi"
+        }
+      }
+    },
+    "nodeContextBadges": {
+      "mainlineAssets": "Tài sản chính tuyến",
+      "labels": {
+        "identity": "Danh tính",
+        "voice": "Giọng đọc",
+        "narratorVoice": "Giọng đọc người kể chuyện",
+        "sfx": "Âm thanh hiệu ứng",
+        "ambientAudio": "Âm thanh môi trường",
+        "scene": "Bối cảnh",
+        "prop": "Đạo cụ",
+        "sketch": "Phác thảo",
+        "frame": "Phân cảnh",
+        "video": "Video",
+        "audio": "Âm thanh",
+        "directorCombined": "Ảnh tổng hợp Đạo diễn",
+        "selectedBackground": "Nền tảng hiện tại"
+      },
+      "bindingLabels": {
+        "backgroundCandidate": "Ứng viên nền tảng",
+        "sketchCandidate": "Ứng viên Phác thảo",
+        "frameCandidate": "Ứng viên Phân cảnh",
+        "currentSketch": "Phác thảo hiện tại",
+        "currentFrame": "Phân cảnh hiện tại"
+      },
+      "identityBadge": "Danh tính · {{character}}",
+      "voiceBadge": "Giọng đọc · {{character}}",
+      "sceneBadge": "Bối cảnh · {{scene}}",
+      "propBadge": "Đạo cụ · {{prop}}"
+    },
+    "contextOperations": {
+      "beatToSketch": "Beat tạo Phác thảo",
+      "directorCombinedToSketch": "Tạo Phác thảo từ ảnh Tổng hợp của Đạo diễn",
+      "selectedBackgroundToSketch": "Tạo Phác thảo từ Điểm neo Nền",
+      "sketchToFrame": "Tạo Phân cảnh theo ngữ cảnh Mạch chính",
+      "mainlineContext": "Ngữ cảnh Mạch chính",
+      "matchDescription": "Chỉ xuất hiện khi Danh tính/Bối cảnh/Beat khớp"
     }
   },
   "theme": {
@@ -508,7 +869,74 @@
   },
   "credits": {
     "balance": "Số dư điểm hiện tại",
-    "short": "Điểm"
+    "short": "Điểm",
+    "visual": {
+      "limitedTimeDiscount": "Thời gian giới hạn {{discount}}% giảm",
+      "discountPromotion": "{{discount}}% giảm",
+      "onPromotion": "Đang khuyến mãi"
+    },
+    "openPanel": "Mở bảng điểm",
+    "personalAccount": "Tài khoản điểm cá nhân",
+    "details": "Xem chi tiết",
+    "earned": "Đã kiếm được",
+    "spent": "Đã tiêu",
+    "refunded": "Đã hoàn lại",
+    "promotions": "Chương trình khuyến mãi khả dụng",
+    "promotionCount": "Hiện có {{count}} chương trình khuyến mãi có thể áp dụng",
+    "viewTransactions": "Xem lịch sử điểm",
+    "back": "Quay lại",
+    "centerTitle": "Trung tâm điểm",
+    "centerDescription": "Xem lại số dư điểm thống nhất, thanh toán, hoàn tiền và chương trình khuyến mãi có sẵn.",
+    "pendingAmount": "{{amount}} điểm đang chờ thanh toán",
+    "availablePromotions": "Chương trình khuyến mãi khả dụng",
+    "promotionDisclaimer": "Các mức giảm giá cuối cùng phụ thuộc vào báo giá trực tiếp cho tính năng, mô hình và miền.",
+    "endsAt": "Kết thúc {{time}}",
+    "longTerm": "Không có ngày kết thúc",
+    "startDate": "Ngày bắt đầu",
+    "endDate": "Ngày kết thúc",
+    "projectFilter": "Lọc theo dự án",
+    "allProjects": "Tất cả dự án",
+    "featureFilter": "Lọc theo tính năng",
+    "allFeatures": "Tất cả tính năng",
+    "modelFilter": "Lọc theo mô hình",
+    "allModels": "Tất cả mô hình",
+    "adjustment": "Điều chỉnh điểm",
+    "promotionalPrice": "Giá khuyến mãi",
+    "empty": "Không có hoạt động điểm",
+    "summaryLoadFailed": "Tóm tắt điểm tạm thời không khả dụng",
+    "transactionsLoadFailed": "Lịch sử điểm tạm thời không khả dụng",
+    "retry": "Thử lại",
+    "filtering": "Đang lọc…",
+    "filteredRecords": "{{count}} bản ghi phù hợp",
+    "totalRecords": "Tổng cộng {{count}} bản ghi",
+    "previousPage": "Trang trước",
+    "nextPage": "Trang tiếp theo",
+    "pageOf": "Trang {{page}} / {{total}}",
+    "category": {
+      "all": "Tất cả",
+      "earned": "Đã kiếm được",
+      "spent": "Đã tiêu",
+      "refunded": "Đã hoàn lại"
+    },
+    "status": {
+      "pending": "Đang chờ",
+      "confirmed": "Đã tính phí",
+      "refunded": "Đã hoàn lại",
+      "completed": "Đã hoàn thành"
+    },
+    "domain": {
+      "mainline": "Mạch chính",
+      "freezone": "Freezone",
+      "all": "Mạch chính & Freezone"
+    },
+    "columns": {
+      "time": "Thời gian",
+      "feature": "Tính năng / Mô hình",
+      "project": "Dự án",
+      "status": "Trạng thái",
+      "change": "Thay đổi điểm",
+      "balance": "Số dư sau thay đổi"
+    }
   },
   "nav": {
     "home": "Trang chủ",
@@ -536,7 +964,10 @@
     "tasks": "Task Center",
     "taskCenter": "Trung tâm tác vụ",
     "aiAssistant": "Xia Director",
-    "freezone": "Freezone"
+    "freezone": "Freezone",
+    "creationMode": "Chế độ sáng tạo",
+    "xiaji": "Series",
+    "xiajiMenu": "Menu Series"
   },
   "characters": {
     "title": "Nhân vật",
@@ -585,7 +1016,15 @@
       "total": "Số nhân vật",
       "withPortraits": "Đã có chân dung",
       "identities": "Danh tính / tạo hình",
-      "attempts": "Yêu cầu tạo"
+      "attempts": "Yêu cầu tạo",
+      "strip": {
+        "total": "Tổng cộng nhân vật",
+        "mainCharacter": "Nhân vật chính giải thích",
+        "portrait": "Hình đại diện",
+        "identity": "Danh tính",
+        "voice": "Giọng đọc",
+        "ariaLabel": "Thống kê nhân vật"
+      }
     },
     "tabs": {
       "basics": "Cơ bản",
@@ -948,6 +1387,14 @@
       "unmute": "Bật tiếng",
       "fullscreen": "Toàn màn hình",
       "exitFullscreen": "Thoát toàn màn hình"
+    },
+    "download": {
+      "label": "Máy tính để bàn",
+      "primary": {
+        "mac": "macOS",
+        "windows": "Windows"
+      },
+      "aria": "Tải xuống ứng dụng desktop"
     }
   },
   "project": {
@@ -1080,7 +1527,40 @@
     "sortDesc": "Giảm dần",
     "nodes": "Số node",
     "empty": "Chưa có dự án",
-    "emptyHint": "Nhấn nút phía trên để tạo dự án mới"
+    "emptyHint": "Nhấn nút phía trên để tạo dự án mới",
+    "dashboardReturn": "Quay lại Trung tâm quản lý dự án",
+    "notFound": "Không tìm thấy dự án",
+    "notFoundDescriptionPrefix": "Không tìm thấy dự án dưới tài khoản hiện tại:",
+    "notFoundDescriptionSuffix": ".",
+    "backToProjects": "Quay lại dự án",
+    "shareDialog": {
+      "title": "Chia sẻ dự án",
+      "descriptionWithOwner": "{{name}} · {{owner}}",
+      "descriptionFallback": "Quản lý thành viên dự án",
+      "currentUserFallback": "người dùng hiện tại",
+      "addMember": "Thêm thành viên",
+      "addMemberHint": "Nhập tên người dùng, chọn quyền rồi thêm họ vào dự án.",
+      "copyLink": "Sao chép liên kết",
+      "searchPlaceholder": "Tìm kiếm tên người dùng",
+      "alreadyInProject": "Đã có trong dự án",
+      "add": "Thêm",
+      "members": "Thành viên",
+      "owner": "Chủ sở hữu",
+      "projectOwner": "Chủ sở hữu dự án",
+      "loadingMembers": "Đang tải thành viên",
+      "removeMember": "Xóa thành viên",
+      "roleViewer": "Chỉ xem",
+      "roleEditor": "Có thể chỉnh sửa và chạy tác vụ",
+      "roleAdmin": "Có thể quản lý thành viên được chia sẻ",
+      "toastMemberUpdated": "Đã cập nhật thành viên chia sẻ",
+      "toastShareFailed": "Chia sẻ không thành công. Vui lòng xác nhận người dùng tồn tại và bạn có quyền",
+      "toastLinkCopied": "Liên kết dự án đã được sao chép",
+      "toastCopyFailed": "Sao chép không thành công",
+      "toastPermissionUpdated": "Quyền đã được cập nhật",
+      "toastPermissionUpdateFailed": "Cập nhật quyền không thành công",
+      "toastMemberRemoved": "Đã xóa thành viên chia sẻ",
+      "toastRemoveFailed": "Xóa không thành công"
+    }
   },
   "assets": {
     "common": {
@@ -1175,7 +1655,8 @@
         "environmentPrompt": "Prompt mô tả môi trường",
         "variantPrompt": "Prompt gia tăng cho biến thể",
         "variantPromptPlaceholder": "Chỉ viết phần khác với bối cảnh cơ sở, ví dụ vũng nước phản chiếu, tường cháy đen, trang trí lễ hội.",
-        "description": "Mô tả tường thuật"
+        "description": "Mô tả tường thuật",
+        "variantPlaceholder": "Rò rỉ nước"
       },
       "environment": {
         "front": "Mô tả mặt trước",
@@ -1185,6 +1666,11 @@
         "light": "Mô tả nguồn sáng",
         "material": "Chất liệu/phong cách",
         "forbidden": "Yếu tố cấm"
+      },
+      "building": "Đang xây dựng bối cảnh...",
+      "buildingEmpty": {
+        "title": "Đang xây dựng bối cảnh",
+        "description": "Hệ thống đang trích xuất các bối cảnh từ biểu đồ. Chúng sẽ xuất hiện ở đây khi sẵn sàng."
       }
     },
     "props": {
@@ -1227,6 +1713,15 @@
         "owner": "Nhân vật sở hữu",
         "visualPrompt": "Prompt hình ảnh"
       }
+    },
+    "sceneEnvironment": {
+      "front": "Phía trước",
+      "left": "Bên trái",
+      "right": "Bên phải",
+      "back": "Phía sau",
+      "light": "Nguồn ánh sáng",
+      "material": "Chất liệu / Phong cách",
+      "forbidden": "Các yếu tố bị cấm"
     }
   },
   "time": {
@@ -1298,7 +1793,11 @@
     },
     "edit": "Sửa",
     "close": "Đóng",
-    "success": "Thành công"
+    "success": "Thành công",
+    "retry": "Thử lại",
+    "novelImportRequired": "Vui lòng trước tiên nhập một tiểu thuyết",
+    "generateNew": "Tạo mới",
+    "refreshDone": "Đã làm mới"
   },
   "ingest": {
     "title": "Nguồn truyện",
@@ -1367,6 +1866,28 @@
     "buildHint": "Dựng đồ thị ngữ nghĩa, rồi dựng riêng ở trang nhân vật / tập",
     "emptyPreview": "Sau khi tải tệp lên, bản xem trước cấu trúc tiểu thuyết sẽ hiện ở đây",
     "chapterTitleFallback": "Chương {{n}}",
+    "novelFormat": {
+      "button": "Hướng dẫn định dạng phim cao cấp",
+      "title": "Định dạng phim cao cấp",
+      "intro": "Kịch bản phim cao cấp cần có ranh giới tập phim và bối cảnh rõ ràng. DramaHub sẽ chia kịch bản theo tiêu đề bối cảnh, sau đó tạo hình ảnh, đối thoại và âm thanh từng dòng một; nó sẽ không phỏng đoán chia bối cảnh cho văn bản không có tiêu đề bối cảnh.",
+      "standardStatus": "Tiêu chuẩn · sẵn sàng nhập",
+      "standardStatusHint": "Hệ thống hỗ trợ nhiều định dạng ngành. Miễn là vị trí, thời gian và siêu dữ liệu INT/EXT hoàn chỉnh thì có thể phân tích một cách đáng tin cậy.",
+      "warningStatus": "Có thể sửa chữa · cho phép nhập",
+      "warningStatusHint": "Ranh giới bối cảnh rõ ràng, nhưng vị trí, thời gian hoặc siêu dữ liệu INT/EXT không hoàn chỉnh và sẽ được chuẩn hóa.",
+      "blockingStatus": "Không có ranh giới bối cảnh đáng tin cậy · bị chặn",
+      "blockingStatusHint": "Nhập bị chặn chỉ khi các chương không hợp lệ hoặc phim cao cấp không có tiêu đề bối cảnh có thể nhận dạng được.",
+      "specLabel": "Tiêu đề bối cảnh hoàn chỉnh được hỗ trợ",
+      "repairableLabel": "Định dạng tự động hoàn thành được",
+      "repairableHint": "Ranh giới bối cảnh dưới đây có thể nhận dạng được nhưng thiếu thời gian. Nhập được cho phép kèm theo cảnh báo; nguồn không bị thay đổi.",
+      "rulesLabel": "Quy tắc viết",
+      "ruleEpisode": "Bắt đầu mỗi tập với \"Tập N\"; sắp xếp các tập theo thứ tự.",
+      "ruleScene": "Mỗi bối cảnh phải có tiêu đề riêng. Các định dạng được hỗ trợ bao gồm \"1-1 Vị trí Ngày INT\", \"1.1 Vị trí INT Ngày\", các trường tách biệt và tiêu đề INT./EXT.",
+      "ruleCharacters": "Sử dụng \"Nhân vật:\" cho các tên nhân vật thực sự có mặt trong bối cảnh, cách nhau bằng dấu phẩy; giữ danh tính và ghi chú biểu diễn ngoài dòng này.",
+      "ruleBody": "Giữ một hành động hoặc cảnh hiển thị trên một dòng; cả dấu \"△\" và \"▲\" đều được hỗ trợ. Không kết hợp nhiều cảnh hoặc diễn viên trên một dòng.",
+      "ruleDialogue": "Viết đối thoại dưới dạng \"Nhân vật: dòng\". Thêm gợi ý biểu diễn ngắn gọn trong ngoặc đơn chỉ khi cần thiết, và sử dụng \"Nhân vật OS: dòng\" cho tiếng nói bên trong.",
+      "ruleLocationChange": "Tạo tiêu đề bối cảnh mới khi vị trí vật lý thay đổi. Cả đơn hàng Vị trí-Thời gian-INT/EXT và Vị trí-INT/EXT-Thời gian đều được hỗ trợ.",
+      "exampleLabel": "Đoạn ví dụ"
+    },
     "projectType": "Loại dự án",
     "projectTypeLocked": "Loại dự án đã khoá, muốn đổi thì nhập lại",
     "projectTypes": {
@@ -1388,7 +1909,53 @@
       "western": "Người phương Tây",
       "mixed": "Lai"
     },
-    "stopped": "Đã dừng"
+    "stopped": "Đã dừng",
+    "sceneHeaders": {
+      "rowCount": "{{count}} cảnh",
+      "count": "Tổng {{count}} cảnh",
+      "missing": "Không nhận dạng được tiêu đề bối cảnh nào, vì vậy hệ thống không thể biết mỗi bối cảnh bắt đầu ở đâu.",
+      "missingFix": "Làm theo ví dụ trên: bắt đầu bằng \"Tập N\", sau đó đặt cho mỗi bối cảnh một tiêu đề \"số hiệu, địa điểm, thời gian, NỘI/NGOÀI\" riêng biệt trước các nhân vật, hành động và đối thoại của nó.",
+      "repairable": "Các ranh giới bối cảnh đã được nhận dạng, nhưng một số tiêu đề bị thiếu thời gian, địa điểm hoặc giá trị NỘI/NGOÀI. Vẫn cho phép nhập và siêu dữ liệu bị thiếu sẽ được hoàn thành trong quá trình lập kế hoạch bối cảnh.",
+      "repairableFix": "Sử dụng ví dụ trên để thêm địa điểm, thời gian hoặc giá trị NỘI/NGOÀI bị thiếu. Bạn cũng có thể tiếp tục nhập mà không cần chỉnh sửa nguồn.",
+      "open": "Xem các bối cảnh cho {{chapter}}",
+      "rowCount_one": "{{count}} bối cảnh",
+      "rowCount_other": "{{count}} bối cảnh",
+      "count_one": "Tổng cộng {{count}} bối cảnh",
+      "count_other": "Tổng cộng {{count}} bối cảnh",
+      "scene": "Bối cảnh {{number}}",
+      "characters": "Nhân vật xuất hiện",
+      "characterSeparator": ", ",
+      "unknownLocation": "Không nhận dạng được vị trí bối cảnh",
+      "empty": "Không có văn bản bối cảnh nào có sẵn trong chương này",
+      "unparsedBody": "Văn bản nằm ngoài các bối cảnh được nhận dạng"
+    },
+    "uploadingTitle": "Đang tải lên tiểu thuyết…",
+    "uploadingHint": "Vui lòng ở trên trang này cho đến khi tải lên hoàn tất. Nó có thể mất một lúc trên kết nối chậm.",
+    "elapsed": "Đã trôi qua {{time}}",
+    "knowledgeGraph": {
+      "title": "Biểu đồ kiến thức",
+      "stats": "{{nodes}} nút · {{edges}} quan hệ",
+      "connections": "{{count}} kết nối",
+      "relationships": "Mối quan hệ",
+      "interactionHint": "Kéo để di chuyển · Cuộn để phóng to · Chọn nút để xem chi tiết",
+      "truncated": "Đang hiển thị các mối quan hệ cốt lõi",
+      "zoomIn": "Phóng to biểu đồ",
+      "zoomOut": "Thu nhỏ biểu đồ",
+      "resetView": "Đặt lại chế độ xem",
+      "expand": "Mở rộng biểu đồ",
+      "loadFailed": "Biểu đồ kiến thức tạm thời không khả dụng",
+      "loadFailedHint": "Dữ liệu biểu đồ của bạn vẫn được lưu giữ. Vui lòng thử tải lại nó trong giây lát."
+    },
+    "reimport": "Nhập lại",
+    "reimportSourceMissing": "Tệp được tải lên ban đầu không khả dụng. Vui lòng tải lên nó lại trước khi nhập.",
+    "chapterDetails": {
+      "open": "Xem văn bản của {{chapter}}",
+      "description": "Xem trước văn bản chương",
+      "sceneHeaders": "Các bối cảnh",
+      "body": "Văn bản",
+      "empty": "Không có văn bản chương nào có sẵn",
+      "emptyScene": "Không có văn bản nào có sẵn cho bối cảnh này"
+    }
   },
   "video": {
     "voiceSelect": "Chọn giọng",
@@ -1473,7 +2040,14 @@
       "single_video": "Video một beat",
       "global_optimize_video": "Tối ưu toàn cục",
       "selected_regen": "Tạo lại mục đã chọn",
-      "compose_episode": "Dựng video"
+      "compose_episode": "Dựng video",
+      "freezone_image_reverse_prompt": "Đảo ngược prompt hình ảnh"
+    },
+    "cancelRunning": {
+      "title": "Dừng tác vụ",
+      "fallbackMessage": "Tác vụ đã bắt đầu thực thi. Dừng ngay bây giờ sẽ không hoàn lại các điểm đã tiêu. Có chắc chắn muốn dừng không?",
+      "confirm": "Xác nhận dừng",
+      "keepRunning": "Tiếp tục thực thi"
     }
   },
   "taskCenter": {
@@ -1537,7 +2111,9 @@
       },
       "logs": {
         "placeholder": "Chưa có nhật ký nào."
-      }
+      },
+      "currentStatus": "Trạng thái hiện tại",
+      "debugInfo": "Thông tin gỡ lỗi"
     },
     "status": {
       "submitting": "Đang gửi",
@@ -1622,6 +2198,73 @@
         "jelly": "Time Jelly làm chậm nhịp"
       },
       "ultimate": "Bùng nổ cảm hứng"
+    },
+    "libraryTitle": "Piko Break",
+    "librarySubtitle": "Chọn một trò chơi",
+    "backToLibrary": "Quay lại danh sách trò chơi",
+    "memory": {
+      "title": "Khớp bộ nhớ",
+      "hint": "Lật các thẻ có cùng biểu tượng",
+      "moves": "Lượt di chuyển",
+      "cardHidden": "Thẻ chưa lật",
+      "cardVisible": "Thẻ {{value}}",
+      "completed": "Tất cả cặp đã khớp",
+      "resultMeta": "Đã sử dụng {{moves}} lượt di chuyển"
+    },
+    "breakout": {
+      "title": "Đánh vỡ gạch",
+      "canvasLabel": "Bảng trò chơi đánh vỡ gạch",
+      "hint": "Di chuyển thanh chắn bằng chuột hoặc cảm ứng, hoặc sử dụng các phím mũi tên hoặc phím A, D",
+      "start": "Bắt đầu trò chơi",
+      "ready": "Xoá sạch mọi gạch",
+      "lifeLost": "Tiếp tục nào!",
+      "won": "Bảng đã được xoá!",
+      "lost": "Kết thúc ván chơi",
+      "score": "Điểm {{score}}",
+      "lives": "Mạng {{lives}}"
+    },
+    "rollingBall": {
+      "title": "Quả bóng lăn",
+      "canvasLabel": "Bảng trò chơi quả bóng lăn",
+      "hint": "Di chuyển trái phải để hạ cánh trên các nền tảng cuộn",
+      "start": "Bắt đầu trò chơi",
+      "ready": "Hạ cánh xuống đường",
+      "lost": "Quả bóng trượt mất rồi",
+      "score": "Hạ cánh {{score}}"
+    },
+    "flying": {
+      "title": "Piko Bay",
+      "canvasLabel": "Bảng trò chơi Piko Bay",
+      "hint": "Nhấn Space, Mũi tên lên hoặc chạm để Piko bay qua các cổng năng lượng",
+      "start": "Bắt đầu bay",
+      "ready": "Sẵn sàng cất cánh",
+      "lost": "Piko va chạm với cổng năng lượng",
+      "score": "Cánh cổng {{score}}"
+    },
+    "catch": {
+      "title": "Piko Catch",
+      "canvasLabel": "Bảng trò chơi Piko Catch",
+      "hint": "Di chuyển Piko trái phải, bắt các sao ý tưởng và tinh thể, tránh các khối lỗi màu đỏ",
+      "start": "Bắt đầu bắt",
+      "ready": "Bắt các ý tưởng rơi xuống",
+      "finished": "Hoàn thành bộ sưu tập ý tưởng",
+      "lost": "Piko cần nghỉ ngơi một chút",
+      "score": "Ý tưởng {{score}}",
+      "status": "Mạng {{lives}} · {{seconds}}s",
+      "result": "Bạn đã thu thập {{score}} điểm ý tưởng"
+    },
+    "leap": {
+      "title": "Piko Nhảy",
+      "canvasLabel": "Bảng trò chơi Piko Nhảy",
+      "hint": "Giữ Space, chuột hoặc màn hình để sạc, sau đó thả để nhảy đến chip ý tưởng tiếp theo",
+      "start": "Bắt đầu nhảy",
+      "ready": "Sẵn sàng cho lần nhảy tiếp theo",
+      "lost": "Piko không hạ cánh vững chắc",
+      "score": "Điểm nhảy {{score}}",
+      "combo": "Tấn công kết hợp tâm ×{{combo}}",
+      "centerHint": "Hạ cánh ở tâm để nhận điểm thưởng",
+      "chargeHint": "Giữ để sạc · thả để nhảy",
+      "result": "Bạn đã ghi được {{score}} điểm"
     }
   },
   "literalScript": {
@@ -1861,7 +2504,8 @@
         "identitiesNotPlanned": "Danh tính của tập chưa được quy hoạch, hãy vào trang \"Kịch bản\" để cấu hình danh tính cho tập này.",
         "propsNotPlanned": "Đạo cụ của tập chưa được quy hoạch, hãy vào trang \"Kịch bản\" để cấu hình đạo cụ cho tập này.",
         "more": "Thêm",
-        "saveFailed": "Lưu thất bại"
+        "saveFailed": "Lưu thất bại",
+        "noSceneVariant": "Không có biến thể"
       },
       "insertManual": {
         "titleBeforeFirst": "Chèn beat thủ công trước Beat đầu tiên",
@@ -1895,7 +2539,12 @@
         "identitiesPlaceholder": "Phân tách bằng dấu phẩy, ví dụ {{example}}; để trống sẽ tự trích từ mô tả khung hình",
         "identitiesPlaceholderEmpty": "ID danh tính phân tách bằng dấu phẩy; để trống sẽ tự trích từ mô tả khung hình",
         "submit": "Chèn",
-        "success": "Đã chèn beat thủ công"
+        "success": "Đã chèn beat thủ công",
+        "sceneVariant": "Biến thể",
+        "noSceneVariant": "Không có biến thể",
+        "props": "Đạo cụ xuất hiện",
+        "propsPlaceholder": "Cách nhau bằng dấu phẩy (ví dụ {{example}}); để trống để tự động phát hiện từ mô tả hình ảnh",
+        "propsPlaceholderEmpty": "ID đạo cụ cách nhau bằng dấu phẩy; để trống để tự động phát hiện"
       },
       "audio": {
         "narrationEmpty": "Lời thuyết minh đang trống, beat này không tạo được âm thanh. Hãy điền ở mục \"Nội dung\" trước.",
@@ -1918,7 +2567,9 @@
         "configureVoiceAction": "Đi cấu hình",
         "beatNarrationVoice": "Âm thanh thuyết minh của beat này",
         "beatNarrationVoiceUpload": "Tải lên âm thanh beat này",
-        "beatNarrationVoiceUploaded": "Đã tải lên âm thanh thuyết minh beat này"
+        "beatNarrationVoiceUploaded": "Đã tải lên âm thanh thuyết minh beat này",
+        "prereqHintCharacters": ". Hãy tới \"Nhân vật\" để tải lên giọng đọc của diễn viên thuyết minh.",
+        "prereqHintVoices": ". Hãy tới \"Tư liệu > Giọng đọc\" để tải lên hoặc cắt giọng đọc thuyết minh mặc định."
       },
       "video": {
         "started": "Đã bắt đầu video Beat #{{n}}",
@@ -2074,7 +2725,16 @@
         "narratorVoiceTrimDuration": "Số giây giữ lại",
         "narratorVoiceTrimApply": "Cắt còn 3-5 giây",
         "narratorVoiceTrimInvalid": "Tham số cắt không hợp lệ",
-        "narratorVoiceUse": "Dùng"
+        "narratorVoiceUse": "Dùng",
+        "seedance2SubjectPromptGenerated": "Prompt chủ đề đã được tối ưu hóa",
+        "grokVideoInspector": "Trình kiểm tra Video Grok",
+        "happyHorseInspector": "Trình kiểm tra HappyHorse",
+        "grokPromptLabel": "Prompt Grok",
+        "subjectPromptLabel": "Prompt chủ đề",
+        "generateGrokPrompt": "Tạo prompt Grok",
+        "generateSubjectPrompt": "Tạo prompt chủ đề",
+        "seedance2CropTitleWithAspect": "Cắt {{aspect}}",
+        "seedance2CropDragHandle": "Di chuyển vùng cắt"
       },
       "sketch": {
         "switched": "Đã chuyển phác thảo",
@@ -2152,7 +2812,9 @@
         "openFreezone": "Sửa trong Freezone",
         "openFreezoneTip": "Sửa phác thảo của beat hiện tại trong Freezone",
         "freezoneOpened": "Đã mở Freezone phác thảo",
-        "freezoneOpenFailed": "Mở Freezone phác thảo thất bại"
+        "freezoneOpenFailed": "Mở Freezone phác thảo thất bại",
+        "cropTitleWithAspect": "Cắt {{aspect}}",
+        "cropDragHandle": "Di chuyển vùng cắt"
       },
       "sketchGrid": {
         "title": "Lưới phác thảo",
@@ -2174,7 +2836,8 @@
         "copySuccess": "Đã sao chép prompt",
         "cut": "Cắt vào kho",
         "cutSuccess": "Đã cắt lưới #{{n}}",
-        "cutFailed": "Cắt lưới thất bại"
+        "cutFailed": "Cắt lưới thất bại",
+        "unknownScene": "Bối cảnh không xác định"
       },
       "render": {
         "generateNew": "Tạo ảnh mới",
@@ -2211,7 +2874,15 @@
         "backgroundUploaded": "Đã tải lên tham chiếu nền render",
         "backgroundUploadFailed": "Tải lên tham chiếu nền render thất bại",
         "backgroundSaved": "Đã chuyển tham chiếu nền render",
-        "backgroundSaveFailed": "Lưu tham chiếu nền render thất bại"
+        "backgroundSaveFailed": "Lưu tham chiếu nền render thất bại",
+        "backgroundCropSave": "Lưu ảnh chụp",
+        "backgroundCropTitleWithAspect": "Cắt {{aspect}}",
+        "backgroundCropDragHandle": "Di chuyển vùng cắt",
+        "relightLabel": "Relight tới {{timeOfDay}}",
+        "relightLabelDefaultTime": "thời gian chỉ định",
+        "relightTooltip": "Relight: chiếu sáng lại cảnh quay theo thời gian trong ngày của beat mà không thay đổi cấu trúc bối cảnh.",
+        "lockedLightTooltip": "Khóa ánh sáng: sử dụng ánh sáng của riêng bối cảnh; không chiếu sáng lại.",
+        "lockedLightLabel": "Khóa ánh sáng"
       },
       "renderGrid": {
         "title": "Lưới render",
@@ -2350,7 +3021,9 @@
         "episodeFreezone": "EP Freezone",
         "episodeFreezoneTooltip": "Mở khu làm việc Freezone của tập này",
         "episodeFreezoneOpened": "Đã mở EP Freezone",
-        "episodeFreezoneOpenFailed": "Mở EP Freezone thất bại"
+        "episodeFreezoneOpenFailed": "Mở EP Freezone thất bại",
+        "sketchAutoCombine": "Tạo lại theo lô",
+        "renderAutoCombine": "Kết hợp tự động"
       },
       "verify": {
         "notRun": "Chưa chạy",
@@ -2364,6 +3037,19 @@
         "faceScore": "Khuôn mặt {{score}}",
         "clothingScore": "Trang phục {{score}}",
         "jumpBeat": "Đến beat {{n}}"
+      },
+      "insertShot": {
+        "variantLabel": "Biến thể",
+        "noVariant": "Không có biến thể",
+        "propsLabel": "Đạo cụ",
+        "propsPlaceholderWithExample": "Cách nhau bằng dấu phẩy, ví dụ {{example}}; để trống để tự động trích xuất từ mô tả cảnh",
+        "propsPlaceholderEmpty": "Cách nhau bằng dấu phẩy; để trống để tự động trích xuất từ mô tả cảnh"
+      },
+      "actionPanel": {
+        "episodeFreezone": "Canvas của tập",
+        "episodeFreezoneTooltip": "Mở tư liệu của tập này trong Canvas",
+        "episodeFreezoneOpened": "Đã mở Canvas của tập",
+        "episodeFreezoneOpenFailed": "Không thể mở Canvas của tập"
       }
     },
     "state": {
@@ -2378,7 +3064,8 @@
       "readyRatio": "{{ready}}/{{total}}",
       "blockedCount": "{{count}} chưa sẵn sàng",
       "composeReady": "Đã sẵn sàng",
-      "composeBlocked": "Thiếu {{count}}"
+      "composeBlocked": "Thiếu {{count}}",
+      "beatCount": "{{count}} Beat"
     },
     "compose": {
       "blocked": "Còn thiếu các mục sau:",
@@ -2507,7 +3194,8 @@
       "errors": {
         "invalidBeats": "Các beat đã chọn không thuộc tập hiện tại",
         "noBeats": "Tập hiện tại chưa có beat nào"
-      }
+      },
+      "paddingCount": "+{{count}} trống"
     },
     "renderSettings": {
       "model": "Model render",
@@ -2574,7 +3262,13 @@
     "noStylesAvailable": "Không có phong cách khả dụng. Nhấp góc trên bên phải để tạo.",
     "paramsExtracted": "Đã trích xuất tham số phong cách",
     "idNameRequired": "Vui lòng nhập ID và tên",
-    "styleCreated": "Đã tạo phong cách"
+    "styleCreated": "Đã tạo phong cách",
+    "customPreviewEmpty": "Chưa có ảnh tham khảo được tải lên",
+    "uploadedPreview": "Xem trước ảnh tham khảo đã tải lên",
+    "analyzingPreview": "Đang phân tích ảnh tham khảo…",
+    "styleIdRequiredBeforeUpload": "Vui lòng nhập ID kiểu dáng trước khi tải lên ảnh tham khảo",
+    "unsupportedPreviewType": "Sử dụng ảnh PNG, JPEG, WebP hoặc GIF.",
+    "renameTitle": "Đổi tên kiểu dáng"
   },
   "identityPicker": {
     "title": "Chọn danh tính nhân vật",
@@ -2973,7 +3667,12 @@
       "lock": "Khoá canvas",
       "unlock": "Mở khoá canvas",
       "organize": "Sắp xếp / định vị canvas",
-      "organizeShortcut": "⌥⇧F"
+      "organizeShortcut": "⌥⇧F",
+      "toolMove": "Công cụ di chuyển",
+      "toolHand": "Công cụ bàn tay",
+      "toolGroupLabel": "Công cụ con trỏ Canvas",
+      "hideEdges": "Ẩn kết nối",
+      "showEdges": "Hiển thị kết nối"
     },
     "quickbar": {
       "addNode": "Thêm node",
@@ -3013,7 +3712,12 @@
       "batchUse": "Dùng hàng loạt",
       "selectAll": "Chọn tất cả",
       "deselectAll": "Bỏ chọn tất cả",
-      "downloading": "Đang tải xuống…"
+      "downloading": "Đang tải xuống…",
+      "searchPlaceholder": "Tìm kiếm prompt…",
+      "searchPlaceholderName": "Tìm kiếm tên…",
+      "clearSearch": "Xóa tìm kiếm",
+      "noMatch": "Không có tư liệu lịch sử nào khớp",
+      "noMatchOtherTabs": "Không có kết quả khớp trong tab này — thử {{tabs}}"
     },
     "shortcuts": {
       "title": "Phím tắt",
@@ -3061,6 +3765,221 @@
       "keys": {
         "space": "Space"
       }
+    },
+    "assetLibraryModal": {
+      "title": "Thư viện tài sản",
+      "syncButton": "Đồng bộ lại",
+      "syncTooltip": "Tự động đồng bộ khi mở. Nhấp để đồng bộ lại nếu mạch chính có nhân vật / bối cảnh / đạo cụ mới.",
+      "closeButton": "Đóng",
+      "totalCount": "Đã nhập {{count}} mục",
+      "selectedCount": "Đã chọn {{count}}/{{max}}",
+      "dragHint": "Thả để tải lên {{type}}",
+      "file": "tệp",
+      "loadError": "Tải không thành công: ",
+      "uploadButton": "Tải lên cục bộ",
+      "uploadHintImage": "Hỗ trợ PNG / JPG / WebP, có thể kéo và thả",
+      "uploadHintVideo": "Hỗ trợ MP4 / MOV, v.v., có thể kéo và thả",
+      "uploadHintAudio": "Hỗ trợ MP3 / WAV / M4A, có thể kéo và thả",
+      "uploading": "Đang tải lên…",
+      "uploadFailed": "Tải lên không thành công",
+      "remove": "Xóa",
+      "maxSelectableExceeded": "Tối đa {{max}} có thể chọn",
+      "deselectTooltip": "Bỏ chọn",
+      "selectTooltip": "Chọn",
+      "unnamedEntry": "(Không có tên)",
+      "deleteButton": "Xóa",
+      "deleteNoIdError": "Mục này thiếu id và không thể xóa",
+      "deleteConfirm": "Xóa \"{{name}}\"?",
+      "emptyStateWithUpload": "Không có tài sản trong danh mục này. Nhấp \"Tải lên cục bộ\" để thêm, hoặc \"Đồng bộ lại\" để đồng bộ từ mạch chính.",
+      "emptyStateNoUpload": "Không có bối cảnh trong mạch chính hoặc đã đồng bộ trống. Nhấp \"Đồng bộ lại\" để thử lại.",
+      "confirmButton": "Xác nhận",
+      "sourceUpload": "Tải lên",
+      "sourceCharacter": "Nhân vật",
+      "sourceScene": "Bối cảnh",
+      "sourceProp": "Đạo cụ"
+    },
+    "nodeActionToolbar": {
+      "mainlineProjectionLocked": "Dự án chính · Bị khóa",
+      "opening": "Đang mở...",
+      "openWorkbench": "Mở Workbench",
+      "beatContextButtonTitle": "Tạo hoặc xác định vị trí node bối cảnh Beat tương ứng với tài sản này; sẽ không tự động kết nối",
+      "beatContext": "Bối cảnh Beat",
+      "beatContextNodeTitle": "Bối cảnh Beat · EP{{episode}}/B{{beat}}",
+      "groupBackgroundColorTitle": "Màu nền nhóm",
+      "backgroundColor": "Màu nền",
+      "none": "Không có",
+      "arrangeTitle": "Cách sắp xếp",
+      "arrange": "Sắp xếp",
+      "grid": "Lưới",
+      "arrangeHorizontal": "Sắp xếp ngang",
+      "arrangeVertical": "Sắp xếp dọc",
+      "commitNodeTitle": "Ghi lại nội dung của node hiện tại vào tài sản dòng chính",
+      "commit": "Gửi"
+    },
+    "eraseOverlay": {
+      "aspectRatioOriginal": "Ảnh gốc",
+      "errorLoadingImage": "Không thể tải hình ảnh",
+      "erase": "Xoá",
+      "errorNoProject": "Không có dự án trong URL, không thể gửi",
+      "errorNoMask": "Vui lòng tô vẽ vùng cần xoá trên hình ảnh trước",
+      "closeErase": "Đóng Xoá",
+      "toolBrush": "Cọ",
+      "toolRect": "Hình chữ nhật",
+      "toolEraser": "Tẩy",
+      "brushSize": "Kích thước cọ",
+      "undo": "Hoàn tác",
+      "redo": "Làm lại",
+      "labelAspectRatio": "Tỉ lệ khung hình",
+      "labelResolution": "Độ phân giải",
+      "labelNumImages": "Số lượng ảnh",
+      "numImagesFormat": "{{count}} ảnh"
+    },
+    "annotateToolEditor": {
+      "tools": {
+        "rect": "Hình chữ nhật",
+        "ellipse": "Vòng tròn",
+        "arrow": "Mũi tên",
+        "pen": "Bút vẽ",
+        "text": "Văn bản"
+      },
+      "moveImageTitle": "Di chuyển hình ảnh (hoặc giữ phím cách để kéo)",
+      "moveImageLabel": "Di chuyển",
+      "zoomOutTitle": "Thu nhỏ",
+      "zoomInTitle": "Phóng to",
+      "fitToWindowTitle": "Vừa với cửa sổ",
+      "colorLabel": "Màu sắc",
+      "undoLabel": "Hoàn tác",
+      "redoLabel": "Làm lại",
+      "deleteSelectedLabel": "Xóa đã chọn",
+      "clearAllLabel": "Xóa tất cả",
+      "cancelLabel": "Hủy",
+      "confirmLabel": "Xác nhận"
+    },
+    "redrawOverlay": {
+      "failedToLoadSource": "Không thể tải hình ảnh nguồn",
+      "partialRedraw": "Vẽ lại từng phần",
+      "redraw": "Vẽ lại",
+      "noProjectInUrl": "URL hiện tại không có dự án, không thể gửi",
+      "promptOrMaskRequired": "Vui lòng nhập gợi ý hoặc vẽ vùng vẽ lại trên hình ảnh",
+      "fullRedraw": "Vẽ lại toàn bộ",
+      "brushTool": "Cọ vẽ",
+      "rectangleTool": "Hình chữ nhật",
+      "eraserTool": "Tẩy",
+      "brushSize": "Kích thước cọ",
+      "undoLastStep": "Hoàn tác bước cuối cùng",
+      "undo": "Hoàn tác",
+      "clearMask": "Xóa mặt nạ",
+      "reset": "Đặt lại",
+      "exitRedraw": "Thoát vẽ lại",
+      "loadingSource": "Đang tải hình ảnh nguồn...",
+      "maskPromptPlaceholder": "Mô tả phần được che phủ nên trở thành như thế nào, ví dụ: thay đổi nền này thành bầu trời hoàng hôn",
+      "fullPromptPlaceholder": "Mô tả cách thiết kế lại hình ảnh này, ví dụ: giữ thành phần và thay đổi nền thành sa mạc hoàng hôn"
+    },
+    "multiSelectionToolbar": {
+      "arrange": "Sắp xếp",
+      "createDuplicate": "Tạo bản sao",
+      "batchDownload": "Tải xuống hàng loạt",
+      "group": "Nhóm lại",
+      "mergeStoryboardGroup": "Hợp nhất nhóm phân cảnh",
+      "storyboardGroupTooltip": "Các nhóm phân cảnh chỉ hỗ trợ các nút hình ảnh, số nút không được vượt quá 25",
+      "lockedNodesDeleteTooltip": "Tất cả các nút được chọn là các nút bị khóa mạch chính và không thể xóa",
+      "deleteNodesTooltip": "Xóa {{count}} nút",
+      "batchDelete": "Xóa hàng loạt",
+      "gridLayout": "Bố cục lưới",
+      "horizontalLayout": "Bố cục ngang",
+      "verticalLayout": "Bố cục dọc"
+    },
+    "nodeSelectionMenu": {
+      "threeDWorld": "Thế giới 3D",
+      "referenceGenerateHeader": "Tạo từ Node này",
+      "skillCount": "{{count}} kỹ năng"
+    },
+    "commitTargetHint": {
+      "candidate": {
+        "sketch": "Phác thảo",
+        "frame": "Phân cảnh"
+      },
+      "typedMessage": "EP{{episode}}/Beat {{beat}} · {{candidate}} candidate · kết quả tạo ra trên node này, được nâng lên {{promotedNode}} sau khi commit",
+      "untypedMessage": "Mạch chính candidate · đã liên kết với EP{{episode}}/Beat {{beat}} · kết quả tạo ra trên node này, slot được khớp theo bối cảnh tại thời điểm commit",
+      "freeMessage": "free candidate · kết quả tạo ra trên node này, chọn tư liệu đích thủ công tại thời điểm commit",
+      "title": "cách kết quả tạo ra được ghi ngược lại vào slot mạch chính tại thời điểm commit"
+    },
+    "splitStoryboardEditor": {
+      "parameters": "Tham số chia tách phác thảo",
+      "rows": "Số hàng",
+      "cols": "Số cột",
+      "lineThickness": "Độ dày đường phân tách",
+      "outputCellCount": "Số ô xuất ra",
+      "cellWidth": "Chiều rộng ô (px)",
+      "cellHeight": "Chiều cao ô (px)",
+      "error": {
+        "lineTooThick": "Đường phân tách hiện tại quá dày, dẫn đến diện tích trích xuất không đủ. Vui lòng giảm độ dày đường hoặc giảm số hàng/cột."
+      }
+    },
+    "audioWaveform": {
+      "scrubber": "Thanh trượt sóng âm thanh",
+      "rewind10s": "Tua lại 10s",
+      "pause": "Tạm dừng",
+      "play": "Phát",
+      "fastForward10s": "Tua tiến 10s"
+    },
+    "nodeGenHistory": {
+      "relativeSeconds": "{{count}} giây trước",
+      "relativeMinutes": "{{count}} phút trước",
+      "relativeHours": "{{count}} giờ trước",
+      "relativeDays": "{{count}} ngày trước",
+      "title": "Lịch sử",
+      "refreshTooltip": "Làm mới lịch sử",
+      "currentLabel": "Hiện tại"
+    },
+    "cropToolEditor": {
+      "aspectRatioFree": "Tự do",
+      "aspectRatioOriginal": "Gốc",
+      "custom": "Tùy chỉnh",
+      "enterRatioExample": "Vui lòng nhập tỷ lệ, ví dụ 3:2 hoặc 1.5",
+      "invalidRatioFormat": "Định dạng tỷ lệ không hợp lệ",
+      "enterRatioPlaceholder": "Nhập tỷ lệ, ví dụ 3:2 hoặc 1.5"
+    },
+    "videoViewerModal": {
+      "titleFallback": "Video",
+      "close": "Đóng",
+      "pause": "Tạm dừng",
+      "play": "Phát",
+      "videoSeek": "Tiến độ video",
+      "unmute": "Bỏ im lặng",
+      "mute": "Im lặng",
+      "fullscreen": "Toàn màn hình"
+    },
+    "nodeSpawnPlus": {
+      "connectToNode": "Kết nối vào nút này"
+    },
+    "providerModelPicker": {
+      "providers": {
+        "newapi": "Xia Post / NewAPI",
+        "huimeng": "HuiMeng",
+        "openrouter": "OpenRouter",
+        "openai": "OpenAI",
+        "seedance": "Seedance"
+      }
+    },
+    "mediaModelParamChip": {
+      "title": "Tham số mô hình",
+      "default": "Mặc định"
+    },
+    "upscaleEditor": {
+      "title": "Phóng to HD",
+      "cancel": "Huỷ",
+      "providerLabel": "Chọn model",
+      "qualityLabel": "Chất lượng ảnh",
+      "scaleLabel": "Hệ số phóng to",
+      "submit": "Gửi tạo",
+      "qualityPicker": {
+        "title": "Chất lượng ảnh"
+      }
+    },
+    "multiSelectionConnect": {
+      "label": "Kết nối loạt",
+      "tooltip": "Kết nối loạt: Nhấp để tạo nút phía hạ lưu mới nhận kết nối từ tất cả các nút được chọn, hoặc kéo đến nút hiện có"
     }
   },
   "tool": {
@@ -3357,7 +4276,8 @@
     "thinkingLevelDesc": "Chỉ có hiệu lực với Nano Banana 2 của fal; mức suy luận cao sẽ tốn thêm chi phí.",
     "thinkingDisabled": "Tắt",
     "thinkingMinimal": "Tiêu chuẩn",
-    "thinkingHigh": "Cao"
+    "thinkingHigh": "Cao",
+    "noModelsAvailable": "Quản trị viên chưa cấu hình bất kỳ mô hình hình ảnh nào"
   },
   "node": {
     "menu": {
@@ -3412,7 +4332,33 @@
       "promptRequired": "Vui lòng nhập prompt",
       "apiKeyRequired": "Provider backend chưa được cấu hình",
       "resultTitle": "Ảnh kết quả",
-      "promptPlaceholder": "Mô tả bất kỳ nội dung nào bạn muốn tạo hoặc chỉnh sửa"
+      "promptPlaceholder": "Mô tả bất kỳ nội dung nào bạn muốn tạo hoặc chỉnh sửa",
+      "noModelAvailable": "Quản trị viên chưa cấu hình mô hình ảnh nào",
+      "imageLabel": "Ảnh {{index}}",
+      "nodeBadgeLabel": "Node ảnh",
+      "moreReferencesLabel": "+{{count}} ảnh tham chiếu",
+      "uploadButtonTooltip": "Kéo thả ảnh từ Thư viện tài liệu, hoặc click AI chỉnh sửa từ Node ảnh để kết nối tự động",
+      "connectReferenceButton": "Kết nối tham chiếu",
+      "refineImageSuggestion": "Tạo phiên bản ổn định hơn và tinh tế hơn dựa trên ảnh tham chiếu, duy trì danh tính chủ thể và thành phần.",
+      "imageToImageButton": "Ảnh tạo ảnh",
+      "enhanceImageSuggestion": "Nâng cao ảnh tham chiếu bằng khôi phục nét cao, cải thiện chi tiết, cạnh và kết cấu trong khi giữ nguyên nội dung gốc.",
+      "enhanceImageButton": "Nâng cao ảnh",
+      "focusPromptButton": "Tập trung prompt",
+      "generationModes": {
+        "textToImage": "Văn bản tạo ảnh",
+        "allReference": "Tham chiếu đa năng",
+        "imageReference": "Tham chiếu ảnh",
+        "imageToImage": "Ảnh tạo ảnh",
+        "imageToVideo": "Ảnh tạo video",
+        "firstLastFrame": "Khung đầu/cuối"
+      },
+      "capabilityHint": "Khả năng ảnh ứng viên · Chỉ trở thành tài liệu sau khi Commit",
+      "freestylePromptButton": "Prompt tự do",
+      "markButton": "Đánh dấu",
+      "cameraMovementSuggestion": "Chuyển động máy quay: đẩy nhẹ, duy trì sự ổn định chủ thể, chất lượng điện ảnh.",
+      "assetLibraryTooltip": "Chọn ảnh tham chiếu từ Thư viện tài liệu (nhân vật / bối cảnh / đạo cụ)",
+      "insertReferenceButtonTooltip": "Chèn {{label}}",
+      "candidateLabel": "Ứng viên"
     },
     "imageGen": {
       "contextPalette": {
@@ -3420,7 +4366,48 @@
         "actors": "Màu nhân vật",
         "props": "Màu đạo cụ",
         "empty": "Node hiện tại không có ngữ cảnh màu beat khả dụng"
-      }
+      },
+      "aspectAuto": "Tự động",
+      "qualityLow": "Nét thấp",
+      "qualityMedium": "Nét chuẩn",
+      "qualityHigh": "Nét cao",
+      "expandAlbum": "Mở rộng album",
+      "uploadImage": "Tải lên hình ảnh",
+      "uploading": "Đang tải lên",
+      "removeReference": "Xóa tham chiếu",
+      "expandResults": "Mở rộng {{n}} kết quả tạo",
+      "generatingNew": "Đang tạo hình ảnh mới…",
+      "back": "Quay lại",
+      "uploadingEllipsis": "Đang tải lên…",
+      "tryThis": "Thử:",
+      "createUpstreamImage": "Tạo nút hình ảnh phía trên làm tham chiếu",
+      "imageToImage": "Ảnh tạo ảnh",
+      "albumHeader": "Album · {{n}} ảnh",
+      "setAsMainImage": "Bấm để đặt làm ảnh chính",
+      "applyToCanvasTitle": "Áp dụng hình ảnh này làm nút hình ảnh độc lập trên bố cục",
+      "applyToCanvas": "Áp dụng vào bố cục",
+      "downloadImage": "Tải xuống hình ảnh này",
+      "mainImage": "Ảnh chính",
+      "generatingEllipsis": "Đang tạo…",
+      "backgroundSourceTitle": "Chọn vùng 16:9 từ {{role}} để ghi vào selected_background.png của beat này — sketch/render tiếp theo trong không gian làm việc beat sẽ sử dụng đây làm điểm neo nền",
+      "cropBackground": "Cắt nền",
+      "assetLibraryTitle": "Chọn hình ảnh tham chiếu từ Thư viện tư liệu (Nhân vật / Bối cảnh / Đạo cụ)",
+      "assetLibrary": "Thư viện tư liệu",
+      "upstreamSource": "Từ phía trên · {{source}}",
+      "detachReference": "Hủy tham chiếu này",
+      "placeholderWithUpstream": "Nội dung phía trên đã kết nối tự động. Thêm các gợi ý khác…",
+      "placeholderDefault": "Mô tả bối cảnh bạn muốn tạo, @đề cập đến tư liệu",
+      "maxReferencesSupported": "Mô hình này hỗ trợ tối đa {{n}} hình ảnh tham chiếu",
+      "quality": "Chất lượng",
+      "resolution": "Độ phân giải",
+      "aspectRatio": "Tỉ lệ khung hình",
+      "style": "Phong cách",
+      "camera": "Camera",
+      "countUnit": "{{n}}",
+      "translatePrompt": "Dịch gợi ý (Trung ↔ Tiếng Anh)",
+      "generate": "Tạo",
+      "assetReferenceGroup": "Nhóm tham chiếu tư liệu",
+      "missingProjectOrBeatContext": "Thiếu ngữ cảnh dự án hoặc Beat"
     },
     "beatContextNode": {
       "heading": "Ngữ cảnh beat",
@@ -3466,11 +4453,34 @@
         "propColor": "Màu đạo cụ",
         "actorColors": "Màu nhân vật",
         "propColors": "Màu đạo cụ"
+      },
+      "errors": {
+        "unsavedConflicts": "Canvas hiện tại có xung đột chưa lưu. Hãy giải quyết chúng trước khi đồng bộ với mạch chính.",
+        "missingProjectEpisodeBeat": "Thiếu project/episode/beat. Không thể đồng bộ với mạch chính.",
+        "missingProjectEpisodeBeatLocal": "Thiếu project/episode/beat. Không thể cập nhật bối cảnh cục bộ."
+      },
+      "mentionCandidates": {
+        "identity": "Nhân vật",
+        "prop": "Đạo cụ"
       }
     },
     "upload": {
       "uploadedAlt": "Tài nguyên đã tải lên",
-      "hint": "Kéo thả vào đây hoặc nhấp tải lên tài nguyên ở góc trên bên phải"
+      "hint": "Kéo thả vào đây hoặc nhấp tải lên tài nguyên ở góc trên bên phải",
+      "cannotReadDirectorWorldScreenshot": "Không thể đọc ảnh chụp Thế giới Đạo diễn",
+      "cannotParseDirectorWorldScreenshotSize": "Không thể phân tích kích thước ảnh chụp Thế giới Đạo diễn",
+      "defaultDirectorElement": "Phần tử Đạo diễn",
+      "uploadImage": "Tải lên hình ảnh",
+      "uploading": "Đang tải lên",
+      "uploadAsset": "Tải lên tư liệu",
+      "compositeImageMissingData": "Ảnh ghép Đạo diễn thiếu combined/env_only/frame_meta",
+      "missingProjectForSavingCanvasDirectorComposite": "Thiếu dự án, không thể lưu ảnh ghép Đạo diễn Canvas",
+      "canvasDirectorCompositeMissingImageUrl": "Ảnh ghép Đạo diễn Canvas thiếu URL hình ảnh",
+      "directorComposite": "Ảnh ghép Đạo diễn",
+      "environmentOnly": "Chỉ nền",
+      "directorWorldOutput": "Đầu ra Thế giới Đạo diễn",
+      "directorWorldScreenshotOutputFailed": "Đầu ra ảnh chụp Thế giới Đạo diễn sang Canvas thất bại",
+      "directorWorldExport": "Xuất Thế giới Đạo diễn"
     },
     "audio": {
       "uploadTypeError": "Vui lòng tải lên tệp âm thanh",
@@ -3478,14 +4488,50 @@
       "uploading": "Đang tải lên",
       "uploadAudio": "Tải lên âm thanh",
       "replaceAudioTitle": "Thay âm thanh",
-      "replace": "Thay thế"
+      "replace": "Thay thế",
+      "generationFailed": "Tạo thất bại",
+      "retry": "Thử lại",
+      "noAudio": "Chưa có âm thanh"
     },
     "storyboardNode": {
       "title": "Kết quả tách ô",
       "frames": "Ô lưới",
       "rows": "Số hàng",
       "cols": "Số cột",
-      "frameIndex": "Ô thứ {{index}}"
+      "frameIndex": "Ô thứ {{index}}",
+      "canvasInitError": "Khởi tạo canvas xuất bị lỗi",
+      "emptyFrame": "Trống",
+      "editSingleFrameTooltip": "Chỉnh sửa ô này riêng",
+      "replaceFromInputTooltip": "Thay thế từ hình ảnh đầu vào",
+      "frameNoteDescription": "Mô tả ô {{frameNo}}",
+      "noEditableImage": "Ô này không có hình ảnh để chỉnh sửa",
+      "frameTitle": "Ô {{index}}",
+      "createEditNodeError": "Tạo nút chỉnh sửa bị lỗi",
+      "noExportImages": "Không có hình ảnh để xuất",
+      "exportError": "Xuất bị lỗi",
+      "packDownloadError": "Đóng gói và tải xuống bị lỗi",
+      "noInputImages": "Không có hình ảnh đầu vào",
+      "showFrameIndex": "Hiển thị chỉ số ô",
+      "showFrameNote": "Hiển thị mô tả ô",
+      "imageFit": "Điều chỉnh hình ảnh",
+      "imageFitCover": "Lấp đầy ô",
+      "imageFitContain": "Hiển thị hoàn chỉnh",
+      "notePlacement": "Vị trí mô tả",
+      "notePlacementOverlay": "Lớp phủ trên hình",
+      "notePlacementBottom": "Văn bản dưới hình",
+      "frameIndexPrefix": "Tiền tố chỉ số",
+      "cellGap": "Khoảng cách",
+      "fontSize": "Kích thước chữ (%)",
+      "backgroundColor": "Nền",
+      "textColor": "Văn bản",
+      "exportSettings": "Cài đặt xuất",
+      "gridInfo": "{{rows}} x {{cols}} | {{frameCount}} ô",
+      "packingProgress": "Đang đóng gói...",
+      "packDownload": "Đóng gói & Tải xuống",
+      "exportingProgress": "Đang xuất...",
+      "mergeGrid": "Hợp nhất lưới",
+      "defaultProjectName": "Dự án không tên",
+      "defaultProjectNameFallback": "Dự án"
     },
     "storyboardGen": {
       "rowsShort": "Hàng",
@@ -3497,11 +4543,77 @@
       "overallAspectRatio": "Tỉ lệ tổng thể",
       "requestAspectRatio": "Tỉ lệ yêu cầu",
       "framePlaceholder": "Mô tả phương án {{index}}",
-      "gridPreviewTitle": "Xem trước lưới"
+      "gridPreviewTitle": "Xem trước lưới",
+      "emptyFrameDescription": "Vui lòng điền ít nhất một mô tả ứng cử viên lưới"
     },
     "operationPanel": {
       "expand": "Phóng to",
-      "collapse": "Thu gọn"
+      "collapse": "Thu gọn",
+      "promptPlaceholderWithUpstream": "Nội dung từ phía trên đã được tương tác tự động. Tiếp tục bổ sung prompt…",
+      "humanReviewTitle": "Bật khi tư liệu chứa khuôn mặt người thực. Điều này có thể tăng thời gian duyệt và không đảm bảo phê duyệt.",
+      "humanReview": "Kiểm duyệt người thực",
+      "translatePromptTitle": "Dịch prompt (Trung Quốc ↔ Anh)",
+      "cameraMovement": "Chuyển động máy quay",
+      "characterLibrary": "Thư viện tư liệu",
+      "externalAsset": "Tư liệu bên ngoài",
+      "assetReferenceGroup": "Nhóm tham chiếu tư liệu",
+      "genMode": {
+        "textToVideo": "Văn bản tạo video",
+        "firstFrame": "Khung đầu",
+        "imageToVideo": "Ảnh tạo video",
+        "imageReference": "Tham chiếu đa ảnh",
+        "firstLastFrame": "Khung đầu và cuối",
+        "videoEdit": "Chỉnh sửa video",
+        "allReference": "Tham chiếu đa năng",
+        "current": "Chế độ hiện tại"
+      },
+      "imageReferenceLabel": "Tham chiếu {{index}}",
+      "videoReferenceLabel": "Tham chiếu video {{index}}",
+      "audioReferenceLabel": "Tham chiếu âm thanh {{index}}",
+      "frameLabel": {
+        "first": "Đầu",
+        "last": "Cuối"
+      },
+      "mediaType": {
+        "image": "Ảnh",
+        "video": "Video",
+        "audio": "Âm thanh"
+      },
+      "countUnit": {
+        "image": "ảnh",
+        "media": "mục"
+      },
+      "referenceOverCap": "Tham chiếu {{mediaType}} vượt quá giới hạn {{mode}} ({{cap}} {{countUnit}}). Tư liệu này sẽ không được sử dụng cho tạo nội dung.",
+      "modeError": {
+        "videoConnected": {
+          "useVideoEdit": "Node video đã được kết nối. Vui lòng sử dụng \"Chỉnh sửa video\".",
+          "firstFrameUnavailable": "Node video đã được kết nối. \"Khung đầu\" không khả dụng.",
+          "imageToVideoUnavailable": "Node video đã được kết nối. \"Ảnh tạo video\" không khả dụng.",
+          "imageReferenceUnavailable": "Node video đã được kết nối. \"Tham chiếu ảnh\" không khả dụng."
+        },
+        "imageConnected": {
+          "chooseOtherModes": "Node ảnh đã được kết nối. Vui lòng chọn \"Khung đầu\", \"Ảnh tạo video\" hoặc \"Tham chiếu ảnh\"."
+        },
+        "imageRequired": {
+          "single": "Cần node ảnh (1)",
+          "multi": "Cần node ảnh (1–9)"
+        },
+        "multipleSingleImages": {
+          "firstFrame": "\"Khung đầu\" chỉ hỗ trợ một ảnh duy nhất",
+          "imageToVideo": "\"Ảnh tạo video\" chỉ hỗ trợ một ảnh duy nhất. Vui lòng sử dụng \"Tham chiếu ảnh\"."
+        },
+        "imageTooMany": "\"Tham chiếu ảnh\" hỗ trợ tối đa 9 ảnh",
+        "videoRequired": {
+          "single": "Cần node video (1)"
+        },
+        "videoTooMany": "\"Chỉnh sửa video\" chỉ hỗ trợ 1 node video",
+        "modelNotSupportVideoEdit": "Mô hình này không hỗ trợ \"Chỉnh sửa video\"",
+        "videoOnlyAllRefOrEdit": "Khi có tư liệu video, chỉ có thể sử dụng \"Tham chiếu đa năng\" hoặc \"Chỉnh sửa video\"",
+        "videoOnlyAllRef": "Khi có tư liệu video, chỉ có thể sử dụng \"Tham chiếu đa năng\"",
+        "textToVideoUnavailableWithMedia": "Không khả dụng khi tham chiếu tư liệu ảnh hoặc âm thanh",
+        "firstLastFrameImageTooMany": "Không khả dụng khi kết nối hơn 2 ảnh",
+        "unsupported": "Chế độ này không được hỗ trợ"
+      }
     },
     "textNode": {
       "tryHint": "Thử:",
@@ -3515,7 +4627,9 @@
       "placeholder": "Viết ra câu chuyện, bối cảnh hoặc cảm hứng nhân vật. Ví dụ: trong nhà ga cũ một đêm mưa, một lá thư đến muộn đã thay đổi lựa chọn của tất cả mọi người.",
       "modelPickerHint": "Chọn model",
       "submit": "Gửi",
-      "translate": "Dịch (Trung ↔ Anh)"
+      "translate": "Dịch (Trung ↔ Anh)",
+      "generatePlaceholder": "Mô tả câu chuyện, bối cảnh, nhân vật, đối thoại hoặc prompt sáng tạo mà bạn muốn tạo…",
+      "generateText": "Tạo văn bản bằng AI"
     },
     "videoUpscale": {
       "title": "Nâng nét video",
@@ -3544,7 +4658,9 @@
         "allReference": "Tham chiếu toàn năng",
         "imageToVideo": "Ảnh tạo video",
         "firstLastFrame": "Khung đầu/cuối",
-        "imageReference": "Tham chiếu ảnh"
+        "imageReference": "Tham chiếu ảnh",
+        "firstFrame": "Khung đầu",
+        "videoEdit": "Chỉnh sửa video"
       },
       "placeholder": "Tạo video theo mô tả bằng văn bản.",
       "submit": "Gửi",
@@ -3571,7 +4687,15 @@
         "title": "Tạo âm thanh",
         "on": "Bật",
         "off": "Tắt",
-        "durationExceeded": "Tổng thời lượng âm thanh không được vượt quá {{max}} giây, hãy rút ngắn hoặc thay tham chiếu nhạc nền rồi thử lại."
+        "durationExceeded": "Tổng thời lượng âm thanh không được vượt quá {{max}} giây, hãy rút ngắn hoặc thay tham chiếu nhạc nền rồi thử lại.",
+        "roleMusic": "Tham chiếu âm nhạc",
+        "durationTooShort": "Mỗi đoạn âm thanh phải dài ít nhất {{min}} giây: {{clips}}. Vui lòng thay thế hoặc kéo dài và thử lại.",
+        "durationTooLong": "Mỗi đoạn âm thanh phải dài nhiều nhất {{max}} giây: {{clips}}. Vui lòng cắt ngắn hoặc thay thế và thử lại.",
+        "durationTotalTooShort": "Tất cả các đoạn âm thanh kết hợp phải dài ít nhất {{min}} giây, hiện tại {{total}} giây: {{clips}}. Vui lòng thêm hoặc kéo dài âm thanh và thử lại.",
+        "durationTotalTooLong": "Tất cả các đoạn âm thanh kết hợp phải dài nhiều nhất {{max}} giây, hiện tại {{total}} giây: {{clips}}. Vui lòng cắt ngắn hoặc loại bỏ một số đoạn và thử lại.",
+        "clipDuration": "{{label}}（{{seconds}}s）",
+        "clipSeparator": ", ",
+        "clipFallbackLabel": "Âm thanh{{index}}"
       },
       "count": {
         "format": "{{count}}"
@@ -3594,7 +4718,498 @@
           "redo": "Làm lại",
           "reset": "Đặt lại"
         }
+      },
+      "emptyState": {
+        "allReference": "Tham chiếu đa năng",
+        "imageReference": "Tham chiếu hình ảnh",
+        "firstFrame": "Tạo video từ khung đầu",
+        "imageToVideo": "Ảnh tạo video",
+        "firstLastFrame": "Tạo video từ khung đầu/cuối",
+        "tryThese": "Thử các cách này:"
+      },
+      "spawnedNode": {
+        "firstFrame": "Khung đầu",
+        "referenceImage": "Hình ảnh tham chiếu",
+        "keyframeFirst": "Khung đầu",
+        "keyframeLast": "Khung cuối",
+        "clip": "Cắt video"
+      },
+      "group": {
+        "imageReference": "Nhóm tham chiếu hình ảnh",
+        "firstFrame": "Nhóm tạo video từ khung đầu",
+        "imageToVideo": "Nhóm ảnh tạo video",
+        "allReference": "Nhóm tham chiếu đa năng",
+        "firstLastFrame": "Nhóm tạo video từ khung đầu/cuối"
+      },
+      "clip": {
+        "error": "Cắt video thất bại",
+        "errorNoUrl": "Hoàn tất cắt video nhưng không trả về địa chỉ video"
+      },
+      "videoEdit": {
+        "tooManyImages": "Chỉnh sửa video hỗ trợ tối đa {{limit}} hình ảnh tham chiếu, đã sử dụng {{limit}} cái đầu tiên (bỏ qua {{ignored}} cái)"
+      },
+      "allReference": {
+        "happyhorseUnsupported": "HappyHorse không hỗ trợ chế độ tham chiếu đa năng, vui lòng chuyển sang văn bản tạo video hoặc ảnh tạo video",
+        "modelUnsupported": "Mô hình hiện tại không hỗ trợ tham chiếu đa năng, vui lòng chuyển mô hình hoặc sử dụng chế độ tạo khác"
+      },
+      "generation": {
+        "noResultUrl": "Tạo video không trả về kết quả",
+        "failed": "Tạo video thất bại",
+        "requestId": "ID yêu cầu",
+        "newVideoGenerating": "Video mới đang tạo…",
+        "backToLoading": "Quay lại",
+        "sensitiveContentBlocked": "Tư liệu chứa khuôn mặt thật, đã bị chính sách an toàn nội dung chặn. Vui lòng bật công tắc \"Đánh giá tư liệu con người\" dưới đây và thử lại (có thể tăng thời gian đánh giá, không đảm bảo thành công).",
+        "sensitiveContentTitle": "Tư liệu bị chặn"
+      },
+      "album": {
+        "expand": "Mở rộng album",
+        "expandResults": "Mở rộng {{count}} kết quả tạo",
+        "title": "Album · {{count}} mục",
+        "setAsMain": "Nhấp để đặt làm video chính",
+        "applyToCanvas": "Áp dụng vào Canvas",
+        "applyToCanvasTooltip": "Đặt video này dưới dạng một Node video độc lập trên Canvas",
+        "download": "Tải xuống video này",
+        "mainVideo": "Video chính",
+        "generating": "Đang tạo…"
+      },
+      "capabilities": {
+        "maxImages": "Mô hình này hỗ trợ tối đa {{count}} tài liệu ảnh",
+        "noVideo": "Mô hình này không hỗ trợ tài liệu video",
+        "maxVideos": "Mô hình này hỗ trợ tối đa {{count}} tài liệu video",
+        "noAudio": "Mô hình này không hỗ trợ tài liệu âm thanh",
+        "maxAudios": "Mô hình này hỗ trợ tối đa {{count}} tài liệu âm thanh"
+      },
+      "loading": {
+        "failed": "Không thể tải video"
+      },
+      "humanReviewErrors": {
+        "assetFetchFailed": "Không thể truy cập ảnh tham khảo {{index}}. Vui lòng tải lên lại và thử lại.",
+        "assetExpired": "Liên kết ảnh tham khảo {{index}} đã hết hạn. Vui lòng tải lên lại.",
+        "unsupportedImage": "Ảnh tham khảo {{index}} có định dạng hoặc kích thước không được hỗ trợ.",
+        "contentRejected": "Ảnh tham khảo {{index}} không vượt qua kiểm duyệt nội dung. Hãy thử ảnh khác.",
+        "reviewTimeout": "Hết thời gian chờ kiểm duyệt ảnh tham khảo. Vui lòng thử lại sau.",
+        "unknownReviewError": "Ảnh tham khảo {{index}} không vượt qua kiểm duyệt và dịch vụ thượng lưu không cung cấp lý do. Vui lòng thử ảnh khác hoặc liên hệ với quản trị viên."
+      },
+      "referenceDuration": {
+        "videoFallbackLabel": "Video{{index}}",
+        "videoTooShort": "Mỗi đoạn video phải dài ít nhất {{min}} giây: {{clips}}. Vui lòng thay thế hoặc kéo dài và thử lại.",
+        "videoTooLong": "Mỗi đoạn video phải dài nhiều nhất {{max}} giây: {{clips}}. Vui lòng cắt ngắn hoặc thay thế và thử lại.",
+        "videoTotalTooShort": "Tất cả các đoạn video kết hợp phải dài ít nhất {{min}} giây, hiện tại {{total}} giây: {{clips}}. Vui lòng thêm hoặc kéo dài video và thử lại.",
+        "videoTotalTooLong": "Tất cả các đoạn video kết hợp phải dài nhiều nhất {{max}} giây, hiện tại {{total}} giây: {{clips}}. Vui lòng cắt ngắn hoặc loại bỏ video và thử lại."
+      },
+      "player": {
+        "play": "Phát",
+        "pause": "Tạm dừng",
+        "mute": "Tắt tiếng",
+        "unmute": "Bật tiếng"
       }
+    },
+    "scriptNode": {
+      "actions": {
+        "fromScript": "Tạo Beat từ Kịch bản",
+        "fromVideoRef": "Tạo Beat từ Tham chiếu Video",
+        "fromCharacter": "Tạo Beat từ Nhân vật"
+      },
+      "groups": {
+        "fromScriptGroup": "Nhóm Tạo Beat từ Kịch bản",
+        "fromVideoRefGroup": "Nhóm Tạo Beat từ Tham chiếu Video",
+        "fromCharacterGroup": "Nhóm Tạo Beat từ Nhân vật"
+      },
+      "columns": {
+        "shotNo": "Số Beat",
+        "duration": "Thời lượng",
+        "visualDescription": "Mô tả Hình ảnh",
+        "character1": "Nhân vật 1",
+        "characterDescription1": "Mô tả Nhân vật 1",
+        "characterImage1": "Hình ảnh Nhân vật 1",
+        "character2": "Nhân vật 2",
+        "characterDescription2": "Mô tả Nhân vật 2",
+        "characterImage2": "Hình ảnh Nhân vật 2",
+        "reference": "Tham chiếu",
+        "shot": "Góc máy",
+        "characterAction": "Hành động Nhân vật",
+        "emotion": "Cảm xúc",
+        "sceneTags": "Nhãn Bối cảnh",
+        "lightingMood": "Không khí Ánh sáng",
+        "sound": "Hiệu ứng âm thanh",
+        "dialogue": "Đối thoại",
+        "shotPrompt": "Prompt Beat",
+        "videoMotionPrompt": "Prompt Chuyển động Video"
+      },
+      "ui": {
+        "tryThis": "Thử:",
+        "shotsCount": "Tổng cộng {{count}} Beat",
+        "close": "Đóng",
+        "defaultTitle": "Kịch bản Beat",
+        "scriptView": "Chế độ xem Kịch bản",
+        "fullscreen": "Toàn màn hình",
+        "uploadImage": "Nhấp để tải lên hình ảnh",
+        "replaceImage": "Thay thế hình ảnh",
+        "deleteImage": "Xóa hình ảnh",
+        "closePreview": "Đóng xem trước",
+        "placeholder": "Mô tả cốt truyện hoặc thêm tham chiếu Nhân vật, tham chiếu Video, v.v. để tạo kịch bản Beat cho bạn",
+        "translate": "Dịch (Tiếng Việt↔Tiếng Anh)",
+        "generate": "Tạo",
+        "retry": "Thử lại"
+      },
+      "errors": {
+        "promptOrMedia": "Vui lòng nhập prompt để mô tả cốt truyện, hoặc kết nối một nút Video / Hình ảnh Nhân vật",
+        "uploadFailed": "Tải lên thất bại",
+        "missingProject": "Thiếu tham số dự án"
+      },
+      "displayName": {
+        "script": "Kịch bản"
+      },
+      "characterDefaultNames": {
+        "1": "Nhân vật 1",
+        "2": "Nhân vật 2"
+      },
+      "reference": {
+        "label": "Tham chiếu {{index}}"
+      }
+    },
+    "audioOperationPanel": {
+      "inputMusicDesc": "Nhập Mô Tả Nhạc",
+      "inputSynthText": "Nhập Văn Bản để Tổng Hợp",
+      "musicPlaceholder": "Mô tả nhạc bạn muốn: phong cách, nhạc cụ, nhịp độ, tâm trạng…",
+      "synthPlaceholder": "Nhập Văn Bản để Tổng Hợp",
+      "emotionLabel": "Từ Ngữ Điệu",
+      "optionalFreeInput": "(Tùy chọn, Nhập Tự Do)",
+      "emotionPlaceholder": "Ví dụ: căng thẳng, giọng thấp, có chút sợ hãi",
+      "translateTooltip": "Dịch (Tiếng Trung ↔ Tiếng Anh)",
+      "voiceSettingsTooltip": "Cài Đặt Giọng Đọc",
+      "advancedSettingsTooltip": "Cài Đặt Nâng Cao",
+      "generateTooltip": "Tạo",
+      "helpAriaLabel": "Trợ Giúp",
+      "advancedSettingsLabel": "Cài Đặt Nâng Cao",
+      "musicLengthLabel": "Thời Lượng Nhạc",
+      "musicLengthHelp": "Đặt độ dài bài hát. Ở chế độ tự động, đảm bảo lời bài hát hoàn chỉnh; sau khi chỉ định thời lượng, ưu tiên khớp với nó.",
+      "forceInstrumentalLabel": "Bắt Buộc Nhạc Nền",
+      "forceInstrumentalHelp": "Bắt buộc nhạc nền tinh khiết (không có giọng người).",
+      "respectSectionsDurationsLabel": "Tôn Trọng Thời Lượng Phần",
+      "respectSectionsDurationsHelp": "Tuân thủ chặt chẽ các chính sách thời lượng phần nhạc.",
+      "voiceSettingsLabel": "Cài Đặt Giọng Đọc",
+      "voiceLoadingLabel": "Đang Tải…",
+      "copiedTooltip": "Đã Sao Chép",
+      "copyFailedTooltip": "Sao Chép Thất Bại",
+      "copyVoiceRefTooltip": "Sao Chép Tham Chiếu Giọng Đọc",
+      "switchVoiceTooltip": "Chuyển Đổi Giọng Đọc",
+      "preset30s": "30 Giây",
+      "preset1m": "1 Phút",
+      "preset2m": "2 Phút",
+      "preset3m": "3 Phút",
+      "preset4m": "4 Phút",
+      "preset5m": "5 Phút",
+      "preset10m": "10 Phút",
+      "projectNarratorLabel": "Người Kể Chuyện Dự Án",
+      "customVoiceLabel": "Giọng Đọc Tùy Chỉnh",
+      "characterLabel": "Nhân Vật",
+      "characterDefaultVoice": "{{name}} (Giọng Đọc Mặc Định)",
+      "characterAgeGroupVoice": "{{name}} ({{slot}})",
+      "identityLabel": "Danh Tính",
+      "identityOwnVoice": "{{id}} (Giọng Riêng)",
+      "identityResolvedVoice": "{{id}} (Đã Phân Tích)"
+    },
+    "cameraMovementPicker": {
+      "title": "Chuyển động máy quay",
+      "closeButton": "Đóng",
+      "loading": "Đang tải...",
+      "noTemplates": "Không có mẫu chuyển động máy quay nào",
+      "clearButton": "Xóa",
+      "useButton": "Sử dụng",
+      "noPreview": "Không có bản xem trước"
+    },
+    "cameraPicker": {
+      "title": "Máy quay",
+      "close": "Đóng",
+      "cameraBody": "Máy ảnh",
+      "lens": "Ống kính",
+      "focalLength": "Tiêu cự",
+      "aperture": "Khẩu độ",
+      "clear": "Xóa",
+      "use": "Sử dụng",
+      "prevItem": "Mục trước",
+      "nextItem": "Mục tiếp theo",
+      "loading": "Đang tải…"
+    },
+    "contextPromptPalette": {
+      "button": "Bảng màu ngữ cảnh",
+      "actors": "Màu nhân vật",
+      "props": "Màu đạo cụ"
+    },
+    "skillNode": {
+      "providerMainline": "Kỹ năng Mainline",
+      "providerAgent": "Kỹ năng Agent",
+      "providerTool": "Kỹ năng Công cụ",
+      "providerWorkflow": "Kỹ năng Quy trình",
+      "loadingSkill": "Đang tải kỹ năng...",
+      "unknownSkill": "Kỹ năng không xác định",
+      "missingBeatContext": "Thiếu bối cảnh Beat",
+      "noBackgroundOutputNode": "Không tìm thấy nút đầu ra nền hiện tại",
+      "backgroundOutputNodeUnavailable": "Nút đầu ra nền hiện tại không khả dụng",
+      "noMasterImage": "Bối cảnh hiện tại không có ảnh master",
+      "noReverseImage": "Bối cảnh hiện tại không có ảnh reverse",
+      "noBeatDirectorBackground": "Beat hiện tại chưa có ảnh nền đạo diễn"
+    },
+    "stylePicker": {
+      "title": "Phong cách",
+      "clear": "Xóa",
+      "close": "Đóng",
+      "loading": "Đang tải...",
+      "noTemplates": "Không có mẫu phong cách",
+      "other": "Khác"
+    },
+    "pano360": {
+      "status": {
+        "ready": "Sẵn sàng",
+        "loaded": "Đã tải",
+        "loading": "Đang tải...",
+        "frontYawSet": "Đặt chế độ xem hiện tại làm Front: {{yaw}}°",
+        "correctionJsonCopied": "JSON chỉnh sửa đã sao chép vào clipboard",
+        "correctionJsonGenerated": "JSON chỉnh sửa đã được tạo (clipboard không khả dụng, xem bảng điều khiển)",
+        "currentViewSnapped": "Ảnh chụp chế độ xem hiện tại đã được tạo",
+        "backgroundSet": "Nền hiện tại đã được đặt",
+        "backgroundCandidateSubmitted": "Ứng cử viên nền đã được tạo và gửi",
+        "capturing": "Đang chụp ({{count}} khung)…",
+        "uploading": "Đang tải lên ({{count}} khung)…",
+        "capturesDone": "Đã tạo {{count}} ảnh chụp"
+      },
+      "error": {
+        "viewerInitFailed": "Khởi tạo Photo Sphere Viewer không thành công: {{error}}",
+        "loadFailed": "Tải không thành công",
+        "loadFailedWithError": "Tải không thành công: {{error}}",
+        "snapFailed": "Chụp ảnh không thành công",
+        "snapFailedWithError": "Chụp ảnh không thành công: {{error}}",
+        "notInBeatContext": "Không ở trong ngữ cảnh Beat, không thể đặt làm nguồn nền",
+        "setFailedWithError": "Đặt không thành công: {{error}}"
+      },
+      "label": {
+        "currentView": "Chế độ xem hiện tại",
+        "currentBackground": "Nền hiện tại",
+        "captureGroup4": "Nhóm ảnh chụp Toàn cảnh (4 khung)",
+        "captureGroup12": "Nhóm ảnh chụp Toàn cảnh (12 khung)"
+      },
+      "direction": {
+        "front": "Phía trước",
+        "right": "Bên phải",
+        "back": "Phía sau",
+        "left": "Bên trái",
+        "seam": "Đường khâu"
+      },
+      "frame": {
+        "front": {
+          "up": "Phía trước·Lên",
+          "down": "Phía trước·Xuống"
+        },
+        "right": {
+          "up": "Bên phải·Lên",
+          "down": "Bên phải·Xuống"
+        },
+        "back": {
+          "up": "Phía sau·Lên",
+          "down": "Phía sau·Xuống"
+        },
+        "left": {
+          "up": "Bên trái·Lên",
+          "down": "Bên trái·Xuống"
+        }
+      },
+      "button": {
+        "snapCurrent": "Chụp chế độ xem hiện tại",
+        "snap2x2": "Ảnh chụp 4 chế độ xem",
+        "snap4x3": "Ảnh chụp 12 chế độ xem",
+        "snapAsBackground": "Dùng làm nguồn nền (ghi vào selected_background của Beat này)",
+        "resetView": "Đặt lại chế độ xem",
+        "zoomOut": "Thu nhỏ",
+        "zoomIn": "Phóng to",
+        "rotateLeft": "Xoay trái",
+        "rotateRight": "Xoay phải",
+        "rotateUp": "Xoay lên",
+        "rotateDown": "Xoay xuống",
+        "fullscreen": "Vào chế độ toàn màn hình",
+        "collapsePanel": "Thu gọn bảng điều khiển",
+        "expandPanel": "Mở rộng bảng điều khiển",
+        "reset": "Đặt lại",
+        "lockCurrentView": "Khóa chế độ xem hiện tại",
+        "lockCurrentViewHint": "Tích hợp chế độ xem hiện tại vào các tham số chỉnh sửa",
+        "setFrontFromView": "Đặt làm chế độ xem hiện tại",
+        "setFrontFromViewHint": "Đặt yaw của chế độ xem hiện tại làm hướng phía trước",
+        "planetMode": "Chế độ hành tinh",
+        "exitPlanet": "Thoát khỏi chế độ hành tinh",
+        "copyCorrectionJson": "Sao chép JSON chỉnh sửa",
+        "copyCorrectionJsonHint": "Sao chép frontYaw hiện tại / tham số chỉnh sửa / FOV thành JSON"
+      },
+      "section": {
+        "fov": "Trường nhìn (FOV)",
+        "correction": "Chỉnh sửa cầu",
+        "frontDirection": "Hướng phía trước",
+        "effectsAndExport": "Hiệu ứng & Xuất"
+      },
+      "meta": {
+        "ready": "Trình xem Canvas tự do 360",
+        "waiting": "Chờ kết nối toàn cảnh từ phía trên"
+      },
+      "placeholder": {
+        "connectImage": "Kết nối nút hình ảnh phía trên để bắt đầu duyệt toàn cảnh"
+      }
+    },
+    "promptMention": {
+      "doubleClickToReplace": "Nhấp đôi để thay thế tham chiếu",
+      "clickToPlay": "{{label}} · Nhấp để phát"
+    },
+    "textAnnotation": {
+      "group": {
+        "textToVideo": "Nhóm Văn bản tạo video",
+        "imageToPrompt": "Nhóm Ảnh tạo Prompt",
+        "textToMusicGen": "Nhóm Tạo âm nhạc",
+        "textToMusic": "Nhóm Sao chép âm thanh"
+      },
+      "textToMusicDefault": "Tạo nhạc điện tử thương hiệu hiện đại (khoảng 110 BPM) với bass sạch mạnh và tiếng trống rõ ràng. Phong cách tổng thể phải tinh tế với cảm giác tương lai mạnh. Mở đầu thiết lập nhịp với bass và synthesizer đơn giản. Phần chính thêm trống ổn định với nhịp rõ ràng trong khi duy trì căng thẳng kiểm soát. Phần phát triển thêm lớp phong phú với synth cải tiến và chuyển động tăng mà không quá tắc. Kết thúc giảm trống trong khi duy trì tần số thấp và âm thanh tinh thần nhạt dần.",
+      "detachReference": "Bỏ tham chiếu tư liệu này",
+      "imageToPromptPlaceholder": "Tạo Prompt có cấu trúc từ ảnh, bao gồm mô tả chủ thể chính, môi trường, ánh sáng, ngôn ngữ máy quay và từ khóa phong cách."
+    },
+    "threeDWorld": {
+      "upstreamNode": "Nút phía trên",
+      "failedToReadScreenshot": "Không thể đọc ảnh chụp 3GS",
+      "failedToParseScreenshotDimensions": "Không thể phân tích kích thước ảnh chụp 3GS",
+      "referenceUpstreamImage": "Tham chiếu tư liệu phía trên",
+      "upstreamImageReference": "Tham chiếu tư liệu phía trên",
+      "upstreamImageReferencePreview": "Xem trước tham chiếu tư liệu phía trên",
+      "imageIndex": "Tư liệu {{index}}",
+      "failedToIdentifyProject": "Không thể xác định dự án hiện tại",
+      "textTo3DNotSupported": "Mô hình Văn bản tạo 3D chưa được hỗ trợ, vui lòng kết nối nút Ảnh",
+      "pano360Image": "Ảnh 360",
+      "pano3DGS": "3DGS 360",
+      "image3DGS": "Ảnh 3DGS",
+      "failedToFindDirectorWorldAddress": "Không tìm thấy địa chỉ Director World 3D trong task.result",
+      "generationFailed": "Tạo thất bại: {{message}}",
+      "notInBeatContextCannotSetBg": "Không ở trong bối cảnh Beat, không thể đặt nền hiện tại",
+      "missingProjectToSaveComposite": "Thiếu dự án, không thể lưu ảnh dựng video Director trên Canvas",
+      "compositeImageMissingBundles": "Ảnh dựng video Director thiếu combined/env_only/frame_meta",
+      "canvasCompositeImageMissingUrl": "Ảnh dựng video Director trên Canvas thiếu địa chỉ ảnh",
+      "directorCompositeImage": "Ảnh dựng video Director",
+      "pureBgImage": "Ảnh nền thuần",
+      "directorWorldOutput": "Xuất Director World",
+      "screenshotOutputToCanvasFailed": "Xuất ảnh chụp Director World sang Canvas thất bại",
+      "directorWorldKindLabel": "Director World {{kind}}",
+      "directorWorldThumbnail": "Hình thu nhỏ Director World"
+    },
+    "videoClip": {
+      "exitClip": "Thoát chỉnh sửa",
+      "subtitlesTbd": "Phụ đề (sẽ triển khai)",
+      "extractingFrames": "Đang trích xuất khung hình…",
+      "frameLoadFailed": "Không thể tải khung hình",
+      "dragAdjustStart": "Kéo để điều chỉnh điểm bắt đầu",
+      "dragAdjustEnd": "Kéo để điều chỉnh điểm kết thúc",
+      "muteTbd": "Tắt tiếng (sẽ triển khai)",
+      "loopTbd": "Lặp (sẽ triển khai)",
+      "clipping": "Đang chỉnh sửa…",
+      "submitClip": "Gửi chỉnh sửa"
+    },
+    "videoStory": {
+      "columns": {
+        "shotNumber": "Số hiệu cảnh",
+        "startTime": "Thời gian bắt đầu",
+        "endTime": "Thời gian kết thúc",
+        "duration": "Thời lượng",
+        "visualDescription": "Mô tả hình ảnh",
+        "narrative": "Nội dung tường thuật",
+        "shotSize": "Kích cỡ cảnh",
+        "cameraAngle": "Góc máy quay",
+        "cameraMovement": "Chuyển động máy quay",
+        "focalAndDof": "Tiêu cự và độ sâu trường ảnh",
+        "lighting": "Ánh sáng",
+        "backgroundMusic": "Nhạc nền",
+        "voiceAndSfx": "Giọng nói & Hiệu ứng âm thanh",
+        "imagePrompt": "Gợi ý sinh tạo hình ảnh",
+        "videoMotionPrompt": "Gợi ý chuyển động video",
+        "keyframeUrl": "Khung chính"
+      },
+      "emptyState": {
+        "title": "Không phát hiện phân cảnh",
+        "description": "Không có hàng phân cảnh khả dụng trong phản hồi. Phản hồi thô được giữ lại như thông tin hỗ trợ để khắc phục sự cố kết quả API.",
+        "viewRawButton": "Xem phản hồi thô",
+        "empty": "(trống)"
+      },
+      "errorState": {
+        "title": "Phân tích không thành công",
+        "unknownError": "Lỗi không xác định"
+      },
+      "status": {
+        "analyzing": "Đang phân tích…",
+        "analysisFailed": "Phân tích không thành công",
+        "rowCount": "{{count}} hàng phân cảnh",
+        "noRows": "Không phát hiện phân cảnh"
+      },
+      "actions": {
+        "fullscreen": "Toàn màn hình",
+        "close": "Đóng"
+      },
+      "fullscreen": {
+        "totalRows": "Tổng cộng {{count}} hàng phân cảnh"
+      }
+    },
+    "voiceSelection": {
+      "title": "Chọn âm sắc",
+      "close": "Đóng",
+      "libraryTab": "Thư viện âm sắc",
+      "myVoicesTab": "Âm sắc của tôi",
+      "searchLibraryPlaceholder": "Tìm kiếm thư viện âm sắc",
+      "loading": "Đang tải…",
+      "empty": "Không có âm sắc nào có sẵn",
+      "invalidFileType": "Vui lòng chọn tệp âm thanh (mp3 / wav / m4a / aac / ogg / webm)",
+      "fileTooLarge": "Âm thanh tham chiếu không được vượt quá {{mb}}MB (hiện tại {{got}}MB), vui lòng nén hoặc cắt và thử lại",
+      "missingProjectParam": "URL hiện tại thiếu tham số project",
+      "loadFailed": "Không thể tải âm sắc",
+      "uploadNetworkError": "Tải lên thất bại: mạng bị gián đoạn (âm thanh lớn có thể bị ngắt đột ngột, vui lòng xác nhận không vượt quá {{mb}}MB và thử lại)",
+      "uploadFailed": "Tải lên thất bại",
+      "uploading": "Đang tải lên…",
+      "cloneNewVoice": "Nhân bản âm sắc mới",
+      "searchMyVoicesPlaceholder": "Tìm kiếm âm sắc của tôi",
+      "emptyState": "Không có âm sắc nào, hãy nhân bản âm sắc mới ngay bây giờ~",
+      "itemsPerPage": "{{size}} mục/trang",
+      "jumpTo": "Nhảy đến",
+      "pageLabel": "trang",
+      "totalCount": "Tổng {{total}} mục",
+      "selected": "Đã chọn",
+      "select": "Chọn",
+      "customVoiceDefaultLabel": "Âm sắc tùy chỉnh",
+      "scope": {
+        "projectNarrator": "Người kể chuyện dự án",
+        "customVoice": "Âm sắc tùy chỉnh",
+        "characterDefault": "{{name}} (giọng đọc mặc định)",
+        "characterAgeGroup": "{{name}} ({{slot}})",
+        "character": "Nhân vật",
+        "ageGroup": "Nhóm tuổi",
+        "identityOwn": "{{id}} (giọng đọc riêng)",
+        "identityResolved": "{{id}} (đã phân tích)",
+        "identity": "Danh tính"
+      }
+    },
+    "displayName": {
+      "upload": "Tải lên tư liệu",
+      "imageEdit": "Ảnh AI",
+      "imageGen": "Node hình ảnh",
+      "exportImage": "Ảnh kết quả",
+      "beatContext": "Ngữ cảnh Beat",
+      "textAnnotation": "Văn bản",
+      "group": "Nhóm",
+      "storyboardSplit": "Kết quả tách ô",
+      "storyboardGen": "Lưới đa phiên bản",
+      "video": "Video",
+      "audio": "Âm thanh",
+      "videoStory": "Video truyện",
+      "videoCompose": "Dựng video",
+      "script": "Bộ tạo kịch bản",
+      "pano360Viewer": "Trình xem toàn cảnh 360°",
+      "threeDWorld": "Thế giới 3D",
+      "skill": "Kỹ năng",
+      "exportGeneric": "Ảnh kết quả",
+      "storyboardGenOutput": "Kết quả lưới",
+      "storyboardSplitExport": "Xuất ô",
+      "storyboardFrameEdit": "Kết quả một ô",
+      "matte": "Kết quả tách nền",
+      "upscale": "Phóng to nét cao"
     }
   },
   "viewer": {
@@ -3902,7 +5517,8 @@
         "aiStagingSelected": "Đã chọn thế chỗ AI",
         "sceneSaved": "Đã lưu bối cảnh Director World",
         "sceneCleared": "Đã xoá bối cảnh đã lưu",
-        "deleteNeedsShift": "Nhấn Shift+Delete để xoá đối tượng đã chọn"
+        "deleteNeedsShift": "Nhấn Shift+Delete để xoá đối tượng đã chọn",
+        "sceneRestored": "Khôi phục từ lần lưu cuối cùng"
       },
       "skillStatus": {
         "generating": "Đang tạo...",
@@ -3919,7 +5535,8 @@
         "actor": "Nhân vật",
         "prop": "Đạo cụ",
         "staging": "Thế chỗ"
-      }
+      },
+      "actorColor": "Màu nhân vật"
     }
   },
   "split": {
@@ -3954,7 +5571,8 @@
       "gatewayNotConfiguredImpact": "Gateway model đang hiệu lực chưa được cấu hình. Các lệnh gọi model văn bản, ảnh, video, âm thanh sẽ thất bại; vui lòng cấu hình kênh chính thức hoặc NewAPI tuỳ chỉnh rồi mới tạo nội dung.",
       "modes": {
         "official": "Kênh chính thức",
-        "custom": "NewAPI tuỳ chỉnh"
+        "custom": "NewAPI tuỳ chỉnh",
+        "hybrid": "Kết hợp Cục bộ + Chính thức"
       },
       "fields": {
         "baseUrl": "Địa chỉ New API",
@@ -3971,7 +5589,19 @@
         "saved": "Đã lưu và chuyển sang kênh chính thức.",
         "enabled": "Đã chuyển sang kênh chính thức.",
         "missingFields": "Vui lòng điền API Key.",
-        "registerLink": "Vui lòng tới RelayClaw để đăng ký"
+        "registerLink": "Vui lòng tới RelayClaw để đăng ký",
+        "mediaCatalogTitle": "Danh mục model media chính thức",
+        "mediaCatalogStatus": "Phiên bản {{version}} · {{count}} model · {{source}}",
+        "mediaCatalogSources": {
+          "bundled": "Tích hợp sẵn",
+          "remote": "Cập nhật trực tuyến"
+        },
+        "mediaCatalogAutoUpdate": "Tự động cập nhật danh mục model chính thức",
+        "mediaCatalogAutoUpdateHint": "Định kỳ kiểm tra ở chế độ nền và áp dụng ngay các bản cập nhật tương thích khi mở Cài đặt.",
+        "mediaCatalogCheckNow": "Kiểm tra cập nhật",
+        "mediaCatalogUpdated": "Đã cập nhật danh mục model media chính thức.",
+        "mediaCatalogUpToDate": "Danh mục model media chính thức đã là bản mới nhất.",
+        "mediaCatalogCheckFailed": "Không kiểm tra được danh mục model media chính thức. Vui lòng thử lại sau."
       },
       "custom": {
         "description": "Điền địa chỉ NewAPI cục bộ và thông tin cơ sở dữ liệu rồi bấm khởi tạo, backend sẽ tự kết nối DB, tạo token, ghi cấu hình và chuyển sang kênh tuỳ chỉnh.",
@@ -3993,7 +5623,13 @@
         "setupPasswordMissingUsername": "Vui lòng điền tên đăng nhập quản trị viên.",
         "setupPasswordIncomplete": "Vui lòng điền cả mật khẩu khởi tạo và xác nhận mật khẩu.",
         "setupPasswordTooShort": "Mật khẩu khởi tạo cần ít nhất 8 ký tự.",
-        "setupPasswordMismatch": "Hai lần nhập mật khẩu khởi tạo không khớp nhau."
+        "setupPasswordMismatch": "Hai lần nhập mật khẩu khởi tạo không khớp nhau.",
+        "repair": "Kiểm tra & sửa lỗi",
+        "localStatusTitle": "NewAPI cục bộ",
+        "localReady": "Đã cấu hình token vận hành",
+        "localNeedsInit": "Cần khởi tạo",
+        "sqliteReady": "Cơ sở dữ liệu SQLite đã sẵn sàng; không cần cấu hình đường dẫn cơ sở dữ liệu.",
+        "sqliteWaiting": "Đang chờ dịch vụ NewAPI cục bộ tạo cơ sở dữ liệu SQLite."
       },
       "featureModels": {
         "title": "Ánh xạ model văn bản",
@@ -4048,7 +5684,13 @@
           "screenplay": "Chuẩn hoá kịch bản",
           "assetCompile": "Biên dịch tài nguyên 2.0",
           "directorWorld": "DirectorWorld",
-          "novelImport": "Nhập tiểu thuyết"
+          "novelImport": "Nhập tiểu thuyết",
+          "xiahua": "Freezone",
+          "xialiao": "Story Source",
+          "xiatan": "Asset Library",
+          "xiajing": "Episode Studio",
+          "xiadao": "Xia Director",
+          "xiage": "Visual Style"
         },
         "features": {
           "HERMES": "Model chat Hermes / Xia Director",
@@ -4070,8 +5712,28 @@
           "EPISODE_SCENE_RECONCILE": "Đối soát tài nguyên bối cảnh nền",
           "NARRATED_SCENE_ASSET": "Lên kế hoạch tài nguyên bối cảnh cho phim thuyết minh",
           "STAGING_PROP": "Freezone AI lên kế hoạch đạo cụ tạm thời",
-          "COGNEE": "LLM dùng cho cognify / memify"
-        }
+          "COGNEE": "LLM dùng cho cognify / memify",
+          "FREEZONE_TEXT_WRITER": "Sinh văn bản AI",
+          "FREEZONE_VISION": "Phân tích nội dung ảnh và video"
+        },
+        "comfyWorkflows": "ComfyUI Workflows",
+        "comfyWorkflowHint": "Một model có thể thêm nhiều Workflow định dạng API; định tuyến do RelayClaw xử lý. API Key là tuỳ chọn.",
+        "comfyAddWorkflow": "Thêm Workflow",
+        "comfyExpandWorkflow": "Mở rộng",
+        "comfyCollapseWorkflow": "Thu gọn",
+        "comfyModelName": "Tên model",
+        "comfyModelPlaceholder": "Tên model, ví dụ MiniMax-H3",
+        "comfyWorkflowId": "Workflow ID",
+        "comfyWorkflowJson": "Workflow JSON",
+        "comfyWorkflowIdPlaceholder": "Workflow ID, ví dụ minimax-h3-t2v",
+        "comfyDuplicateWorkflow": "Workflow ID không được trùng nhau.",
+        "comfyInvalidWorkflow": "Workflow phải là một đối tượng JSON hợp lệ.",
+        "clearComfy": "Xoá cấu hình ComfyUI",
+        "clearComfyTitle": "Xoá cấu hình ComfyUI?",
+        "clearComfyConfirm": "Thao tác này sẽ xoá kênh ComfyUI, các Workflow và ánh xạ model media liên quan khỏi cài đặt cục bộ và NewAPI. Các dự án và media đã tạo sẽ không bị xoá.",
+        "comfyCleared": "Đã xoá cấu hình ComfyUI.",
+        "multimodalRequiredBadge": "Cần đa phương thức",
+        "cogneeDescription": "Nhập tiểu thuyết và truy xuất tri thức cần cấu hình đồng thời model hiểu nội dung và model vector; cả hai cùng tạo nên kho tri thức tiểu thuyết Cognee."
       },
       "embeddingModel": {
         "title": "Cấu hình model Embedding",
@@ -4114,6 +5776,82 @@
           "image": "Ảnh",
           "video": "Video",
           "audio": "Âm thanh"
+        },
+        "addModel": "Thêm model",
+        "addModelTitle": "Thêm model media",
+        "editModelTitle": "Chỉnh sửa model media",
+        "editCapabilities": "Chỉnh sửa năng lực model",
+        "removeModel": "Xoá model",
+        "colActions": "Thao tác",
+        "modelId": "Model ID",
+        "displayName": "Tên hiển thị",
+        "mediaType": "Loại media",
+        "sortOrder": "Thứ tự sắp xếp",
+        "enabled": "Bật trong Freezone",
+        "capabilitiesJson": "JSON cấu hình năng lực",
+        "commonCapabilities": "Năng lực Freezone",
+        "resolutionOptions": "Độ phân giải",
+        "ratioOptions": "Tỉ lệ khung hình",
+        "customOptionPlaceholder": "Nhập giá trị tuỳ chỉnh, nhiều giá trị cách nhau bằng dấu phẩy",
+        "addCustomOption": "Thêm giá trị tuỳ chỉnh",
+        "qualityOptions": "Chất lượng ảnh (cách nhau bằng dấu phẩy)",
+        "minDuration": "Thời lượng tối thiểu (giây)",
+        "maxDuration": "Thời lượng tối đa (giây)",
+        "referenceImageMax": "Giới hạn ảnh tham chiếu",
+        "referenceVideoMax": "Giới hạn video tham chiếu",
+        "referenceAudioMax": "Giới hạn audio tham chiếu",
+        "referenceAudioMinSeconds": "Tối thiểu mỗi đoạn audio (giây)",
+        "referenceAudioMaxSeconds": "Tối đa mỗi đoạn audio (giây)",
+        "referenceAudioTotalMinSeconds": "Tổng audio tối thiểu (giây)",
+        "referenceAudioTotalMaxSeconds": "Tổng audio tối đa (giây)",
+        "referenceVideoMinSeconds": "Tối thiểu mỗi đoạn video (giây)",
+        "referenceVideoMaxSeconds": "Tối đa mỗi đoạn video (giây)",
+        "referenceVideoTotalMinSeconds": "Tổng video tối thiểu (giây)",
+        "referenceVideoTotalMaxSeconds": "Tổng video tối đa (giây)",
+        "humanReview": "Hỗ trợ kiểm duyệt bởi người thật",
+        "supportedModes": "Chế độ tạo video",
+        "capabilitiesHint": "Dùng cùng chuẩn config với danh mục model media EE; lưu toàn bộ cấu hình để áp dụng trong Freezone.",
+        "applyModelEdit": "Áp dụng vào cấu hình",
+        "missingModelFields": "Hãy nhập Model ID, Tên hiển thị và chọn kênh.",
+        "invalidCapabilitiesJson": "Cấu hình năng lực phải là một đối tượng JSON hợp lệ.",
+        "saveVideo": "Lưu cấu hình video"
+      },
+      "guide": "Hướng dẫn cấu hình",
+      "activateMode": "Đặt làm cấu hình hiện tại",
+      "configureBeforeActivate": "Hãy hoàn tất cấu hình này trước khi bật.",
+      "modeActivated": "Đã bật cấu hình {{mode}}.",
+      "quick": {
+        "title": "Cấu hình đề xuất",
+        "description": "Sau khi NewAPI cục bộ khởi tạo xong, dùng một cấu hình để thiết lập đồng thời kênh nhà cung cấp, model nghiệp vụ, Embedding và ánh xạ model media.",
+        "recommended": "Đề xuất",
+        "custom": "Cấu hình của tôi",
+        "active": "Đang dùng",
+        "upstreamKey": "API Key thượng nguồn",
+        "upstreamKeyPlaceholder": "Nhập API Key của nhà cung cấp model",
+        "channelKeysTitle": "API Key theo kênh",
+        "keyHint": "Key được nhập riêng cho từng kênh và không bao giờ lưu vào JSON cấu hình. Có thể để trống nếu nhà cung cấp tương ứng đã có Key đã lưu.",
+        "savedKeyPlaceholder": "Đã lưu · {{preview}} (nhập giá trị mới để thay thế)",
+        "fixJsonFirst": "Hãy sửa JSON cấu hình trước. Các ô nhập Key theo kênh sẽ hiện ở đây sau khi JSON phân tích thành công.",
+        "editJson": "Xem hoặc chỉnh sửa JSON cấu hình",
+        "jsonHint": "channels định nghĩa các kênh; model nghiệp vụ, Embedding và từng model media chọn kênh qua trường channel. Hiện chưa hỗ trợ trùng provider.",
+        "recommendedJsonHint": "Cấu hình đề xuất là mẫu tích hợp sẵn chỉ đọc. Chuyển sang Cấu hình của tôi để chỉnh sửa dựa trên mẫu này và lưu lâu dài.",
+        "apply": "Lưu và áp dụng toàn bộ cấu hình",
+        "applyHint": "Ghi toàn bộ cấu hình một lần; có thể tiếp tục điều chỉnh từng mục ở phần Cấu hình nâng cao bên dưới.",
+        "applying": "Đang xử lý: {{step}}",
+        "applied": "Cấu hình đề xuất đã được lưu và bật toàn bộ.",
+        "initializeFirst": "Hãy khởi tạo NewAPI cục bộ trước, xác nhận cơ sở dữ liệu và quyền quản trị hoạt động bình thường rồi mới áp dụng cấu hình.",
+        "comfyConfig": "Cấu hình ComfyUI",
+        "comfyTemplateHint": "Chỉ nạp ví dụ MiniMax H3 cục bộ khi cần; mở cấu hình kết hợp sẽ không tự tạo kênh ComfyUI.",
+        "loadComfyTemplate": "Nạp mẫu MiniMax H3",
+        "advanced": "Cấu hình nâng cao",
+        "invalidJson": "JSON cấu hình không hợp lệ: {{message}}",
+        "missingKeys": "Thiếu API Key thượng nguồn cho (các) kênh: {{channels}}",
+        "steps": {
+          "initialize": "Khởi tạo NewAPI cục bộ",
+          "channel": "Lưu kênh nhà cung cấp",
+          "features": "Lưu model nghiệp vụ",
+          "embedding": "Lưu Embedding",
+          "media": "Lưu model media"
         }
       }
     },
@@ -4264,7 +6002,16 @@
     "checkingUpdate": "Đang kiểm tra cập nhật...",
     "checkUpdateHasUpdate": "Đã phát hiện phiên bản mới.",
     "checkUpdateUpToDate": "Bạn đang dùng phiên bản mới nhất.",
-    "checkUpdateFailed": "Kiểm tra cập nhật thất bại, vui lòng thử lại sau."
+    "checkUpdateFailed": "Kiểm tra cập nhật thất bại, vui lòng thử lại sau.",
+    "navigationLabel": "Danh mục cài đặt",
+    "statusConfigured": "Đã cấu hình {{page}}",
+    "statusNotConfigured": "Chưa cấu hình {{page}}",
+    "secretSavedBadge": "Đã lưu",
+    "secretSavedPlaceholder": "Đã lưu · {{preview}} (nhập giá trị mới để thay thế)",
+    "pages": {
+      "models": "Model & Kênh",
+      "storage": "Lưu trữ media"
+    }
   },
   "pricing": {
     "nativePrice": "Tiền tệ gốc: {{value}}",
@@ -4289,7 +6036,9 @@
     "copyReport": "Sao chép thông tin lỗi",
     "technicalDetails": "Chi tiết kỹ thuật",
     "serviceConfigTitle": "Dịch vụ tạo chưa được cấu hình",
-    "openRouterConfigMessage": "Model hiện tại cần dịch vụ OpenRouter, nhưng backend chưa cấu hình API Key. Vui lòng liên hệ quản trị viên."
+    "openRouterConfigMessage": "Model hiện tại cần dịch vụ OpenRouter, nhưng backend chưa cấu hình API Key. Vui lòng liên hệ quản trị viên.",
+    "stillRunningTitle": "Vẫn đang tạo",
+    "stillRunningMessage": "Lần tạo này tốn thời gian hơn bình thường. Trang đã dừng chờ đợi, nhưng công việc vẫn đang chạy ở chế độ nền — vui lòng làm mới sau để nhận kết quả hoặc kiểm tra tiến độ trong trung tâm tác vụ."
   },
   "videoCompose": {
     "title": "Dựng video",
@@ -4359,5 +6108,174 @@
     "zoom": "Thu phóng",
     "zoomIn": "Phóng to",
     "zoomOut": "Thu nhỏ"
+  },
+  "pipelineImport": {
+    "importPanel": {
+      "importFailed": "Tải thất bại",
+      "willImportNImages": "Sẽ nhập {{n}} hình ảnh",
+      "import": "Nhập",
+      "importing": "Đang nhập...",
+      "importAssetsToCanvas": "Nhập tài nguyên vào canvas",
+      "projectLabel": "Dự án: {{project}}",
+      "assetTypes": "Loại Tài nguyên",
+      "identityLabel": "🎭 Identity (Danh tính Nhân vật)",
+      "portraitLabel": "🖼 Portrait (Chân dung Nhân vật)",
+      "frameLabel": "🎬 Frame (Khung đầu Beat)",
+      "sketchLabel": "✏️ Sketch (Phác thảo)",
+      "directorRenderLabel": "📐 Tài sản Tổng hợp Đạo diễn",
+      "noCharactersMessage": "Dự án này không có nhân vật",
+      "episodeBeatSection": "Tập / Beat",
+      "episodeLabel": "Tập:",
+      "selectNone": "Bỏ chọn tất cả",
+      "identityDefaultLabel": "Danh tính",
+      "portraitDefaultLabel": "Chân dung",
+      "directorRenderDefaultLabel": "Render Đạo diễn"
+    },
+    "extractFrames": {
+      "errorNoFile": "Vui lòng chọn tệp video trước",
+      "progressUploading": "Đang tải video...",
+      "progressExtracting": "ffmpeg trích xuất khung (tối đa 60 giây)...",
+      "errorEmptyFrames": "Trích xuất khung không trả về kết quả; video có thể quá ngắn hoặc định dạng không được hỗ trợ",
+      "progressAnalyzing": "Vision đang phân tích {{count}} khung...",
+      "progressDoneWithAnalysis": "Đã trích xuất {{count}} khung và hoàn thành phân tích shot",
+      "progressDone": "Đã trích xuất {{count}} khung",
+      "toastSuccess": "Hoàn thành phân cảnh: {{count}} khung đã được thêm vào canvas",
+      "progressFailed": "Thất bại",
+      "title": "Phân tích Phân cảnh",
+      "description": "Video → ffmpeg trích khung khóa → (tùy chọn) Vision phân tích ngôn ngữ shot",
+      "closeButton": "Đóng",
+      "sectionVideoFile": "Tệp Video",
+      "sectionFrameParams": "Tham số Trích xuất Khung",
+      "labelMaxFrames": "Số Khung Tối Đa",
+      "hintMaxFrames": "3 - 50",
+      "labelThreshold": "Ngưỡng Bối cảnh",
+      "hintThreshold": "0 - 1",
+      "helpThreshold": "Ngưỡng cao hơn = lấy mẫu chỉ khi cảnh thay đổi đáng kể (0.2-0.3 cho video quay dài, 0.5+ cho MV cắt nhanh)",
+      "sectionPostProcessing": "Xử lý Sau",
+      "labelAnalyzeShots": "Phân tích ngôn ngữ shot cho mỗi khung bằng Vision",
+      "descAnalyzeShots": "Loại shot / góc / chuyển động máy quay / tâm trạng / tông màu · sử dụng khả năng Vision mặc định của backend",
+      "cancelButton": "Hủy bỏ",
+      "startButton": "Bắt đầu Phân cảnh",
+      "processingButton": "Đang xử lý",
+      "selectVideoFile": "Chọn tệp video",
+      "supportedFormats": "Hỗ trợ mp4 / mov / webm và các định dạng khác",
+      "replaceButton": "Thay thế",
+      "browseButton": "Duyệt",
+      "progressComplete": "Hoàn thành"
+    },
+    "maskEditor": {
+      "title": "Trình chỉnh sửa Mask",
+      "loadImageError": "Không thể tải ảnh gốc (cookie có thể đã hết hạn)",
+      "promptRequired": "Vui lòng viết một prompt mô tả thay đổi vùng được che phủ",
+      "paintRequired": "Vui lòng vẽ một vùng trước (cọ đỏ vẽ vị trí cần chỉnh sửa)",
+      "generatingMask": "Đang tạo tệp mask...",
+      "uploadingMask": "Đang tải lên mask...",
+      "submittingRedraw": "Đang gửi vẽ lại cục bộ...",
+      "processing": "Đang xử lý (30-60 giây)...",
+      "completed": "Hoàn thành",
+      "closeButton": "Đóng",
+      "brush": "Cọ",
+      "eraser": "Tẩy",
+      "size": "Kích thước",
+      "clearMaskTooltip": "Xóa mask",
+      "clear": "Xóa",
+      "loadingImage": "Đang tải ảnh gốc...",
+      "promptPlaceholder": "Thay đổi gì trong vùng che phủ? Ví dụ: thay đổi thành tóc xanh / thêm tia nắng / loại bỏ người đi bộ nền...",
+      "instructionText": "Đỏ = vùng chỉnh sửa · LingShan-G2 · ~30-60 giây",
+      "cancel": "Hủy",
+      "submitting": "Đang xử lý..."
+    },
+    "videoReference": {
+      "selectVideoFirst": "Vui lòng chọn tệp video trước",
+      "uploadingVideo": "Đang tải lên video...",
+      "extractingFrames": "Đang trích xuất {{maxFrames}} khung hình chính (tổng thể / tông màu)...",
+      "extractionFailed": "Trích xuất khung hình trả về kết quả trống",
+      "completedFrames": "Hoàn tất — {{frameCount}} khung hình đã được thêm vào canvas dưới dạng tham chiếu",
+      "notificationImported": "Tham chiếu video: {{frameCount}} khung hình đã được thêm vào canvas",
+      "failedLabel": "Lỗi",
+      "titleVideoReference": "Tham chiếu video",
+      "descriptionVideoReference": "Tải lên một đoạn phim / video ngắn → Trích xuất 3-5 khung hình chính cho tham chiếu phong cách/tổng thể/tông màu, đưa vào GenNode làm ảnh tham chiếu để AI sao chép ngôn ngữ thị giác.",
+      "closeButton": "Đóng",
+      "sectionReferenceVideo": "Video tham chiếu",
+      "sectionFrameCount": "Số lượng khung hình",
+      "frameCountLabel": "{{count}} khung hình",
+      "hintFrameCount": "5-7 khung hình thường là đủ (quá nhiều sẽ khiến mô hình không tập trung vào style)",
+      "cancelButton": "Hủy",
+      "processingButton": "Đang xử lý",
+      "importButton": "Nhập tham chiếu",
+      "selectVideoFile": "Chọn tệp video",
+      "supportedFormats": "Hỗ trợ mp4 / mov / webm và các định dạng khác",
+      "replaceButton": "Thay thế",
+      "browseButton": "Duyệt",
+      "doneStatus": "Hoàn tất"
+    },
+    "createIdentity": {
+      "title": "Tạo danh tính mới",
+      "description": "Tạo danh tính nhân vật toàn cầu mới từ hình ảnh được chọn hiện tại, không ghi đè các danh tính chính tắc hiện có.",
+      "character": "Nhân vật",
+      "identityName": "Tên danh tính",
+      "identityNamePlaceholder": "Ví dụ: giai đoạn người già, giai đoạn trang phục công việc, giai đoạn chiến đấu",
+      "ageGroup": "Nhóm tuổi",
+      "ageGroupNoSpecify": "Không chỉ định",
+      "appearanceDescription": "Mô tả trang phục/kiểu dáng",
+      "appearanceDescriptionPlaceholder": "Mô tả quần áo, phụ kiện và kiểu tóc cho danh tính này. Không bao gồm các hành động.",
+      "facePrompt": "Lời nhắc khuôn mặt cấp danh tính (tùy chọn)",
+      "facePromptPlaceholder": "Chỉ điền khi có sự thay đổi tuổi lớn; sử dụng lại chân dung nhân vật theo mặc định.",
+      "noPreview": "Không có xem trước",
+      "createButton": "Tạo danh tính",
+      "creatingButton": "Đang tạo...",
+      "successMessage": "Danh tính {{character}} / {{identityName}} được tạo thành công"
+    }
+  },
+  "superchat": {
+    "taskCompletedMessage": "✅ {{label}} hoàn thành. Bạn có thể cho tôi xem kết quả hoặc tiếp tục bước tiếp theo.",
+    "taskFailedMessage": "{{label}} thất bại: {{error}}\nVui lòng xử lý các điều kiện tiên quyết lỗi trước khi tiếp tục.",
+    "taskFailureNoDetails": "Không có chi tiết lỗi cụ thể",
+    "scrollToBottom": "Cuộn xuống dưới cùng"
+  },
+  "viewerKit": {
+    "panoCapture": {
+      "fovPresetFisheye": "Cá mắt 160°",
+      "fovPresetWide": "Rộng 120°",
+      "fovPresetStandard": "Tiêu chuẩn 70°",
+      "fovPresetTelephoto": "Tele 8°",
+      "captureLabel": "Chụp ảnh",
+      "viewerNotReady": "Trình xem 360 chưa sẵn sàng",
+      "contextSaveTarget": "Lưu đích selected_background",
+      "contextSceneEntry": "Nhập cảnh chỉ tải xuống, không ghi latest",
+      "resetButton": "Đặt lại",
+      "closeButton": "Đóng",
+      "lockViewButton": "Chính lưu hiện tại",
+      "enterPlanetView": "Chế độ xem tiểu hành tinh",
+      "exitPlanetView": "Thoát chế độ xem tiểu hành tinh",
+      "copyCorrectionJson": "Sao chép JSON tham số",
+      "saving": "Đang lưu",
+      "saveCorrection": "Lưu hiệu chỉnh",
+      "hideGuides": "Ẩn hướng dẫn",
+      "showGuides": "Hiển thị hướng dẫn",
+      "resetCropFrame": "Đặt lại khung cắt",
+      "setFrontFromView": "Đặt hiện tại làm mặt trước",
+      "resetSphereCorrection": "Đặt lại hiệu chỉnh",
+      "saved": "Đã lưu",
+      "noPathReturned": "Không trả về đường dẫn",
+      "captureHistory": "Lịch sử chụp ảnh",
+      "clearCaptureHistory": "Xóa lịch sử chụp ảnh",
+      "screenshotAlt": "Chụp ảnh {{id}}",
+      "screenshotLabel": "Chụp ảnh {{id}}",
+      "downloadScreenshot": "Tải xuống chụp ảnh {{id}}"
+    }
+  },
+  "route": {
+    "script": {
+      "modeLiteralValue": "mỗi dòng một Beat"
+    }
+  },
+  "login": {
+    "cinematic": {
+      "scrollDown": "Cuộn xuống"
+    }
+  },
+  "loginCinematic": {
+    "moreInfo": "Thêm thông tin"
   }
 }

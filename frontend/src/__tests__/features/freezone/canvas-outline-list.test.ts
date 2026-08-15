@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import i18n from "@/i18n";
+import viTranslations from "@/../public/locales/vi/translation.json";
+
+// Node display names now resolve through i18n; load the vi bundle locally so
+// buildCanvasOutline (which uses i18n.t) yields the Vietnamese labels this suite asserts.
+beforeAll(() => {
+  i18n.addResourceBundle("vi", "translation", viTranslations, true, true);
+  void i18n.changeLanguage("vi");
+});
 
 import {
   CANVAS_NODE_TYPES,
@@ -44,7 +54,7 @@ describe("buildCanvasOutline", () => {
 
     expect(outline.map((item) => [item.id, item.kind, item.name])).toEqual([
       ["a", "node", "封面"],
-      ["b", "node", "视频"],
+      ["b", "node", "Video"],
     ]);
   });
 

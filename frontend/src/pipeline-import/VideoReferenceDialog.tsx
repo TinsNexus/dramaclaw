@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { FileVideo, Film, Loader2, Upload, X } from "lucide-react";
 
 import { submitFreezoneExtract, uploadFreezoneImage } from "@/api/ops";
@@ -48,6 +49,7 @@ export function VideoReferenceDialog({
   onDone,
   onReferenceReady,
 }: VideoReferenceDialogProps) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [maxFrames, setMaxFrames] = useState(5);
   const [progress, setProgress] = useState<ProgressState>({
@@ -69,17 +71,17 @@ export function VideoReferenceDialog({
 
   const handleSubmit = async () => {
     if (!file) {
-      setError("请先选择视频文件");
+      setError(t("pipelineImport.videoReference.selectVideoFirst"));
       return;
     }
     setError(null);
     try {
-      setProgress({ stage: "uploading", message: "上传视频...", progress: 0.2 });
+      setProgress({ stage: "uploading", message: t("pipelineImport.videoReference.uploadingVideo"), progress: 0.2 });
       const upload = await uploadFreezoneImage(project, file, file.name);
 
       setProgress({
         stage: "extracting",
-        message: `抽 ${maxFrames} 关键帧（构图 / 色调参考）...`,
+        message: t("pipelineImport.videoReference.extractingFrames", { maxFrames }),
         progress: 0.5,
       });
       const ref = await submitFreezoneExtract(project, {
@@ -90,20 +92,20 @@ export function VideoReferenceDialog({
       const task = await awaitTaskCompletion(ref.task_key, project, { taskType: ref.task_type });
       const urls = extractFrameUrls(task);
       if (urls.length === 0) {
-        throw new Error("抽帧返回了空结果");
+        throw new Error(t("pipelineImport.videoReference.extractionFailed"));
       }
       const frames: ReferenceFrame[] = urls.map((url, i) => ({ url, index: i }));
       onReferenceReady(frames);
       setProgress({
         stage: "done",
-        message: `完成 — ${frames.length} 帧已加入画布作为 reference`,
+        message: t("pipelineImport.videoReference.completedFrames", { frameCount: frames.length }),
         progress: 1,
       });
-      onDone(`影像参照：${frames.length} 帧已入画布`);
+      onDone(t("pipelineImport.videoReference.notificationImported", { frameCount: frames.length }));
       setTimeout(onClose, 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setProgress({ stage: "error", message: "失败", progress: 0 });
+      setProgress({ stage: "error", message: t("pipelineImport.videoReference.failedLabel"), progress: 0 });
     }
   };
 
@@ -129,11 +131,9 @@ export function VideoReferenceDialog({
             <Film className="h-[18px] w-[18px]" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold leading-tight text-text-dark">影像参照</h2>
+            <h2 className="text-[15px] font-semibold leading-tight text-text-dark">{t("pipelineImport.videoReference.titleVideoReference")}</h2>
             <p className="mt-1 text-xs leading-relaxed text-text-muted">
-              上传一段电影 / 短片 → 抽 3-5 关键帧作为 style / 构图 / 色调参考，
-              <br />
-              连进 GenNode 作为 reference image，让 AI 复刻视觉语言。
+              {t("pipelineImport.videoReference.descriptionVideoReference")}
             </p>
           </div>
           <button
@@ -141,26 +141,27 @@ export function VideoReferenceDialog({
             onClick={requestClose}
             disabled={submitting}
             className="text-text-muted hover:text-text-dark transition disabled:opacity-30"
-            aria-label="关闭"
+            aria-label={t("pipelineImport.videoReference.closeButton")}
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
         <div className="px-5 py-4 space-y-5">
-          <Section title="参考视频">
+          <Section title={t("pipelineImport.videoReference.sectionReferenceVideo")}>
             <FilePicker
               file={file}
               disabled={submitting}
               inputRef={fileInputRef}
               onChange={setFile}
+              t={t}
             />
           </Section>
 
           <Section
-            title="抽帧数量"
+            title={t("pipelineImport.videoReference.sectionFrameCount")}
             trailing={
-              <span className="text-xs font-semibold tabular-nums text-accent">{maxFrames} 帧</span>
+              <span className="text-xs font-semibold tabular-nums text-accent">{t("pipelineImport.videoReference.frameCountLabel", { count: maxFrames })}</span>
             }
           >
             <div className="rounded-lg border border-[color:var(--ui-border-soft)] bg-[var(--ui-surface-field)] px-3 py-3">
@@ -180,11 +181,11 @@ export function VideoReferenceDialog({
               </div>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-text-muted/80">
-              5-7 帧通常够（多了模型反而抓不住 style 重点）
+              {t("pipelineImport.videoReference.hintFrameCount")}
             </p>
           </Section>
 
-          {progress.stage !== "idle" && <ProgressBar progress={progress} />}
+          {progress.stage !== "idle" && <ProgressBar progress={progress} t={t} />}
 
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs leading-relaxed text-red-300 break-words">
@@ -195,7 +196,7 @@ export function VideoReferenceDialog({
 
         <footer className="flex items-center justify-end gap-2 border-t border-[color:var(--ui-border-soft)] px-5 py-3.5">
           <UiButton variant="ghost" size="sm" onClick={requestClose} disabled={submitting}>
-            取消
+            {t("pipelineImport.videoReference.cancelButton")}
           </UiButton>
           <UiButton
             variant="primary"
@@ -206,10 +207,10 @@ export function VideoReferenceDialog({
             {submitting ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                处理中
+                {t("pipelineImport.videoReference.processingButton")}
               </>
             ) : (
-              "导入参考"
+              t("pipelineImport.videoReference.importButton")
             )}
           </UiButton>
         </footer>
@@ -246,9 +247,10 @@ interface FilePickerProps {
   disabled: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onChange: (file: File | null) => void;
+  t: (key: string, options?: Record<string, any>) => string;
 }
 
-function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
+function FilePicker({ file, disabled, inputRef, onChange, t }: FilePickerProps) {
   return (
     <div
       className={`flex items-center gap-3 rounded-lg border border-dashed px-3 py-3 transition-colors ${
@@ -270,8 +272,8 @@ function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
           </>
         ) : (
           <>
-            <div className="text-sm text-text-dark">选择视频文件</div>
-            <div className="mt-0.5 text-[11px] text-text-muted">支持 mp4 / mov / webm 等格式</div>
+            <div className="text-sm text-text-dark">{t("pipelineImport.videoReference.selectVideoFile")}</div>
+            <div className="mt-0.5 text-[11px] text-text-muted">{t("pipelineImport.videoReference.supportedFormats")}</div>
           </>
         )}
       </div>
@@ -281,7 +283,7 @@ function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        {file ? "更换" : "浏览"}
+        {file ? t("pipelineImport.videoReference.replaceButton") : t("pipelineImport.videoReference.browseButton")}
       </UiButton>
       <input
         ref={inputRef}
@@ -295,7 +297,7 @@ function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
   );
 }
 
-function ProgressBar({ progress }: { progress: ProgressState }) {
+function ProgressBar({ progress, t }: { progress: ProgressState; t: (key: string, options?: Record<string, any>) => string }) {
   const pct = Math.round(progress.progress * 100);
   const isDone = progress.stage === "done";
   return (
@@ -306,7 +308,7 @@ function ProgressBar({ progress }: { progress: ProgressState }) {
           {progress.message}
         </span>
         <span className="text-[11px] tabular-nums text-text-muted">
-          {isDone ? "完成" : `${pct}%`}
+          {isDone ? t("pipelineImport.videoReference.doneStatus") : `${pct}%`}
         </span>
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">

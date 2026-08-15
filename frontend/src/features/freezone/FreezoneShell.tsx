@@ -124,14 +124,18 @@ export function startProjectionStatusRefresh(
   return stop;
 }
 
-function renderCommitSuccessMessage(target: PushTarget, result: PushResult): string {
+function renderCommitSuccessMessage(
+  target: PushTarget,
+  result: PushResult,
+  t: (key: string, opts?: Record<string, unknown>) => string = (key) => key,
+): string {
   if (target.kind === "director_render") {
-    return `已提交导演合成资产：${result.target_path}（含纯背景和元数据）`;
+    return t("viewer.threeD.directorControlCommitted", { path: result.target_path });
   }
   if (target.kind === "scene_director_world") {
-    return `已提交导演世界：${result.target_path}`;
+    return t("freezone.shell.sceneDirectorWorldCommitSuccess", { path: result.target_path });
   }
-  return `已提交到 ${result.target_path}`;
+  return t("freezone.shell.commitSuccess", { path: result.target_path });
 }
 
 function sceneDirectorWorldDataForManifest(
@@ -630,13 +634,13 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
     return canvasEventBus.subscribe("freezone/commit-node", ({ nodeId, auto, successMessage }) => {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       if (!node) {
-        setToast("当前节点没有可提交的内容");
+        setToast(t("freezone.shell.nodeNoCommittableContent"));
         return;
       }
       // 泛化:不再只认 imageUrl,而是按节点类型推断媒体 url(图像/视频/音频/3GS)。
       const info = deriveNodeDropInfo(node);
       if (!info?.sourceUrl) {
-        setToast("当前节点没有可提交的内容");
+        setToast(t("freezone.shell.nodeNoCommittableContent"));
         return;
       }
       const sourceUrl = info.sourceUrl;
@@ -660,17 +664,17 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
             if (savedOpenScene) {
               const flushed = await sync.flush();
               if (!flushed) {
-                throw new Error("当前画布未保存成功，处理冲突后再提交");
+                throw new Error(t("viewer.threeD.canvasSaveConflictBeforeCommit"));
               }
             }
             const latestNode = useCanvasStore.getState().nodes.find((candidate) => candidate.id === nodeId);
             if (!latestNode) {
-              setToast("当前节点没有可提交的内容");
+              setToast(t("freezone.shell.nodeNoCommittableContent"));
               return;
             }
             const latestInfo = deriveNodeDropInfo(latestNode);
             if (!latestInfo?.sourceUrl) {
-              setToast("当前节点没有可提交的内容");
+              setToast(t("freezone.shell.nodeNoCommittableContent"));
               return;
             }
             const latestData = (latestNode.data ?? {}) as Record<string, unknown>;
@@ -702,15 +706,15 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
         return;
       }
       if (!defaultTarget) {
-        setToast("当前节点没有可自动提交的主线目标");
+        setToast(t("freezone.shell.nodeNoAutoCommitTarget"));
         return;
       }
       void (async () => {
-        setToast("正在写入当前背景…");
+        setToast(t("freezone.shell.writingBackgroundToast"));
         try {
           const flushed = await sync.flush();
           if (!flushed) {
-            throw new Error("当前画布未保存成功，处理冲突后再提交");
+            throw new Error(t("viewer.threeD.canvasSaveConflictBeforeCommit"));
           }
           const latestData = resolveSubmitNodeData(latestCanvasNodeData(nodeId), data) ?? data;
           const latestSourceUrl =
@@ -750,9 +754,8 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
           setAssetLibraryReloadToken((token) => token + 1);
           setToast(
             successMessage ??
-              `${renderCommitSuccessMessage(target, result)}${
-                manifestNodeData ? "；已同步导演世界状态" : ""
-              }`,
+              renderCommitSuccessMessage(target, result, t) +
+              (manifestNodeData ? t("freezone.shell.directorWorldStateSynced") : ""),
           );
           void sync.flush();
         } catch (err) {
@@ -760,7 +763,7 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
         }
       })();
     });
-  }, [projectId, sync]);
+  }, [projectId, sync, t]);
 
   useEffect(() => {
     const unsubscribeSync = canvasEventBus.subscribe(
@@ -821,7 +824,7 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
         sourceFileName: `${baseLabel}-mask`,
       } as Record<string, unknown>,
     );
-    setToast(`Mask edit 完成 — 新图已入画布`);
+    setToast(t("freezone.shell.maskEditComplete"));
     void DEFAULT_NODE_WIDTH; // unused but keep import alive
   };
 
@@ -882,7 +885,7 @@ export function FreezoneShell({ project, canvasId }: FreezoneShellProps) {
             onRestoreMainlineDefault={async () => {
               try {
                 await sync.restoreMainlineDefault();
-                setToast("已按当前主流程事实同步主线视图");
+                setToast(t("freezone.shell.mainlineSyncSuccess"));
               } catch (err) {
                 setToast(err instanceof Error ? err.message : String(err));
               }
@@ -1412,6 +1415,7 @@ function CanvasConflictOverlay({
   readConflictSnapshot: () => ConflictSnapshot | null;
 }) {
   const { t } = useTranslation();
+  const defaultErrorMessage = t("freezone.shell.conflictDefaultMessage");
   const [savingCopy, setSavingCopy] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   // Read once on mount so the "下载本地 JSON" button always renders against
@@ -1440,13 +1444,13 @@ function CanvasConflictOverlay({
   return (
     <div className="absolute inset-0 bg-bg-dark/60 flex items-center justify-center">
       <div className="px-4 py-3 rounded-lg bg-surface border border-amber-400/50 text-sm text-amber-100 max-w-md flex flex-col gap-3">
-        <div className="font-medium">画布保存冲突</div>
+        <div className="font-medium">{t("freezone.shell.conflictTitle")}</div>
         <div className="text-text-muted">
-          {error ?? "画布已被其他窗口或用户修改。刷新会丢弃当前本地未保存修改，另存为副本会保留当前画布。"}
+          {error ?? defaultErrorMessage}
         </div>
         {snapshot && (
           <div className="text-[11px] text-text-muted/80">
-            本地未保存修改已暂存到浏览器，可下载备份后再决定是否刷新。
+            {t("freezone.shell.conflictSnapshotInfo")}
           </div>
         )}
         <div className="flex flex-wrap gap-2">
@@ -1455,7 +1459,7 @@ function CanvasConflictOverlay({
             onClick={onRefresh}
             className="px-3 py-1 rounded-md border border-amber-400/40 text-amber-100 hover:bg-amber-400/10 transition-colors"
           >
-            刷新
+            {t("freezone.shell.conflictRefresh")}
           </button>
           <button
             type="button"
@@ -1472,16 +1476,16 @@ function CanvasConflictOverlay({
             className="px-3 py-1 rounded-md border border-cyan-300/45 bg-cyan-400/18 text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.12)] transition-colors hover:border-cyan-200/70 hover:bg-cyan-400/28 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/30 disabled:shadow-none"
             title={snapshot ? undefined : t("freezone.canvases.noConflictSnapshot")}
           >
-            {savingCopy ? "保存中..." : "另存为副本"}
+            {savingCopy ? t("freezone.shell.conflictSavingCopy") : t("freezone.shell.conflictSaveAsCopy")}
           </button>
           {snapshot && (
             <button
               type="button"
               onClick={handleDownload}
               className="px-3 py-1 rounded-md border border-[var(--ui-border-soft)] text-text hover:bg-bg-dark/50 transition-colors"
-              title={`下载本地修改快照（${snapshot.nodes.length} 节点 · ${snapshot.edges.length} 连线）`}
+              title={t("freezone.shell.conflictDownloadTitle", { nodes: snapshot.nodes.length, edges: snapshot.edges.length })}
             >
-              下载本地 JSON
+              {t("freezone.shell.conflictDownloadJson")}
             </button>
           )}
         </div>
@@ -1510,14 +1514,15 @@ function BackupStatusIndicator({
 }: {
   status: import("@/api/canvas").CanvasBackupStatus | null;
 }) {
+  const { t } = useTranslation();
   if (status !== "pending" && status !== "failed") {
     return null;
   }
   const isFailed = status === "failed";
-  const label = isFailed ? "云端备份失败" : "云端备份中";
+  const label = isFailed ? t("freezone.shell.backupFailed") : t("freezone.shell.backupPending");
   const detail = isFailed
-    ? "本地修改已保存，但云端备份未完成。请保留页面，稍后会自动重试。"
-    : "本地修改已保存，云端备份还在同步中。可以继续编辑。";
+    ? t("freezone.shell.backupFailedDetail")
+    : t("freezone.shell.backupPendingDetail");
   const palette = isFailed
     ? "border-red-500/45 bg-red-500/10 text-red-200"
     : "border-amber-300/40 bg-amber-300/10 text-amber-100";
@@ -1535,9 +1540,10 @@ function BackupStatusIndicator({
 }
 
 function CanvasLoadingScreen() {
+  const { t } = useTranslation();
   return (
     <div className="w-full h-full flex items-center justify-center text-text-muted text-sm">
-      正在加载画布...
+      {t("freezone.shell.canvasLoading")}
     </div>
   );
 }
@@ -1560,10 +1566,11 @@ function CanvasErrorOverlay({
   error: string | null;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-bg-dark/45 px-6">
       <div className="flex w-full max-w-2xl flex-col gap-3 rounded-xl border border-red-400/25 bg-red-950/[0.14] px-4 py-3 text-sm shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-        <div className="font-medium text-red-200">画布同步失败</div>
+        <div className="font-medium text-red-200">{t("freezone.shell.canvasSyncFailed")}</div>
         <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2 text-xs leading-5 text-red-100/75">
           {error}
         </div>
@@ -1572,7 +1579,7 @@ function CanvasErrorOverlay({
           onClick={onRetry}
           className="self-start rounded-lg border border-red-300/25 bg-red-950/20 px-3 py-1.5 text-xs font-medium text-red-100/80 transition-colors hover:border-red-200/40 hover:bg-red-500/10 hover:text-red-50"
         >
-          重试
+          {t("freezone.shell.retry")}
         </button>
       </div>
     </div>

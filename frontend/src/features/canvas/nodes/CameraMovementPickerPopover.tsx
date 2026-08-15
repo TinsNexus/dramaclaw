@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
 import {
@@ -27,6 +28,7 @@ export function CameraMovementPickerPopover({
   onConfirm,
   onClose,
 }: CameraMovementPickerPopoverProps) {
+  const { t } = useTranslation('node.cameraMovementPicker');
   const [draftId, setDraftId] = useState<string | null>(selectedId);
 
   return (
@@ -36,12 +38,12 @@ export function CameraMovementPickerPopover({
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex h-10 items-center justify-between px-4">
-        <span className="text-sm font-medium text-text-dark">运镜</span>
+        <span className="text-sm font-medium text-text-dark">{t('title')}</span>
         <button
           type="button"
           onClick={onClose}
           className="flex size-6 items-center justify-center rounded-md text-text-muted/90 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
-          aria-label="关闭"
+          aria-label={t('closeButton')}
         >
           <X className="size-3.5" />
         </button>
@@ -49,7 +51,7 @@ export function CameraMovementPickerPopover({
 
       {templates.length === 0 ? (
         <div className="flex h-32 items-center justify-center text-[12px] text-text-muted">
-          {isLoading ? '加载中…' : '暂无可用运镜模板'}
+          {isLoading ? t('loading') : t('noTemplates')}
         </div>
       ) : (
         <div className="ui-scrollbar grid max-h-[420px] grid-cols-4 gap-3 overflow-y-auto px-4 pb-4 pt-2">
@@ -70,7 +72,7 @@ export function CameraMovementPickerPopover({
           onClick={() => onConfirm(null)}
           className="h-8 rounded-md px-3 text-[12px] font-medium text-text-dark/78 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
         >
-          清除
+          {t('clearButton')}
         </button>
         <button
           type="button"
@@ -78,7 +80,7 @@ export function CameraMovementPickerPopover({
           disabled={!draftId}
           className="h-8 min-w-[50px] rounded-md bg-primary px-3 text-[13px] text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-text-muted"
         >
-          使用
+          {t('useButton')}
         </button>
       </div>
     </div>
@@ -92,6 +94,7 @@ interface PresetCardProps {
 }
 
 function PresetCard({ preset, isSelected, onSelect }: PresetCardProps) {
+  const { t } = useTranslation('node.cameraMovementPicker');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const videoSrc = resolveCameraPresetVideoUrl(preset);
@@ -139,7 +142,7 @@ function PresetCard({ preset, isSelected, onSelect }: PresetCardProps) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-text-muted">
-            无预览
+            {t('noPreview')}
           </div>
         )}
       </div>

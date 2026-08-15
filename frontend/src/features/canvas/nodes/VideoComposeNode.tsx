@@ -74,8 +74,8 @@ export const VideoComposeNode = memo(
     const canOpen = videoCount >= MIN_UPSTREAM_VIDEOS;
 
     const resolvedTitle = useMemo(
-      () => resolveNodeDisplayName(CANVAS_NODE_TYPES.videoCompose, data),
-      [data],
+      () => resolveNodeDisplayName(CANVAS_NODE_TYPES.videoCompose, data, t),
+      [data, t],
     );
     const cardToneClass = canvasNodeFrameClass({ selected });
 

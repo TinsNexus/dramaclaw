@@ -371,8 +371,8 @@ export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
   }, [childGeometrySignature, isStoryboard, isInteracting, fitGroupToChildren, id]);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.group, data),
-    [data]
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.group, data, t),
+    [data, t]
   );
   const headerTitle = isStoryboard
     ? t('canvas.storyboardGroup.headerCount', { count: childCount })

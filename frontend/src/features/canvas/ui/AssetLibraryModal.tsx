@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Check,
   Loader2,
@@ -124,11 +125,11 @@ const ASSET_TABS: AssetTab[] = [
   },
 ];
 
-const SOURCE_LABEL: Record<FreezoneAssetLibrarySource, string> = {
-  upload: '上传',
-  character: '人物',
-  scene: '场景',
-  prop: '道具',
+const SOURCE_LABEL_KEYS: Record<FreezoneAssetLibrarySource, string> = {
+  upload: 'canvas.assetLibraryModal.sourceUpload',
+  character: 'canvas.assetLibraryModal.sourceCharacter',
+  scene: 'canvas.assetLibraryModal.sourceScene',
+  prop: 'canvas.assetLibraryModal.sourceProp',
 };
 
 function makeId(): string {
@@ -199,6 +200,7 @@ export function AssetLibraryModal({
   maxSelectable = 9,
   allowedMedia,
 }: AssetLibraryModalProps) {
+  const { t } = useTranslation();
   const tabs = useMemo(
     () =>
       ASSET_TABS.filter(
@@ -410,7 +412,9 @@ export function AssetLibraryModal({
     async (entry: LibraryItem) => {
       if (!project || !entry.id) return;
       const confirmed = window.confirm(
-        `确定要删除「${entry.name || entry.id}」？`,
+        t('canvas.assetLibraryModal.deleteConfirm', {
+          name: entry.name || entry.id,
+        }),
       );
       if (!confirmed) return;
       setDeletingId(entry.id);
@@ -525,7 +529,9 @@ export function AssetLibraryModal({
         {/* Title bar */}
         <div className="flex shrink-0 items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-text-dark">资产库</h2>
+            <h2 className="text-base font-semibold text-text-dark">
+              {t('canvas.assetLibraryModal.title')}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -533,20 +539,20 @@ export function AssetLibraryModal({
               onClick={() => void handleSyncFromMainline()}
               disabled={!project || isSyncing}
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white/[0.08] px-3 text-xs font-medium text-text-dark transition-colors hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
-              title="打开时已自动同步；如主线新增了人物 / 场景 / 道具，可点此重新同步"
+              title={t('canvas.assetLibraryModal.syncTooltip')}
             >
               {isSyncing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
-              重新同步
+              {t('canvas.assetLibraryModal.syncButton')}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted/90 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
-              title="关闭"
+              title={t('canvas.assetLibraryModal.closeButton')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -573,19 +579,14 @@ export function AssetLibraryModal({
           </div>
           <div className="flex items-center gap-3 text-xs text-text-muted/85">
             <span>
-              已录入 <span className="text-text-dark">{totalCount}</span> 个
+              {t('canvas.assetLibraryModal.totalCount', { count: totalCount })}
             </span>
             <span className="h-3 w-px bg-white/10" />
             <span>
-              已选{' '}
-              <span
-                className={
-                  activeSelectedCount > 0 ? 'text-primary' : 'text-text-dark'
-                }
-              >
-                {activeSelectedCount}
-              </span>
-              /{maxSelectable}
+              {t('canvas.assetLibraryModal.selectedCount', {
+                count: activeSelectedCount,
+                max: maxSelectable,
+              })}
             </span>
             {isLoadingLibrary && (
               <Loader2 className="ml-1 inline h-3.5 w-3.5 animate-spin text-text-muted" />
@@ -597,12 +598,15 @@ export function AssetLibraryModal({
         <div className="ui-scrollbar relative flex-1 overflow-y-auto px-5 pb-2">
           {isDragging && activeTab?.allowUpload && (
             <div className="pointer-events-none absolute inset-x-5 inset-y-0 z-10 flex items-center justify-center rounded-[8px] border border-dashed border-accent/60 bg-accent/10 text-sm text-text-dark">
-              松开以上传{activeTab?.label ?? '文件'}
+              {t('canvas.assetLibraryModal.dragHint', {
+                type: activeTab?.label ?? t('canvas.assetLibraryModal.file'),
+              })}
             </div>
           )}
           {libraryError && (
             <div className="mb-3 rounded-md bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
-              加载失败：{libraryError}
+              {t('canvas.assetLibraryModal.loadError')}
+              {libraryError}
             </div>
           )}
           <div
@@ -622,14 +626,14 @@ export function AssetLibraryModal({
                     className="inline-flex h-8 items-center justify-center rounded-md bg-white/[0.10] px-4 text-xs font-medium text-text-dark transition-colors hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Upload className="mr-1.5 h-3.5 w-3.5" />
-                    本地上传
+                    {t('canvas.assetLibraryModal.uploadButton')}
                   </button>
                   <div className="text-[11px] text-text-muted/75">
                     {activeMedia === 'image'
-                      ? '支持 PNG / JPG / WebP，可拖入'
+                      ? t('canvas.assetLibraryModal.uploadHintImage')
                       : activeMedia === 'video'
-                        ? '支持 MP4 / MOV 等，可拖入'
-                        : '支持 MP3 / WAV / M4A，可拖入'}
+                        ? t('canvas.assetLibraryModal.uploadHintVideo')
+                        : t('canvas.assetLibraryModal.uploadHintAudio')}
                   </div>
                 </div>
                 <input
@@ -672,11 +676,15 @@ export function AssetLibraryModal({
                   {p.status === 'uploading' ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin text-white" />
-                      <div className="text-[11px] text-white/90">上传中…</div>
+                      <div className="text-[11px] text-white/90">
+                        {t('canvas.assetLibraryModal.uploading')}
+                      </div>
                     </>
                   ) : (
                     <>
-                      <div className="text-[11px] text-red-300">上传失败</div>
+                      <div className="text-[11px] text-red-300">
+                        {t('canvas.assetLibraryModal.uploadFailed')}
+                      </div>
                       {p.error && (
                         <div className="px-2 text-[10px] text-red-200/80 line-clamp-2 text-center">
                           {p.error}
@@ -690,7 +698,7 @@ export function AssetLibraryModal({
                     type="button"
                     onClick={() => removePending(p.id)}
                     className="absolute right-2 bottom-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white transition-colors hover:bg-black/75"
-                    title="移除"
+                    title={t('canvas.assetLibraryModal.remove')}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -756,10 +764,12 @@ export function AssetLibraryModal({
                     disabled={disabledSelect}
                     title={
                       disabledSelect
-                        ? `最多可选 ${maxSelectable} 个`
+                        ? t('canvas.assetLibraryModal.maxSelectableExceeded', {
+                            max: maxSelectable,
+                          })
                         : selected
-                          ? '取消选择'
-                          : '选择'
+                          ? t('canvas.assetLibraryModal.deselectTooltip')
+                          : t('canvas.assetLibraryModal.selectTooltip')
                     }
                     className={`absolute left-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
                       selected
@@ -773,12 +783,15 @@ export function AssetLibraryModal({
                   {/* Source badge top-right */}
                   {entry.source !== 'upload' && (
                     <span className="pointer-events-none absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90">
-                      {SOURCE_LABEL[entry.source]}
+                      {t(SOURCE_LABEL_KEYS[entry.source])}
                     </span>
                   )}
 
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 py-2 text-xs text-white">
-                    <div className="truncate">{entry.name || '(未命名)'}</div>
+                    <div className="truncate">
+                      {entry.name ||
+                        t('canvas.assetLibraryModal.unnamedEntry')}
+                    </div>
                   </div>
                   {/* 只有本地上传的条目可删；主线同步来的条目删了也会在下次打开自动同步时
                       重新出现，所以不提供删除入口，避免「删不掉」的误导。 */}
@@ -791,7 +804,11 @@ export function AssetLibraryModal({
                       }}
                       disabled={!entry.id || isDeleting}
                       className="absolute right-2 bottom-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white opacity-0 transition-[opacity,background-color] hover:bg-black/80 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      title={entry.id ? '删除' : '该条目缺少 id，无法删除'}
+                      title={
+                        entry.id
+                          ? t('canvas.assetLibraryModal.deleteButton')
+                          : t('canvas.assetLibraryModal.deleteNoIdError')
+                      }
                     >
                       {isDeleting ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -811,8 +828,8 @@ export function AssetLibraryModal({
             !libraryError && (
               <div className="mt-3 text-center text-[11px] text-text-muted/70">
                 {activeTab?.allowUpload
-                  ? '该类目暂无素材，可点击「本地上传」添加；主线资产已自动同步，也可点右上角「重新同步」。'
-                  : '主线暂无场景，或已自动同步为空；可点右上角「重新同步」重试。'}
+                  ? t('canvas.assetLibraryModal.emptyStateWithUpload')
+                  : t('canvas.assetLibraryModal.emptyStateNoUpload')}
               </div>
             )}
         </div>
@@ -825,7 +842,7 @@ export function AssetLibraryModal({
             disabled={!hasSelection}
             onClick={handleConfirm}
           >
-            确定
+            {t('canvas.assetLibraryModal.confirmButton')}
           </Button>
         </div>
       </div>

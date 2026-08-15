@@ -8,47 +8,47 @@ import {
 } from './canvasNodes';
 
 export const DEFAULT_NODE_DISPLAY_NAME: Record<CanvasNodeType, string> = {
-  [CANVAS_NODE_TYPES.upload]: '上传资源',
-  [CANVAS_NODE_TYPES.imageEdit]: 'AI 图片',
-  [CANVAS_NODE_TYPES.imageGen]: '图片节点',
-  [CANVAS_NODE_TYPES.exportImage]: '结果图片',
-  [CANVAS_NODE_TYPES.beatContext]: '镜头上下文',
-  [CANVAS_NODE_TYPES.textAnnotation]: '文本',
-  [CANVAS_NODE_TYPES.group]: '分组',
-  [CANVAS_NODE_TYPES.storyboardSplit]: '分格抽取结果',
-  [CANVAS_NODE_TYPES.storyboardGen]: '多版本宫格',
-  [CANVAS_NODE_TYPES.video]: '视频',
-  [CANVAS_NODE_TYPES.audio]: '音频',
-  [CANVAS_NODE_TYPES.videoStory]: '视频故事',
-  [CANVAS_NODE_TYPES.videoCompose]: '视频合成',
-  [CANVAS_NODE_TYPES.script]: '脚本生成器',
-  [CANVAS_NODE_TYPES.pano360Viewer]: '360° 全景查看器',
-  [CANVAS_NODE_TYPES.threeDWorld]: '3D 世界',
-  [CANVAS_NODE_TYPES.skill]: '技能',
+  [CANVAS_NODE_TYPES.upload]: 'node.displayName.upload',
+  [CANVAS_NODE_TYPES.imageEdit]: 'node.displayName.imageEdit',
+  [CANVAS_NODE_TYPES.imageGen]: 'node.displayName.imageGen',
+  [CANVAS_NODE_TYPES.exportImage]: 'node.displayName.exportImage',
+  [CANVAS_NODE_TYPES.beatContext]: 'node.displayName.beatContext',
+  [CANVAS_NODE_TYPES.textAnnotation]: 'node.displayName.textAnnotation',
+  [CANVAS_NODE_TYPES.group]: 'node.displayName.group',
+  [CANVAS_NODE_TYPES.storyboardSplit]: 'node.displayName.storyboardSplit',
+  [CANVAS_NODE_TYPES.storyboardGen]: 'node.displayName.storyboardGen',
+  [CANVAS_NODE_TYPES.video]: 'node.displayName.video',
+  [CANVAS_NODE_TYPES.audio]: 'node.displayName.audio',
+  [CANVAS_NODE_TYPES.videoStory]: 'node.displayName.videoStory',
+  [CANVAS_NODE_TYPES.videoCompose]: 'node.displayName.videoCompose',
+  [CANVAS_NODE_TYPES.script]: 'node.displayName.script',
+  [CANVAS_NODE_TYPES.pano360Viewer]: 'node.displayName.pano360Viewer',
+  [CANVAS_NODE_TYPES.threeDWorld]: 'node.displayName.threeDWorld',
+  [CANVAS_NODE_TYPES.skill]: 'node.displayName.skill',
 };
 
 export const EXPORT_RESULT_DISPLAY_NAME: Record<ExportImageNodeResultKind, string> = {
-  generic: '结果图片',
-  storyboardGenOutput: '宫格输出',
-  storyboardSplitExport: '分格导出',
-  storyboardFrameEdit: '单格结果',
-  matte: '抠图结果',
-  upscale: '高清放大',
+  generic: 'node.displayName.exportGeneric',
+  storyboardGenOutput: 'node.displayName.storyboardGenOutput',
+  storyboardSplitExport: 'node.displayName.storyboardSplitExport',
+  storyboardFrameEdit: 'node.displayName.storyboardFrameEdit',
+  matte: 'node.displayName.matte',
+  upscale: 'node.displayName.upscale',
 };
 
-function resolveExportResultDefault(data: Partial<CanvasNodeData>): string {
+function resolveExportResultDefault(data: Partial<CanvasNodeData>, t: (key: string) => string = (key) => key): string {
   const resultKind = (data as { resultKind?: ExportImageNodeResultKind }).resultKind ?? 'generic';
-  return EXPORT_RESULT_DISPLAY_NAME[resultKind];
+  return t(EXPORT_RESULT_DISPLAY_NAME[resultKind]);
 }
 
-export function getDefaultNodeDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>): string {
+export function getDefaultNodeDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>, t: (key: string) => string = (key) => key): string {
   if (type === CANVAS_NODE_TYPES.exportImage) {
-    return resolveExportResultDefault(data);
+    return resolveExportResultDefault(data, t);
   }
-  return DEFAULT_NODE_DISPLAY_NAME[type];
+  return t(DEFAULT_NODE_DISPLAY_NAME[type]);
 }
 
-export function resolveNodeDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>): string {
+export function resolveNodeDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>, t: (key: string) => string = (key) => key): string {
   const customTitle = typeof data.displayName === 'string' ? data.displayName.trim() : '';
   if (customTitle) {
     return customTitle;
@@ -63,13 +63,13 @@ export function resolveNodeDisplayName(type: CanvasNodeType, data: Partial<Canva
     }
   }
 
-  return getDefaultNodeDisplayName(type, data);
+  return getDefaultNodeDisplayName(type, data, t);
 }
 
-export function isNodeUsingDefaultDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>): boolean {
+export function isNodeUsingDefaultDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>, t: (key: string) => string = (key) => key): boolean {
   const customTitle = typeof data.displayName === 'string' ? data.displayName.trim() : '';
   if (!customTitle) {
     return true;
   }
-  return customTitle === getDefaultNodeDisplayName(type, data);
+  return customTitle === getDefaultNodeDisplayName(type, data, t);
 }

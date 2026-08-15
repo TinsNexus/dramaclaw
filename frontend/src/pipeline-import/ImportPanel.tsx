@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   listCharacters,
   listEpisodes,
@@ -65,6 +66,7 @@ const DEFAULT_KIND_TOGGLES: KindToggles = {
 };
 
 export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
+  const { t } = useTranslation("pipelineImport.importPanel");
   const [characters, setCharacters] = useState<SupertaleCharacter[]>([]);
   const [episodes, setEpisodes] = useState<SupertaleEpisodeSummary[]>([]);
   const [selectedCharacters, setSelectedCharacters] = useState<Set<string>>(new Set());
@@ -96,7 +98,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "加载失败");
+        setError(err instanceof Error ? err.message : t("importFailed"));
         setLoading(false);
       });
     return () => {
@@ -132,16 +134,19 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
 
   const previewAssets = useMemo(
     () =>
-      collectAssets({
-        project,
-        characters,
-        selectedCharacters,
-        beats,
-        selectedBeats,
-        episode: selectedEpisode,
-        kinds,
-      }),
-    [project, characters, selectedCharacters, beats, selectedBeats, selectedEpisode, kinds],
+      collectAssets(
+        {
+          project,
+          characters,
+          selectedCharacters,
+          beats,
+          selectedBeats,
+          episode: selectedEpisode,
+          kinds,
+        },
+        t,
+      ),
+    [project, characters, selectedCharacters, beats, selectedBeats, selectedEpisode, kinds, t],
   );
 
   const handleSubmit = () => {
@@ -158,10 +163,10 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
   const footer = (
     <>
       <div className="mr-auto text-xs text-text-muted self-center">
-        将导入 <span className="text-text-dark font-semibold">{previewAssets.length}</span> 张图
+        {t("willImportNImages", { n: previewAssets.length })}
       </div>
       <UiButton variant="ghost" size="sm" onClick={onClose}>
-        取消
+        {t("common.cancel")}
       </UiButton>
       <UiButton
         variant="primary"
@@ -169,7 +174,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
         onClick={handleSubmit}
         disabled={previewAssets.length === 0 || submitting}
       >
-        {submitting ? "导入中..." : "导入"}
+        {submitting ? t("importing") : t("import")}
       </UiButton>
     </>
   );
@@ -177,52 +182,54 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
   return (
     <UiModal
       isOpen
-      title="导入资产到画布"
+      title={t("importAssetsToCanvas")}
       onClose={onClose}
       footer={footer}
       widthClassName="w-[640px]"
     >
-      <div className="text-xs text-text-muted -mt-1 mb-3">项目: {project}</div>
+      <div className="text-xs text-text-muted -mt-1 mb-3">
+        {t("projectLabel", { project })}
+      </div>
 
       <div className="ui-scrollbar max-h-[60vh] overflow-y-auto space-y-5 -mx-1 px-1">
         {loading ? (
-          <div className="text-sm text-text-muted py-8 text-center">加载中...</div>
+          <div className="text-sm text-text-muted py-8 text-center">{t("common.loading")}</div>
         ) : error ? (
           <div className="text-sm text-red-400 py-8 text-center">{error}</div>
         ) : (
           <>
-            <Section title="资产类型">
+            <Section title={t("assetTypes")}>
               <KindToggleRow
-                label="🎭 Identity (角色身份图)"
+                label={t("identityLabel")}
                 checked={kinds.identity}
                 onChange={(v) => setKinds({ ...kinds, identity: v })}
               />
               <KindToggleRow
-                label="🖼 Portrait (角色肖像)"
+                label={t("portraitLabel")}
                 checked={kinds.portrait}
                 onChange={(v) => setKinds({ ...kinds, portrait: v })}
               />
               <KindToggleRow
-                label="🎬 Frame (beat 首帧)"
+                label={t("frameLabel")}
                 checked={kinds.frame}
                 onChange={(v) => setKinds({ ...kinds, frame: v })}
               />
               <KindToggleRow
-                label="✏️ Sketch (草图)"
+                label={t("sketchLabel")}
                 checked={kinds.sketch}
                 onChange={(v) => setKinds({ ...kinds, sketch: v })}
               />
               <KindToggleRow
-                label="📐 导演合成资产"
+                label={t("directorRenderLabel")}
                 checked={kinds.director_render}
                 onChange={(v) => setKinds({ ...kinds, director_render: v })}
               />
             </Section>
 
             {(kinds.identity || kinds.portrait) && (
-              <Section title="角色">
+              <Section title={t("characters.title")}>
                 {characters.length === 0 ? (
-                  <div className="text-xs text-text-muted">该项目没有角色</div>
+                  <div className="text-xs text-text-muted">{t("noCharactersMessage")}</div>
                 ) : (
                   <CharactersList
                     characters={characters}
@@ -239,7 +246,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
             )}
 
             {(kinds.frame || kinds.sketch || kinds.director_render) && (
-              <Section title="集 / Beat">
+              <Section title={t("episodeBeatSection")}>
                 <EpisodePicker
                   episodes={episodes}
                   selectedEpisode={selectedEpisode}
@@ -340,9 +347,10 @@ function EpisodePicker({
   selectedEpisode: number | null;
   onSelect: (ep: number) => void;
 }) {
+  const { t } = useTranslation("pipelineImport.importPanel");
   return (
     <div className="flex items-center gap-2 text-sm text-text-dark">
-      <span className="text-text-muted text-xs shrink-0">集:</span>
+      <span className="text-text-muted text-xs shrink-0">{t("episodeLabel")}</span>
       <div className="flex-1">
         <UiSelect
           value={selectedEpisode ?? ""}
@@ -368,6 +376,7 @@ function BeatRange({
   selected: Set<number>;
   onChange: (v: Set<number>) => void;
 }) {
+  const { t } = useTranslation("pipelineImport.importPanel");
   const allSelected = selected.size === total;
   const noneSelected = selected.size === 0;
   const setAll = () => onChange(new Set(Array.from({ length: total }, (_, i) => i + 1)));
@@ -386,7 +395,7 @@ function BeatRange({
           onClick={setAll}
           disabled={allSelected}
         >
-          全选
+          {t("canvas.history.selectAll")}
         </UiButton>
         <UiButton
           variant="ghost"
@@ -395,7 +404,7 @@ function BeatRange({
           onClick={setNone}
           disabled={noneSelected}
         >
-          全不选
+          {t("selectNone")}
         </UiButton>
       </div>
       <div className="ui-scrollbar grid grid-cols-8 gap-1 max-h-32 overflow-y-auto pr-1">
@@ -435,7 +444,10 @@ interface CollectArgs {
   kinds: KindToggles;
 }
 
-function collectAssets(args: CollectArgs): ImportableAsset[] {
+function collectAssets(
+  args: CollectArgs,
+  t: (key: string) => string = (key) => key,
+): ImportableAsset[] {
   const out: ImportableAsset[] = [];
 
   // Identity / portrait — character-driven
@@ -450,7 +462,7 @@ function collectAssets(args: CollectArgs): ImportableAsset[] {
           id: `identity:${args.project}:${c.name}:${idKey}`,
           kind: "identity",
           url,
-          label: `${c.display_name || c.name} · ${idKey || "身份图"}`,
+          label: `${c.display_name || c.name} · ${idKey || t("identityDefaultLabel")}`,
           meta: {
             project: args.project,
             character: c.name,
@@ -464,7 +476,7 @@ function collectAssets(args: CollectArgs): ImportableAsset[] {
         id: `portrait:${args.project}:${c.name}`,
         kind: "portrait",
         url: c.portrait_url,
-        label: `${c.display_name || c.name} · 肖像`,
+        label: `${c.display_name || c.name} · ${t("portraitDefaultLabel")}`,
         meta: { project: args.project, character: c.name },
       });
     }
@@ -505,7 +517,7 @@ function collectAssets(args: CollectArgs): ImportableAsset[] {
             id: `director_render:${args.project}:ep${args.episode}:beat${beatNum}`,
             kind: "director_render",
             url: drUrl,
-            label: `ep${args.episode} · beat ${beatNum} · 导演渲染`,
+            label: `ep${args.episode} · beat ${beatNum} · ${t("directorRenderDefaultLabel")}`,
             meta: { project: args.project, episode: args.episode, beat: beatNum },
           });
         }

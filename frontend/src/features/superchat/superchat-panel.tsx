@@ -2520,10 +2520,11 @@ export function SuperChatPanel({
       notifiedTaskKeysRef.current.add(dedupeKey);
 
       const label = buildChatTaskLabel(event.task, t);
+      const errorMsg = event.task.error || event.task.current_task || t("superchat.taskFailureNoDetails");
       const text =
         event.type === "task_complete"
-          ? `✅ ${label}已完成。你可以让我查看结果，或继续下一步。`
-          : `${label}失败：${event.task.error || event.task.current_task || "未提供具体错误原因"}\n请根据错误处理前置条件后再继续。`;
+          ? t("superchat.taskCompletedMessage", { label })
+          : t("superchat.taskFailedMessage", { label, error: errorMsg });
       void chat.appendNotification(text);
     });
   }, [chat.appendNotification, params.project, t, taskEventBus]);
@@ -3295,8 +3296,8 @@ export function SuperChatPanel({
                 "absolute bottom-4 left-1/2 z-30 h-9 w-9 -translate-x-1/2 rounded-full border border-white/12 bg-background/88 text-foreground shadow-lg backdrop-blur transition hover:bg-background",
                 isFreezoneLayout && "bottom-3",
               )}
-              title="回到底部"
-              aria-label="回到底部"
+              title={t("superchat.scrollToBottom")}
+              aria-label={t("superchat.scrollToBottom")}
               onClick={() => scrollToChatBottom("auto")}
             >
               <ArrowDown className="h-4 w-4" />

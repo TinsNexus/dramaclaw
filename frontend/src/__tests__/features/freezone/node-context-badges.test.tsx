@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const mockTranslations: Record<string, string> = {
+  "freezone.nodeContextBadges.labels.directorCombined": "Ảnh dựng đạo diễn",
+};
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => mockTranslations[key] || key,
+  }),
+  initReactI18next: {
+    type: "3rdParty",
+    init: () => {},
+  },
+}));
 
 import { NodeContextBadges } from "@/features/freezone/context/NodeContextBadges";
 
@@ -21,6 +35,6 @@ describe("NodeContextBadges", () => {
       />,
     );
 
-    expect(screen.getAllByText("导演合成图 · EP1/B3")).toHaveLength(1);
+    expect(screen.getAllByText("Ảnh dựng đạo diễn · EP1/B3")).toHaveLength(1);
   });
 });

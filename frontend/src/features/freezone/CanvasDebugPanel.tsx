@@ -17,6 +17,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, RotateCcw, Wrench } from "lucide-react";
 import {
   extractHistoryId,
@@ -61,6 +62,7 @@ export function CanvasDebugPanel({
   error,
   onRehydrate,
 }: CanvasDebugPanelProps) {
+  const { t } = useTranslation();
   const [remote, setRemote] = useState<RemoteSnapshot | null>(null);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function CanvasDebugPanel({
       setHistory(data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        setHistoryError("接口未上线（后端 history endpoint 还没部署）");
+        setHistoryError(t("freezone.canvasDebug.interfaceNotAvailable"));
       } else {
         setHistoryError(formatErr(err));
       }
@@ -121,12 +123,10 @@ export function CanvasDebugPanel({
     const historyId = extractHistoryId(entry);
     if (!historyId) {
       console.error("[freezone:debug] history entry has no recognizable id", entry);
-      window.alert(
-        "无法识别此历史项的 id（list 响应里没找到 id / history_id / filename / name 任一字段）。请看 console。",
-      );
+      window.alert(t("freezone.canvasDebug.historyIdNotFound"));
       return;
     }
-    if (!window.confirm(`确认恢复到 ${historyId}？当前版本会先写入 history。`)) {
+    if (!window.confirm(t("freezone.canvasDebug.confirmRestore", { historyId }))) {
       return;
     }
     setBusyHistoryId(historyId);
@@ -154,9 +154,9 @@ export function CanvasDebugPanel({
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 404
-          ? "接口未上线（后端 canvases/{id}/restore endpoint 还没部署）"
+          ? t("freezone.canvasDebug.restoreInterfaceNotAvailable")
           : formatErr(err);
-      window.alert(`恢复失败：${message}`);
+      window.alert(t("freezone.canvasDebug.restoreFailed", { message }));
     } finally {
       setBusyHistoryId(null);
     }
@@ -179,10 +179,10 @@ export function CanvasDebugPanel({
           type="button"
           onClick={() => onOpenChange(!open)}
           className="inline-flex h-6 items-center gap-1 rounded-full bg-white/[0.035] px-2 text-[10px] font-normal text-foreground/68 transition-colors backdrop-blur-sm hover:bg-white/[0.065] hover:text-foreground/86"
-          title="画布调试面板（仅开发用）"
+          title={t("freezone.canvasDebug.title")}
         >
           <Wrench className="h-2.5 w-2.5 text-foreground/64" />
-          调试
+          {t("freezone.canvasDebug.label")}
           {open ? (
             <ChevronUp className="h-2.5 w-2.5 text-foreground/54" />
           ) : (
@@ -228,7 +228,7 @@ export function CanvasDebugPanel({
               )}
               {!remote && !remoteLoading && !remoteError && (
                 <div className="text-foreground/58 text-[11px]">
-                  尚未拉取，点 GET 查询。
+                  {t("freezone.canvasDebug.remoteNotFetched")}
                 </div>
               )}
               {remoteError && (
@@ -246,7 +246,7 @@ export function CanvasDebugPanel({
                   disabled={historyLoading}
                   className="rounded border border-white/[0.16] px-1.5 py-0.5 text-[10px] text-foreground/86 hover:bg-white/[0.06] disabled:opacity-50"
                 >
-                  {historyLoading ? "..." : "拉取"}
+                  {historyLoading ? "..." : t("freezone.canvasDebug.fetchButton")}
                 </button>
               </header>
               {historyError && (
@@ -255,7 +255,9 @@ export function CanvasDebugPanel({
                 </div>
               )}
               {history && history.length === 0 && (
-                <div className="text-foreground/58 text-[11px]">空（尚无历史快照）</div>
+                <div className="text-foreground/58 text-[11px]">
+                  {t("freezone.canvasDebug.historyEmpty")}
+                </div>
               )}
               {history && history.length > 0 && (
                 <ul className="space-y-1">
@@ -295,10 +297,10 @@ export function CanvasDebugPanel({
                             busyHistoryId === entryHistoryId || !entryHistoryId
                           }
                           className="shrink-0 inline-flex items-center gap-1 rounded border border-amber-300/40 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-100 hover:bg-amber-300/20 disabled:opacity-50"
-                          title={entryHistoryId ? "恢复此版本" : "缺少 history_id，无法恢复"}
+                          title={entryHistoryId ? t("freezone.canvasDebug.restoreThisVersion") : t("freezone.canvasDebug.restoreMissingId")}
                         >
                           <RotateCcw className="h-3 w-3" />
-                          {busyHistoryId === entryHistoryId ? "恢复中" : "恢复"}
+                          {busyHistoryId === entryHistoryId ? t("freezone.canvasDebug.restoring") : t("freezone.canvasDebug.restore")}
                         </button>
                       </li>
                     );
@@ -307,7 +309,7 @@ export function CanvasDebugPanel({
               )}
             </section>
             <footer className="border-t border-white/[0.10] px-3 py-1.5 text-[10px] text-foreground/54">
-              仅调试用 · 后端 history endpoint 未部署时这里会显示"接口未上线"
+              {t("freezone.canvasDebug.footer")}
             </footer>
           </div>
         )}

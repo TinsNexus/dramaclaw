@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { MainlineContext } from '@/features/freezone/context/mainlineContext';
 
@@ -24,15 +25,15 @@ interface Props {
 // 里 `current_sketch` / `current_frame` 等),commit 后下次 canvas reload
 // 会以该 role 长出独立 asset 节点。
 interface SlotMapping {
-  candidate: string;
+  candidateKey: string;
   promotedNode: string;
 }
 const SLOT_MAPPING_BY_WORKFLOW: Record<string, SlotMapping> = {
-  beat_to_sketch: { candidate: '草图', promotedNode: 'current_sketch' },
-  selected_background_to_sketch: { candidate: '草图', promotedNode: 'current_sketch' },
-  director_combined_to_sketch: { candidate: '草图', promotedNode: 'current_sketch' },
-  sketch_to_frame: { candidate: '分镜', promotedNode: 'current_frame' },
-  background_sketch_to_frame: { candidate: '分镜', promotedNode: 'current_frame' },
+  beat_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
+  selected_background_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
+  director_combined_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
+  sketch_to_frame: { candidateKey: 'canvas.commitTargetHint.candidate.frame', promotedNode: 'current_frame' },
+  background_sketch_to_frame: { candidateKey: 'canvas.commitTargetHint.candidate.frame', promotedNode: 'current_frame' },
 };
 
 function deriveSlotMapping(workflowDefaultId?: string): SlotMapping | null {
@@ -62,6 +63,8 @@ export function CommitTargetHint({
   workflowDefaultId,
   className,
 }: Props) {
+  const { t } = useTranslation();
+
   const hint = useMemo(() => {
     const beatCtx = mainlineContexts.find((ctx) => ctx.kind === 'beat');
     const slotMapping = deriveSlotMapping(workflowDefaultId);
@@ -70,21 +73,30 @@ export function CommitTargetHint({
         // 关键:主线技能节点是 trigger+display 一体,产物先落在本节点 imageUrl,
         // 没有下游的"分镜节点"。commit 之后 mainline DB 才生成 `current_xxx`
         // 资产 — 下次打开 canvas 才会看到独立的 asset 节点。
+        const candidate = t(slotMapping.candidateKey);
         return {
           variant: 'typed' as const,
-          text: `EP${beatCtx.episode}/镜头 ${beatCtx.beat} · ${slotMapping.candidate}候选 · 生成后落本节点,commit 后晋升为 ${slotMapping.promotedNode}`,
+          text: t('canvas.commitTargetHint.typedMessage', {
+            episode: beatCtx.episode,
+            beat: beatCtx.beat,
+            candidate,
+            promotedNode: slotMapping.promotedNode,
+          }),
         };
       }
       return {
         variant: 'untyped' as const,
-        text: `主线候选 · 已绑定 EP${beatCtx.episode}/镜头 ${beatCtx.beat} · 生成后落本节点,commit 时按上下文匹配槽位`,
+        text: t('canvas.commitTargetHint.untypedMessage', {
+          episode: beatCtx.episode,
+          beat: beatCtx.beat,
+        }),
       };
     }
     return {
       variant: 'free' as const,
-      text: '自由候选 · 生成后落本节点,commit 时需手动选择目标资产',
+      text: t('canvas.commitTargetHint.freeMessage'),
     };
-  }, [mainlineContexts, workflowDefaultId]);
+  }, [mainlineContexts, workflowDefaultId, t]);
 
   const variantClass =
     hint.variant === 'typed'
@@ -96,7 +108,7 @@ export function CommitTargetHint({
   return (
     <div
       className={`shrink-0 rounded-md border px-2 py-1 text-[10px] leading-tight ${variantClass} ${className ?? ''}`}
-      title="生成后的产物在 commit 时如何写回主线槽位"
+      title={t('canvas.commitTargetHint.title')}
     >
       {hint.text}
     </div>

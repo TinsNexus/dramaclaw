@@ -240,27 +240,27 @@ export const UpscaleEditorOverlay = memo(({ node }: UpscaleEditorOverlayProps) =
         >
         <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2.5">
           <div className="text-sm font-semibold text-text-dark">
-            {t('upscaleEditor.title')}
+            {t('canvas.upscaleEditor.title')}
           </div>
           <button
             type="button"
             className="text-xs text-text-muted transition-colors hover:text-text-dark"
             onClick={handleCancel}
-            title={t('upscaleEditor.cancel')}
+            title={t('canvas.upscaleEditor.cancel')}
           >
-            {t('common.cancel')}
+            {t('canvas.upscaleEditor.cancel')}
           </button>
         </div>
 
         <div className="space-y-3">
-          <PanelRow label={t('upscaleEditor.providerLabel')}>
+          <PanelRow label={t('canvas.upscaleEditor.providerLabel')}>
             <ProviderModelPicker
               selectedModelId={persistedModelId}
               onChange={handleModelChange}
             />
           </PanelRow>
 
-          <PanelRow label={t('upscaleEditor.qualityLabel')}>
+          <PanelRow label={t('canvas.upscaleEditor.qualityLabel')}>
             <QualityPicker
               value={persistedImageSize}
               options={sizeOptions}
@@ -268,7 +268,7 @@ export const UpscaleEditorOverlay = memo(({ node }: UpscaleEditorOverlayProps) =
             />
           </PanelRow>
 
-          <PanelRow label={t('upscaleEditor.scaleLabel')}>
+          <PanelRow label={t('canvas.upscaleEditor.scaleLabel')}>
             <ScaleFactorPicker value={persistedScaleFactor} onChange={handleScaleFactorChange} />
           </PanelRow>
         </div>
@@ -287,7 +287,7 @@ export const UpscaleEditorOverlay = memo(({ node }: UpscaleEditorOverlayProps) =
             title={
               catalogIsEmpty
                 ? t('modelParams.noModelsAvailable')
-                : t('upscaleEditor.submit')
+                : t('canvas.upscaleEditor.submit')
             }
           >
             <ArrowUp className="h-4 w-4" />
@@ -338,7 +338,7 @@ function QualityPicker({ value, options, onChange }: QualityPickerProps) {
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [isOpen]);
 
-  const title = t('upscaleEditor.qualityPicker.title');
+  const title = t('canvas.upscaleEditor.qualityPicker.title');
 
   return (
     <div className="relative">

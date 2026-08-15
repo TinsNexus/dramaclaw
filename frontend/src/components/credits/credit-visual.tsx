@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { createContext, useContext, useId } from "react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ export type CreditPromotionDisplay = {
 
 export function formatCreditPromotionLabel(
   promotion?: CreditPromotionDisplay | null,
+  t: (key: string, opts?: Record<string, string | number>) => string = (key) => key,
 ): string | null {
   const basisPoints = Number(promotion?.discount_basis_points);
   if (!Number.isFinite(basisPoints) || basisPoints <= 0 || basisPoints >= 10_000) {
@@ -37,7 +39,9 @@ export function formatCreditPromotionLabel(
   const discount = (basisPoints / 1_000)
     .toFixed(2)
     .replace(/\.?0+$/, "");
-  return promotion?.ends_at ? `限时 ${discount} 折` : `${discount} 折优惠`;
+  return promotion?.ends_at
+    ? t("credits.visual.limitedTimeDiscount", { discount })
+    : t("credits.visual.discountPromotion", { discount });
 }
 
 type CreditSparkIconProps = {
@@ -110,6 +114,7 @@ export function CreditCostPill({
   disabled?: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   // Hidden inside the canvas (a provider sets this) so cost badges don't show
   // next to canvas node buttons; unaffected everywhere else.
   if (useCreditDisplayHidden()) return null;
@@ -118,7 +123,7 @@ export function CreditCostPill({
     ? display.split("→", 2)
     : [null, display];
   const promotionLabel = originalDisplay
-    ? (formatCreditPromotionLabel(promotion) ?? "促销中")
+    ? (formatCreditPromotionLabel(promotion, t) ?? t("credits.visual.onPromotion"))
     : null;
 
   return (

@@ -111,8 +111,8 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
   const resolvedWidth = resolveNodeDimension(width, compactSize.width);
   const resolvedHeight = resolveNodeDimension(height, compactSize.height);
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(type as CanvasNodeType, data),
-    [data, type]
+    () => resolveNodeDisplayName(type as CanvasNodeType, data, t),
+    [data, type, t]
   );
   const hasMainlineContext = hasMainlineContexts(
     (data as { mainline_context?: unknown }).mainline_context,
@@ -287,7 +287,7 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
             </span>
             {generationErrorRequestId && (
               <div className="flex w-full max-w-[240px] items-center gap-1 rounded bg-red-500/10 px-2 py-1">
-                <span className="shrink-0 text-[10px] text-red-300/70">请求ID</span>
+                <span className="shrink-0 text-[10px] text-red-300/70">{t('node.imageNode.requestId')}</span>
                 <code
                   className="min-w-0 flex-1 truncate font-mono text-[10px] text-red-200"
                   title={generationErrorRequestId}

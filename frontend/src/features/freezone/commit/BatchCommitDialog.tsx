@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PushTarget } from "@/api/push";
 import { promoteToAsset } from "./promoteToAsset";
 
@@ -54,6 +55,7 @@ export function BatchCommitDialog({
   onClose,
   onDone,
 }: BatchCommitDialogProps) {
+  const { t } = useTranslation("freezone", { keyPrefix: "commit.batch" });
   const [rows, setRows] = useState<Record<string, RowState>>(() =>
     Object.fromEntries(
       items.map((it) => [
@@ -107,7 +109,7 @@ export function BatchCommitDialog({
 
   const handleClose = () => {
     if (done && succeeded > 0) {
-      onDone(`批量提交完成：${succeeded} 成功 / ${failed} 失败 / ${items.length - sendable.length} 跳过`);
+      onDone(t("onDoneMessage", { succeeded, failed, skipped: items.length - sendable.length }));
     }
     onClose();
   };
@@ -118,17 +120,17 @@ export function BatchCommitDialog({
         <header className="flex items-center justify-between px-5 py-4 border-b border-border-default">
           <div>
             <div className="text-base font-semibold text-text">
-              📤 批量提交到主线资产
+              📤 {t("header.title")}
             </div>
             <div className="text-xs text-text-muted mt-0.5">
-              项目: {project} · {items.length} 张图（可推 {sendable.length} 张 / 跳过 {items.length - sendable.length} 张）
+              {t("header.subtitle", { project, total: items.length, pushable: sendable.length, skipped: items.length - sendable.length })}
             </div>
           </div>
           <button
             type="button"
             onClick={handleClose}
             className="text-text-muted hover:text-text transition text-sm"
-            aria-label="关闭"
+            aria-label={t("close.label")}
           >
             ✕
           </button>
@@ -136,7 +138,7 @@ export function BatchCommitDialog({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="text-xs text-text-muted/80 mb-3 leading-relaxed">
-            每张图自动提交回它的来源资产槽位（来自主流程导入的图按原槽位写回；上传 / 生成 / 编辑产出的图没有来源信息会跳过 — 用单图提交选择目标）。
+            {t("description")}
           </div>
           <ul className="space-y-1.5">
             {items.map((it) => {
@@ -159,7 +161,7 @@ export function BatchCommitDialog({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-text truncate">{it.label}</div>
                     <div className="text-xs text-text-muted truncate">
-                      {it.target ? renderTargetLabel(it.target) : "无来源信息（跳过）"}
+                      {it.target ? renderTargetLabel(it.target) : t("noSource")}
                     </div>
                   </div>
                   <StatusBadge state={state} />
@@ -172,8 +174,8 @@ export function BatchCommitDialog({
         <footer className="px-5 py-4 border-t border-border-default flex items-center justify-between">
           <div className="text-sm text-text-muted">
             {done
-              ? `${succeeded} 成功 · ${failed} 失败 · ${items.length - sendable.length} 跳过`
-              : `准备提交 ${sendable.length} 张`}
+              ? t("footer.statusDone", { succeeded, failed, skipped: items.length - sendable.length })
+              : t("footer.statusPending", { count: sendable.length })}
           </div>
           <div className="flex gap-2">
             <button
@@ -182,7 +184,7 @@ export function BatchCommitDialog({
               className="px-3 py-1.5 rounded-lg text-text-muted hover:text-text text-sm transition"
               disabled={submitting}
             >
-              {done ? "完成" : "取消"}
+              {done ? t("button.done") : t("button.cancel")}
             </button>
             {!done && (
               <button
@@ -191,7 +193,7 @@ export function BatchCommitDialog({
                 disabled={submitting || sendable.length === 0}
                 className="px-4 py-1.5 rounded-lg bg-accent/90 hover:bg-accent text-white text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? `提交中 (${succeeded + failed}/${sendable.length})...` : `提交 ${sendable.length} 张`}
+                {submitting ? t("button.submitRunning", { done: succeeded + failed, total: sendable.length }) : t("button.submit", { count: sendable.length })}
               </button>
             )}
             {done && failed > 0 && (
@@ -201,7 +203,7 @@ export function BatchCommitDialog({
                 disabled={submitting}
                 className="px-4 py-1.5 rounded-lg bg-yellow-600/90 hover:bg-yellow-500 text-white text-sm transition"
               >
-                重试失败 {failed} 张
+                {t("button.retry", { count: failed })}
               </button>
             )}
           </div>
@@ -212,20 +214,21 @@ export function BatchCommitDialog({
 }
 
 function StatusBadge({ state }: { state: RowState }) {
+  const { t } = useTranslation("freezone", { keyPrefix: "commit.batch" });
   if (state.status === "pending")
-    return <span className="text-xs text-text-muted shrink-0">待提交</span>;
+    return <span className="text-xs text-text-muted shrink-0">{t("status.pending")}</span>;
   if (state.status === "running")
-    return <span className="text-xs text-accent shrink-0">提交中...</span>;
+    return <span className="text-xs text-accent shrink-0">{t("status.running")}</span>;
   if (state.status === "ok")
-    return <span className="text-xs text-emerald-400 shrink-0">✓ 完成</span>;
+    return <span className="text-xs text-emerald-400 shrink-0">✓ {t("status.success")}</span>;
   if (state.status === "skipped")
-    return <span className="text-xs text-text-muted/70 shrink-0">跳过</span>;
+    return <span className="text-xs text-text-muted/70 shrink-0">{t("status.skipped")}</span>;
   return (
     <span
       className="text-xs text-red-400 shrink-0 cursor-help"
       title={state.error ?? ""}
     >
-      ✗ 失败
+      ✗ {t("status.failed")}
     </span>
   );
 }

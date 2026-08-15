@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ClaymoreLab
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import {
   AudioLines,
   Box,
@@ -121,7 +122,7 @@ function toOutlineItem(node: CanvasNode): CanvasOutlineItem {
   return {
     id: node.id,
     kind: group ? "group" : "node",
-    name: resolveNodeDisplayName(type, node.data),
+    name: resolveNodeDisplayName(type, node.data, i18n.t),
     type,
     thumbUrl: group ? null : outlineThumbUrl(node),
     mediaUrl: group ? null : outlineMediaUrl(node),
@@ -313,7 +314,7 @@ export function canvasOutlineSignature(nodes: CanvasNode[]): string {
         node.id,
         type,
         node.parentId ?? "",
-        resolveNodeDisplayName(type, node.data),
+        resolveNodeDisplayName(type, node.data, i18n.t),
         (isGroupNode(node) ? null : outlineThumbUrl(node)) ?? "",
         (isGroupNode(node) ? null : outlineMediaUrl(node)) ?? "",
       ].join("\u0001");
@@ -590,7 +591,7 @@ function OutlineTypeFilter({
           <button
             type="button"
             aria-label={t("freezone.canvasOutline.filter")}
-            title={compact ? `${t("freezone.canvasOutline.filter")}：${label}` : undefined}
+            title={compact ? t("freezone.canvasOutline.filterTitle", { label }) : undefined}
             className={
               "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition hover:bg-[rgb(var(--text-rgb)/0.1)] hover:text-text-dark " +
               (active
