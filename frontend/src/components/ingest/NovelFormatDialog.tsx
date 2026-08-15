@@ -12,57 +12,64 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 /**
- * 精品剧（drama）的导入标准格式与示例。逐行写死而不是塞进 i18n 的长字符串：
- * 这是要按原样展示的样例，任何换行/空格都有意义，不该被译者改动。
+ * Mẫu định dạng chuẩn của phim tinh phẩm (drama). Viết cứng từng dòng thay vì
+ * nhét vào chuỗi i18n dài: đây là mẫu hiển thị nguyên trạng, mọi ngắt dòng/khoảng
+ * trắng đều có nghĩa.
+ *
+ * Nội dung minh hoạ (tên cảnh/nhân vật/thoại) đã Việt hoá cho dễ đọc, NHƯNG các
+ * NHÃN CẤU TRÚC và TỪ THỜI GIAN phải giữ nguyên tiếng Trung vì parser
+ * (screenplay_scene_parser.py) khớp cứng: 场次 / 地点·环境·场景 / 时间·时段 /
+ * 内外景 / 人物·角色 / 第X集, INT·EXT = 内·外, 内景·外景, và TIME_TOKENS
+ * (深夜/日/夜/夜晚…). Đừng đổi các token này sang tiếng Việt.
  */
 const DRAMA_FORMAT_SPEC = [
-  "中文制片格式（任选一种）",
-  "1-1 苏鸾寝殿 深夜 内",
-  "1.1 苏鸾寝殿 内 深夜",
+  "Định dạng kịch bản (chọn một)",
+  "1-1 Tẩm điện Tô Loan 深夜 内",
+  "1.1 Tẩm điện Tô Loan 内 深夜",
   "",
-  "中文分字段格式",
+  "Định dạng phân trường (nhãn tiếng Trung)",
   "场次：1",
-  "地点：苏鸾寝殿",
+  "地点：Tẩm điện Tô Loan",
   "时间：深夜",
   "内外景：内",
   "",
-  "Fountain / Final Draft 格式",
-  "内景 苏鸾寝殿 - 深夜",
+  "Định dạng Fountain / Final Draft",
+  "内景 Tẩm điện Tô Loan - 深夜",
   "INT. BEDROOM - NIGHT",
 ].join("\n");
 
 const DRAMA_REPAIRABLE_FORMAT = [
   "第1集",
   "",
-  "1.1 苏鸾寝殿 内",
-  "人物：苏糖、锦绣",
-  "▲ 漆黑寝殿，烛火摇曳。",
-  "苏糖：锦绣，几更了？",
+  "1.1 Tẩm điện Tô Loan 内",
+  "人物：Tô Đường、Cẩm Tú",
+  "▲ Tẩm điện tối đen, ánh nến lập loè.",
+  "Tô Đường：Cẩm Tú, canh mấy rồi?",
 ].join("\n");
 
 const DRAMA_FORMAT_EXAMPLE = [
   "第1集",
-  "1-1 苏鸾寝殿 深夜 内",
-  "人物：苏糖、锦绣",
-  "△【闪回】漆黑寝殿，匕首尖正对跳动的烛火，刀身映出一张布满冷汗、瞳孔骤缩的少女脸。",
-  "△苏糖 OS：我不能死！",
-  "△【闪出】寒光匕首狠狠刺入少女心口，鲜血瞬间喷溅在锦被上。凶手缓缓抬头，露出贴身侍女锦绣冰冷的脸。",
-  "△苏糖 OS：我不能死得不明不白！",
-  "△【闪回】现代大学宿舍，书本被狠狠砸在地上，苏糖和室友激烈争吵。",
-  "△苏糖 OS：我叫苏糖，普通女大学生。昨天还在跟人吵架，今天一睁眼……",
-  "△【闪出】苏糖猛地从床榻弹坐而起，寝衣被冷汗浸透，双手死死攥住床帐，指节泛白。",
-  "苏糖（大口喘气，眼神涣散，声音发颤）：这种风格是……《乱世凤鸣录》？",
-  "△【特写】一双纤白细腻、完全陌生的手，在苏糖眼前缓缓攥成拳。",
-  "△苏糖 OS：这里是凤鸣大陆，七国乱战。我附身的人，是苏鸾！",
-  "△苏糖浑身剧烈一颤。",
-  "△苏糖 OS：这个世界的规则只有一条——弱肉强食。原著里，苏鸾是个路人甲。",
-  "△寝殿门扇“吱呀”一声，悄无声息推开一道缝。",
-  "△【特写】一只素白的手端着青瓷汤碗走入，宽大袖口滑落，手腕处一道细长的刀鞘轮廓，一闪而过。",
-  "△苏糖 OS：她会死。三天后，在这张床上，被她最信任的侍女一刀穿心。",
-  "△锦绣垂着头，无声走到床边，面色平静得没有一丝波澜。",
-  "苏糖（瞬间收敛所有情绪，声音带着刚睡醒的沙哑慵懒）：锦绣，几更了？",
-  "锦绣（头埋得极低，声音恭顺）：回公主，三更。公主噩梦惊醒，奴婢炖了安神汤。",
-  "△苏糖的眼神骤然锐利，随即立刻垂下眼帘，露出一副困倦不堪的模样。",
+  "1-1 Tẩm điện Tô Loan 深夜 内",
+  "人物：Tô Đường、Cẩm Tú",
+  "△【Hồi tưởng】Tẩm điện tối đen, mũi chuỷ thủ chĩa thẳng vào ngọn nến lập loè, thân đao phản chiếu gương mặt thiếu nữ đầm đìa mồ hôi lạnh, đồng tử co rút.",
+  "△Tô Đường OS：Ta không thể chết!",
+  "△【Hồi hiện】Chuỷ thủ ánh lạnh đâm phập vào tim thiếu nữ, máu tươi bắn tung lên tấm chăn gấm. Hung thủ từ từ ngẩng đầu, lộ ra gương mặt lạnh băng của thị nữ thân cận Cẩm Tú.",
+  "△Tô Đường OS：Ta không thể chết một cách không minh bạch!",
+  "△【Hồi tưởng】Ký túc xá đại học hiện đại, sách vở bị ném mạnh xuống đất, Tô Đường và bạn cùng phòng cãi nhau kịch liệt.",
+  "△Tô Đường OS：Ta tên Tô Đường, một nữ sinh viên bình thường. Hôm qua còn cãi nhau với người ta, hôm nay vừa mở mắt…",
+  "△【Hồi hiện】Tô Đường bật dậy khỏi giường, y phục ngủ đẫm mồ hôi lạnh, hai tay siết chặt màn giường, khớp ngón trắng bệch.",
+  "Tô Đường（thở dốc, ánh mắt thất thần, giọng run rẩy）：Phong cách này là… 《Loạn Thế Phượng Minh Lục》?",
+  "△【Cận cảnh】Một đôi tay trắng nõn mảnh mai, hoàn toàn xa lạ, từ từ siết thành nắm đấm trước mắt Tô Đường.",
+  "△Tô Đường OS：Nơi đây là Đại lục Phượng Minh, bảy nước loạn chiến. Người ta nhập vào, là Tô Loan!",
+  "△Tô Đường toàn thân run bắn.",
+  "△Tô Đường OS：Quy tắc của thế giới này chỉ có một — mạnh được yếu thua. Trong nguyên tác, Tô Loan chỉ là vai phụ vô danh.",
+  "△Cánh cửa tẩm điện “kẽo kẹt” một tiếng, lặng lẽ hé mở một khe.",
+  "△【Cận cảnh】Một bàn tay trắng ngần bưng chén canh sứ xanh bước vào, ống tay áo rộng trượt xuống, nơi cổ tay thoáng hiện đường viền bao đao thon dài.",
+  "△Tô Đường OS：Nàng sẽ chết. Ba ngày sau, trên chiếc giường này, bị thị nữ nàng tin tưởng nhất một đao xuyên tim.",
+  "△Cẩm Tú cúi đầu, lặng lẽ bước đến bên giường, sắc mặt bình thản không chút gợn sóng.",
+  "Tô Đường（lập tức thu hết cảm xúc, giọng khàn khàn uể oải như vừa tỉnh giấc）：Cẩm Tú, canh mấy rồi?",
+  "Cẩm Tú（đầu cúi thật thấp, giọng cung kính）：Bẩm công chúa, canh ba. Công chúa gặp ác mộng tỉnh giấc, nô tì đã hầm canh an thần.",
+  "△Ánh mắt Tô Đường chợt sắc lạnh, rồi lập tức cụp mi xuống, lộ ra vẻ mệt mỏi rã rời.",
 ].join("\n");
 
 export function NovelFormatDialog({
@@ -122,6 +129,9 @@ export function NovelFormatDialog({
               <h3 className="text-xs font-medium text-muted-foreground">
                 {t("ingest.novelFormat.specLabel")}
               </h3>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {t("ingest.novelFormat.specTokenNote")}
+              </p>
               <pre className="whitespace-pre-wrap rounded-md border border-white/10 bg-white/[0.03] px-3.5 py-3 text-[13px] leading-7 text-foreground/90">
                 {DRAMA_FORMAT_SPEC}
               </pre>

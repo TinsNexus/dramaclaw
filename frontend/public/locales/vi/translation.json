@@ -1886,7 +1886,8 @@
       "ruleBody": "Giữ một hành động hoặc cảnh hiển thị trên một dòng; cả dấu \"△\" và \"▲\" đều được hỗ trợ. Không kết hợp nhiều cảnh hoặc diễn viên trên một dòng.",
       "ruleDialogue": "Viết đối thoại dưới dạng \"Nhân vật: dòng\". Thêm gợi ý biểu diễn ngắn gọn trong ngoặc đơn chỉ khi cần thiết, và sử dụng \"Nhân vật OS: dòng\" cho tiếng nói bên trong.",
       "ruleLocationChange": "Tạo tiêu đề bối cảnh mới khi vị trí vật lý thay đổi. Cả đơn hàng Vị trí-Thời gian-INT/EXT và Vị trí-INT/EXT-Thời gian đều được hỗ trợ.",
-      "exampleLabel": "Đoạn ví dụ"
+      "exampleLabel": "Đoạn ví dụ",
+      "specTokenNote": "Các nhãn cú pháp (场次 / 地点 / 时间 / 内·外) và định dạng Fountain bên dưới là token đầu vào bắt buộc để hệ thống phân tích được — giữ nguyên, không dịch. Nội dung truyện có thể viết tiếng Việt, nhưng tiêu đề cảnh phải dùng đúng các nhãn này."
     },
     "projectType": "Loại dự án",
     "projectTypeLocked": "Loại dự án đã khoá, muốn đổi thì nhập lại",

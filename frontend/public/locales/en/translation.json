@@ -1888,7 +1888,8 @@
       "ruleBody": "Keep one visible action or shot per line; both “△” and “▲” action markers are supported. Do not combine several shots or speakers on one line.",
       "ruleDialogue": "Write dialogue as “Character: line”. Add a short performance cue in parentheses only when needed, and use “Character OS: line” for inner voice.",
       "ruleLocationChange": "Create a new scene header when the physical location changes. Both Location-Time-INT/EXT and Location-INT/EXT-Time orders are supported.",
-      "exampleLabel": "Example excerpt"
+      "exampleLabel": "Example excerpt",
+      "specTokenNote": "The syntax labels (场次 / 地点 / 时间 / 内·外) and the Fountain format below are the required input tokens the parser matches — keep them as-is. Story content can be in any language, but scene headers must use these labels."
     },
     "sceneHeaders": {
       "missing": "No scene headings were recognized, so the system cannot tell where each scene begins.",
