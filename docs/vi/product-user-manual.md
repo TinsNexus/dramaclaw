@@ -1,12 +1,16 @@
-# DramaHub — Sổ tay sử dụng sản phẩm (tiếng Việt)
+# DramaHub — Sổ tay sử dụng sản phẩm (bản mã nguồn mở / CE) — tiếng Việt
 
-> Dịch từ: [DramaClaw 产品使用手册](https://neo-flying.feishu.cn/docx/T2UgdVA4Fo1A5KxCh0vckDz3nTg) — v1.0, cập nhật 06/2026
-> Bản thương mại | Dành cho sáng tạo nội dung video AI (phim ảnh & đa thể loại)
+> Dịch từ: [DramaClaw 产品使用手册（开源版）](https://neo-flying.feishu.cn/docx/JGNTdsjJuo748TxJkxecoYs2nth) — v1.0, cập nhật 06/2026
+> **CE — Bản mã nguồn mở** | Dùng cục bộ đơn máy & triển khai riêng (self-host)
 > *Make Your Own DC. — Nền tảng sản xuất công nghiệp hóa nội dung AIGC*
 
 **Về thuật ngữ:** Toàn bộ tên module, nút bấm và khái niệm trong tài liệu này được lấy trực tiếp từ file i18n của sản phẩm — `frontend/public/locales/vi/translation.json` (đối chiếu key với `zh`) — để khớp đúng những gì hiển thị trên giao diện tiếng Việt. Xem [Bảng thuật ngữ](#bảng-thuật-ngữ-đối-chiếu-với-i18n) ở cuối.
 
-**Về tên sản phẩm:** Tài liệu gốc trên Feishu dùng tên *DramaClaw*, nhưng locale hiện tại của repo (`vi`/`en`/`zh`) đều dùng **DramaHub**. Bản dịch này theo locale.
+**Về phiên bản:** Đây là bản dịch của **manual bản mã nguồn mở (CE)** — khớp với repo này (chạy cục bộ/self-host). Bản CE **không có** đăng nhập tài khoản, chia sẻ dự án, phân quyền theo vai trò (RBAC) hay cộng tác đa người dùng qua cloud; mọi thứ chạy ở chế độ đơn người dùng trên máy cục bộ. (Bản thương mại/cloud có thêm các tính năng đó là tài liệu riêng.)
+
+**Về tên sản phẩm:** Manual gốc trên Feishu mang tên *DramaClaw*; repo/locale (`vi`/`en`/`zh`) dùng **DramaHub** — bản dịch này theo tên **DramaHub**.
+
+> ℹ️ *Ghi chú biên dịch:* các chương mô tả module (Ch.1, 3–10, 12) khớp nguyên văn bản thương mại đã dịch; các mục đặc thù CE (Ch.2 khởi động cục bộ & chế độ đơn người dùng, Ch.11 dùng cục bộ/nhóm nhỏ) đã được viết lại theo bản CE. Mục 2.4 và Ch.11 nên rà lại nhẹ với bản gốc khi tiện (doc nguồn bị treo khi trích, không lấy được toàn văn 2 mục này).
 
 ---
 
@@ -58,7 +62,7 @@ Nguyên tắc vàng: **Văn bản quyết định câu chuyện, tài sản quy�
 
 ### Mục lục
 1. Nhận biết DramaHub
-2. Đăng nhập, quản lý dự án và cộng tác
+2. Khởi động cục bộ, quản lý dự án và thiết lập cơ bản
 3. Hai con đường sáng tạo
 4. Chạy thông một Tập đầu tiên
 5. Story Source — Nhập tiểu thuyết/kịch bản
@@ -67,7 +71,7 @@ Nguyên tắc vàng: **Văn bản quyết định câu chuyện, tài sản quy�
 8. Episode Studio — Kịch bản, Beat, Dựng video
 9. Freezone — Canvas vô hạn và sáng tạo chuyên sâu
 10. Xia Director, Visual Style, Task Center
-11. Khuyến nghị cho team và cá nhân
+11. Khuyến nghị dùng cục bộ đơn máy & nhóm nhỏ
 12. Kiểm tra chất lượng và câu hỏi thường gặp
 
 ---
@@ -97,12 +101,12 @@ Beat thông thường có thể đẩy ổn định theo luồng chính; Beat ph
 
 ---
 
-## Chương 2: Đăng nhập, quản lý dự án và cộng tác
+## Chương 2: Khởi động cục bộ, quản lý dự án và thiết lập cơ bản
 
-### 2.1 Đăng nhập và vào dự án
-1. Mở trang đăng nhập DramaHub.
-2. Bấm **"灵感发生"** (Khơi nguồn cảm hứng) để mở hộp thoại đăng nhập, nhập tên người dùng và mật khẩu.
-3. Bấm **"Đăng nhập"** để vào Trung tâm quản lý dự án.
+### 2.1 Khởi động cục bộ và vào dự án
+1. Khởi động DramaHub CE theo hướng dẫn triển khai mã nguồn mở.
+2. Mở địa chỉ truy cập cục bộ; hệ thống mặc định vào không gian làm việc **đơn người dùng trên máy này**.
+3. CE **không bật** đăng nhập, mật khẩu, phiên, tài khoản/ảnh đại diện hay giới hạn tần suất đăng nhập; `auth_required=false`.
 4. Bấm vào dự án có sẵn để vào bàn làm việc, hoặc bấm **"Tạo dự án mới"** để bắt đầu Tập phim mới.
 
 ### 2.2 Trung tâm quản lý dự án
@@ -117,27 +121,24 @@ Trung tâm quản lý dự án là cổng vào của mọi tác phẩm. Mỗi d�
 > Khi team đồng thời test nhiều dự án, nếu chỉ dùng tên kiểu "Test 1", "Dự án mới" thì về sau rất khó biết nội dung, người phụ trách và phiên bản.
 > Nên dùng `Tên tác phẩm_Đợt_Người phụ trách`, ví dụ `TEST_EP01_Eric` — dễ định vị trong Trung tâm quản lý dự án, Trung tâm tác vụ và khi trao đổi nhóm.
 
-### 2.3 Chia sẻ dự án và phân quyền
-Dự án nhóm nên **xác định phân công trước, sau đó mới phân quyền**. Người phụ trách dự án thường chịu trách nhiệm về thành viên, chi phí và QC cuối; biên kịch, mỹ thuật, phân cảnh, người vận hành video vào dự án theo từng khâu.
+### 2.3 Chế độ đơn máy — đơn người dùng (CE)
+DramaHub CE **chỉ giữ chế độ owner đơn người dùng trên máy cục bộ**. Người dùng hiện tại có toàn quyền thao tác với các dự án trên máy này.
 
-| Quyền | Đối tượng phù hợp | Diễn giải |
-|---|---|---|
-| **Người xem** | Khách hàng, người duyệt, thành viên không thao tác | Phù hợp để xem và nghiệm thu, không nên dùng để sản xuất thực tế |
-| **Người biên tập** | Biên kịch, mỹ thuật, phân cảnh, vận hành video | Có thể tham gia sản xuất và chạy tác vụ |
-| **Quản trị viên** | Người phụ trách dự án, nhà sản xuất, chủ sáng tạo | Quản lý thành viên và cài đặt quan trọng của dự án |
-| **Chủ sở hữu** | Người tạo dự án | Có quyền cao nhất |
+- CE **không cung cấp**: chia sẻ dự án, mời thành viên, phân quyền theo vai trò, quản trị dự án xuyên người dùng và RBAC nhóm.
+- Mọi dữ liệu dự án được quản lý trong phạm vi **dự án cục bộ**.
+- Nếu cần nhiều người cùng làm: thống nhất phân công qua quy trình bên ngoài, rồi để owner trên máy tổng hợp và thực thi.
 
-> **👥 Vì sao phải phân công trước rồi mới chia sẻ dự án:**
-> Dự án DramaHub chứa văn bản, tài sản, Beat, video và kết quả dựng. Nếu tất cả thành viên cùng lúc sửa cùng một khối nội dung, rất dễ xảy ra tài sản bị ghi đè, phiên bản Beat lộn xộn.
-> Nên xác định rõ ai phụ trách Nhân vật, ai phụ trách Bối cảnh, ai phụ trách Beat, ai duyệt cuối — rồi mới phân quyền.
+> **👥 Vì sao CE bỏ chia sẻ/phân quyền:**
+> CE hướng tới chạy cục bộ/self-host đơn người dùng — đơn giản, không phụ thuộc tài khoản cloud. Các tính năng cộng tác theo tài khoản (chia sẻ, RBAC, quản trị đa người dùng) thuộc bản thương mại/cloud.
 
-### 2.4 Điểm và chi phí sinh nội dung
-Thanh trên cùng hiển thị số dư **Điểm** của tài khoản hiện tại; một số nút tạo nội dung sẽ hiển thị mức tiêu hao dự kiến. Không thuộc luồng sáng tạo chính, nhưng giúp team ước tính chi phí trước khi tạo ảnh/video/lồng tiếng/dựng hàng loạt.
+### 2.4 Dùng lượng cục bộ và giới hạn sinh nội dung
+Thanh trên cùng có thể hiển thị thông tin dùng lượng của model gateway đang cấu hình; một số nút tạo nội dung hiển thị mức tiêu hao dự kiến. Không thuộc luồng sáng tạo chính, nhưng giúp ước lượng trước khi tạo ảnh/video/lồng tiếng/dựng hàng loạt.
 
-- Khi số dư đang tải có thể hiển thị `--`; lấy số dư thực tế sau khi refresh làm chuẩn.
-- Tạo ảnh, video, TTS, nhạc, kịch bản văn bản… đều hiển thị chi phí Điểm dự kiến.
-- Khi số dư không đủ, tác vụ tạo nội dung sẽ dừng và nhắc liên hệ Quản trị viên nạp thêm.
-- Team B2B nên để người phụ trách quản lý thống nhất việc nạp, ngân sách và rà soát chi tiêu.
+- CE là bản self-host: chi phí và giới hạn phụ thuộc **model gateway / API key bạn tự cấu hình** (không có hệ thống Điểm trả phí như bản cloud).
+- Tạo ảnh, video, TTS, nhạc, kịch bản văn bản… có thể hiển thị mức tiêu hao dự kiến tuỳ nhà cung cấp model.
+- Khi nhà cung cấp báo hết hạn mức hoặc lỗi khoá, tác vụ tạo nội dung sẽ dừng — kiểm tra cấu hình model gateway / API key trong phần Cài đặt.
+
+> *(Mục này bị treo khi trích từ doc nguồn — nội dung trên viết theo định vị CE; nên rà lại nhẹ với bản gốc khi tiện.)*
 
 ### 2.5 Piko / Bạn đồng hành
 Piko dùng để tăng phản hồi thao tác và cảm giác đồng hành, **không thay đổi chức năng tạo nội dung và luồng chính**. Có thể hiểu là trợ lý nhắc việc nhẹ trên trang.
@@ -611,29 +612,21 @@ Task Center dùng để xem trạng thái tác vụ nền. Khi tạo ảnh, vide
 
 ---
 
-## Chương 11: Khuyến nghị cho team và cá nhân
+## Chương 11: Khuyến nghị dùng cục bộ đơn máy & nhóm nhỏ
 
-### 11.1 Phân công đề xuất cho team B2B
+> *(Bản CE chạy đơn người dùng trên máy cục bộ — không có chia sẻ/RBAC trong ứng dụng. Nhóm nhỏ phối hợp bằng cách phân công qua quy trình bên ngoài rồi hợp nhất trên máy owner. Chương này bám định vị CE; nên rà lại nhẹ với bản gốc khi tiện.)*
 
-| Vị trí | Nội dung phụ trách | Tiêu chuẩn bàn giao |
+### 11.1 Mô hình sản xuất đề xuất cho bản mã nguồn mở
+
+| Mô hình | Phù hợp | Làm thế nào |
 |---|---|---|
-| **Người phụ trách dự án** | Tạo dự án, sắp xếp tiến độ, phân quyền thành viên, QC cuối | Đặt tên dự án rõ ràng, quy trình truy vết được |
-| **Biên kịch / Content planner** | Nhập Story Source, AI viết lại, tách Kịch bản, duyệt Beat | Cốt truyện trôi chảy, Lời thoại hợp lý, nhịp rõ ràng |
-| **Thiết lập Nhân vật** | Nhân vật trong Asset Library, Danh tính / tạo hình, quản lý Giọng đọc | Nhân vật ổn định, Danh tính & trang phục không lộn xộn |
-| **Thiết lập Bối cảnh/Đạo cụ** | Bối cảnh trong Asset Library, Biến thể bối cảnh, Đạo cụ, 360, Director World | Không gian liên tục, Đạo cụ tái sử dụng được, cùng địa điểm khác trạng thái quản bằng plate |
-| **Phân cảnh / Đạo diễn** | Phác thảo trong Episode Studio, Director World, Beat then chốt ở Freezone | Beat kể rõ cốt truyện, bố cục hợp lý |
-| **Vận hành tạo ảnh/video** | Ảnh render/Khung đầu, tạo video, Node Freezone | Chất lượng tư liệu dùng được, Ứng viên đặt tên rõ, kết quả đã xác nhận được ghi về luồng chính |
-| **Hậu kỳ / QC** | Dựng video & xuất, Phụ đề, gói tư liệu, duyệt cuối | Video dùng được, Phụ đề và tư liệu đầy đủ |
+| **Dây chuyền luồng chính** | Người mới, phim thuyết minh số lượng lớn, quy trình chuẩn hoá | Bám Story Source → Asset Library → Episode Studio; làm nghiêm theo thứ tự Kịch bản → Beat → Dựng video, dễ theo dõi tiến độ |
+| **Canvas vô hạn (Freezone)** | Phim tinh phẩm, người dùng mạnh về mỹ thuật/video | Tự do sáng tạo Nhân vật, Bối cảnh, Beat và video Ứng viên trong Freezone; xác nhận xong ghi về luồng chính, Episode Studio quản lý tiến độ & dựng thống nhất |
+| **Mô hình hỗn hợp** | **Đa số dự án** | Beat thường đi Episode Studio, Beat then chốt vào Freezone; Asset Library giữ tài sản thống nhất, Episode Studio lo tổng tiến độ, Freezone lo sáng tạo & chất lượng |
 
-### 11.2 Ba mô hình sản xuất cho team
+**Nhóm nhỏ (self-host):** vì CE không có cộng tác theo tài khoản, hãy phân công theo Tập/khâu qua thoả thuận bên ngoài (ai lo Nhân vật, ai lo Bối cảnh/Đạo cụ, ai lo Beat, ai duyệt cuối), rồi hợp nhất tài sản trên máy owner. Đặt tên dự án `Tên tác phẩm_Đợt_Người phụ trách` để dễ truy vết.
 
-| Mô hình | Team phù hợp | Làm thế nào |
-|---|---|---|
-| **Dây chuyền luồng chính** | Team mới, phim thuyết minh số lượng lớn, dự án chuẩn hoá quy trình | Mọi người xoay quanh Story Source, Asset Library, Episode Studio; làm nghiêm theo thứ tự Kịch bản → Beat → Dựng video, thuận tiện cho người phụ trách theo dõi tiến độ |
-| **Canvas vô hạn phối hợp** | Team phim tinh phẩm, tổ đạo diễn, team mạnh về mỹ thuật/video | Nhiều người tự do sáng tạo Nhân vật, Bối cảnh, Beat và video Ứng viên trong Freezone; đạo diễn duyệt xong ghi về luồng chính, Episode Studio tiếp tục quản lý tiến độ & dựng thống nhất |
-| **Mô hình hỗn hợp** | **Đa số dự án chính thức** | Beat thường đi Episode Studio, Beat then chốt vào Freezone; Asset Library đảm bảo tài sản thống nhất, Episode Studio lo tổng tiến độ, Freezone lo sáng tạo và chất lượng |
-
-### 11.3 Cách làm đề xuất cho người sáng tạo cá nhân
+### 11.2 Cách làm đề xuất cho người sáng tạo cá nhân
 - Test bằng văn bản ngắn hoặc nội dung một chương trước, **đừng tải cả cuốn tiểu thuyết siêu dài lên ngay từ đầu.**
 - Tập đầu tiên nên giới hạn số Beat ở mức quản lý được — **chạy thông trước rồi mới theo đuổi tinh chỉnh.**
 - Ưu tiên đảm bảo chân dung nhân vật chính, Danh tính cốt lõi, Bối cảnh cốt lõi và Giọng đọc mặc định.
