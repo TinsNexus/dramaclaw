@@ -7,7 +7,7 @@
 
 ## Why you install it yourself
 
-CE **does not distribute the ffmpeg/ffprobe binaries** — their license (LGPL or GPL) depends on the codecs and build flags enabled at compile time, and bundling them would require a separate source/build/attribution audit. CE therefore treats ffmpeg as a **system dependency**, provided by your operating system, package manager, or deployment image (for background, see [ADR-0002](../../adr/0002-ffmpeg-system-dependency.md)).
+CE **does not distribute the ffmpeg/ffprobe binaries** — their license (LGPL or GPL) depends on the codecs and build flags enabled at compile time, and bundling them would require a separate source/build/attribution audit. CE therefore treats ffmpeg as a **system dependency**, provided by your operating system, package manager, or deployment image.
 
 - **Docker**: the image already runs `apt-get install ffmpeg`, so nothing extra is needed.
 - **Local development**: you install it yourself, see below.

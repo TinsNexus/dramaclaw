@@ -14,7 +14,7 @@ DramaHub CE is a single-machine service that needs **no PostgreSQL / Redis**. By
 | **Docker (recommended)** | Deployment, trials, production self-hosting | Just Docker; ffmpeg and friends are in the image |
 | **Local development (uv)** | Editing code, debugging | Python 3.11–3.12, uv, ffmpeg (installed yourself) |
 
-> ffmpeg/ffprobe are **system dependencies**; CE does not distribute their binaries (see [ADR-0002](../../adr/0002-ffmpeg-system-dependency.md) for the reasoning). The Docker image already bundles them; for local development you install them yourself — see the [ffmpeg guide](../guides/ffmpeg.md).
+> ffmpeg/ffprobe are **system dependencies**; CE does not distribute their binaries. The Docker image already bundles them; for local development you install them yourself — see the [ffmpeg guide](../guides/ffmpeg.md).
 
 ---
 
