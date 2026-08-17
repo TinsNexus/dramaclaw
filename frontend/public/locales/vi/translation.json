@@ -6278,5 +6278,10 @@
   },
   "loginCinematic": {
     "moreInfo": "Thêm thông tin"
+  },
+  "userManual": {
+    "title": "Hướng dẫn sử dụng",
+    "loading": "Đang tải hướng dẫn…",
+    "loadError": "Không tải được hướng dẫn sử dụng."
   }
 }

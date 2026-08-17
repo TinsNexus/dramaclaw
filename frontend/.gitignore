@@ -34,3 +34,6 @@ graphify-out/
 # Local docs editor state
 docs/.obsidian/
 /acceptance-logs
+
+# Generated at dev/build from docs/vi/ by scripts/copy-user-manual.mjs
+public/docs/user-manual-vi.md

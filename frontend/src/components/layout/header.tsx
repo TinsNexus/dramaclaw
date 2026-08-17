@@ -12,6 +12,7 @@ import {
   Camera,
   Check,
   ChevronRight,
+  CircleHelp,
   Languages,
   LogOut,
   X,
@@ -27,6 +28,7 @@ import {
 import { CreditBalanceBadge } from "@/components/layout/credit-balance-badge";
 import { NotificationDrawer } from "@/components/notifications/notification-drawer";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
+import { UserManualDialog } from "@/components/UserManualDialog";
 import {
   PetGalleryDialog,
   type CompanionSelection,
@@ -56,6 +58,7 @@ export function Header() {
   const params = useParams({ strict: false }) as { project?: string };
   const [companionOpen, setCompanionOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [releaseNotificationStateVersion, setReleaseNotificationStateVersion] = useState(0);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -254,6 +257,17 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-[32px] text-sidebar-foreground/82 transition-colors duration-150 ease-[var(--ease-out-quint)] hover:bg-white/[0.05] hover:text-white aria-expanded:bg-white/[0.05] aria-expanded:text-white"
+            aria-label={t("userManual.title")}
+            aria-expanded={manualOpen}
+            onClick={() => setManualOpen(true)}
+          >
+            <CircleHelp className="size-[17px]" />
+          </Button>
           {/* 设置仅在 CE 版显示,EE 版隐藏 */}
           {ceRuntime ? (
             <div ref={settingsAnchorRef} className="relative">
@@ -382,6 +396,7 @@ export function Header() {
         onOpenChange={setAvatarDialogOpen}
       />
       {ceRuntime ? <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
+      <UserManualDialog open={manualOpen} onOpenChange={setManualOpen} />
       {settingsWarningBubble
         ? createPortal(
             <div

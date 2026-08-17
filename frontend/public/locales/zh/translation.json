@@ -6243,5 +6243,10 @@
     "cinematic": {
       "scrollDown": "向下滑动"
     }
+  },
+  "userManual": {
+    "title": "使用手册",
+    "loading": "正在加载手册…",
+    "loadError": "无法加载使用手册。"
   }
 }

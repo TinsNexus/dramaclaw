@@ -6,12 +6,13 @@
   "type": "module",
   "packageManager": "pnpm@11.5.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:ce": "tsc -b && vite build --mode ce",
+    "dev": "node scripts/copy-user-manual.mjs && vite",
+    "build": "node scripts/copy-user-manual.mjs && tsc -b && vite build",
+    "build:ce": "node scripts/copy-user-manual.mjs && tsc -b && vite build --mode ce",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "copy:manual": "node scripts/copy-user-manual.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -6243,5 +6243,10 @@
     "cinematic": {
       "scrollDown": "Scroll down"
     }
+  },
+  "userManual": {
+    "title": "User Manual",
+    "loading": "Loading manual…",
+    "loadError": "Could not load the user manual."
   }
 }
