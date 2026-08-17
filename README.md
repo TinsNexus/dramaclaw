@@ -232,6 +232,24 @@ uv run novelvideo api --port 8780   # start the REST API (CE defaults to inline 
 
 <br/>
 
+### Desktop app (experimental)
+
+A minimal [Electron shell](desktop/README.md) runs the web frontend in a native
+window and starts the local backend for you (reusing an already-running one on
+`:8780`, or spawning `uv run novelvideo api` if none is up). It assumes the repo
+and `uv` are present — it does **not** ship a standalone installer yet.
+
+```bash
+pnpm -C desktop install
+pnpm -C desktop build:frontend   # builds frontend/dist
+pnpm -C desktop start            # opens the desktop window
+```
+
+See [desktop/README.md](desktop/README.md) for how it works, env vars, and the
+path to a fully packaged installer.
+
+<br/>
+
 ## Supported Models & Providers
 
 DramaHub stays model-neutral — all text/image/video/audio models connect through a single **OpenAI-compatible gateway**, in two ways:
