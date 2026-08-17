@@ -14,7 +14,7 @@ DramaHub CE 是单机服务,**无需 PostgreSQL / Redis**。Docker 默认起 `ap
 | **Docker(推荐)** | 部署、试用、生产自托管 | 只需 Docker;ffmpeg 等都在镜像里 |
 | **本地开发(uv)** | 改代码、调试 | Python 3.11–3.12、uv、ffmpeg(自行安装) |
 
-> ffmpeg/ffprobe 是**系统依赖**,CE 不分发其二进制(原因见 [ADR-0002](../../adr/0002-ffmpeg-system-dependency.md))。Docker 镜像已自带;本地开发需自己装,见 [ffmpeg 指南](../guides/ffmpeg.md)。
+> ffmpeg/ffprobe 是**系统依赖**,CE 不分发其二进制。Docker 镜像已自带;本地开发需自己装,见 [ffmpeg 指南](../guides/ffmpeg.md)。
 
 ---
 

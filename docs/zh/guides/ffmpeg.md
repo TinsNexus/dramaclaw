@@ -7,7 +7,7 @@
 
 ## 为什么要自己装
 
-CE **不分发 ffmpeg/ffprobe 二进制**——它们的许可证(LGPL 或 GPL)取决于编译时启用的编解码器与 build flag,随包分发需要单独的来源/构建/署名审计。所以 CE 把 ffmpeg 当**系统依赖**,由你的操作系统、包管理器或部署镜像提供(背景见 [ADR-0002](../../adr/0002-ffmpeg-system-dependency.md))。
+CE **不分发 ffmpeg/ffprobe 二进制**——它们的许可证(LGPL 或 GPL)取决于编译时启用的编解码器与 build flag,随包分发需要单独的来源/构建/署名审计。所以 CE 把 ffmpeg 当**系统依赖**,由你的操作系统、包管理器或部署镜像提供。
 
 - **Docker**:镜像已 `apt-get install ffmpeg`,无需额外操作。
 - **本地开发**:需自己装,见下。
