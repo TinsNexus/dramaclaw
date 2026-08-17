@@ -6282,6 +6282,9 @@
   "userManual": {
     "title": "Hướng dẫn sử dụng",
     "loading": "Đang tải hướng dẫn…",
-    "loadError": "Không tải được hướng dẫn sử dụng."
+    "loadError": "Không tải được hướng dẫn sử dụng.",
+    "toc": "Mục lục",
+    "tocSearch": "Tìm trong mục lục…",
+    "tocEmpty": "Không có mục nào khớp."
   }
 }

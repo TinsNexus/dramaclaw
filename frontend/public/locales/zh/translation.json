@@ -6247,6 +6247,9 @@
   "userManual": {
     "title": "使用手册",
     "loading": "正在加载手册…",
-    "loadError": "无法加载使用手册。"
+    "loadError": "无法加载使用手册。",
+    "toc": "目录",
+    "tocSearch": "搜索目录…",
+    "tocEmpty": "没有匹配的章节。"
   }
 }
