@@ -1,8 +1,0 @@
-node_modules/
-dist/
-out/
-*.log
-
-# Generated during packaging — large, platform-specific, never committed.
-resources/pybackend/
-dist-installers/
