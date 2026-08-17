@@ -240,13 +240,13 @@ export const OPERATIONS_PANEL_OVERHANG = 120;
 // 按模型能力决定（见 shared/videoModelCapabilities.ts），这里只负责「模式 → 外观」。
 const VIDEO_EMPTY_STATE_CTA_META: Record<
   VideoEmptyStateCtaMode,
-  { Icon: LucideIcon; label: string }
+  { Icon: LucideIcon; labelKey: string }
 > = {
-  allReference: { Icon: Sparkles, label: "全能参考" },
-  imageReference: { Icon: Images, label: "图片参考" },
-  firstFrame: { Icon: Film, label: "首帧生成视频" },
-  imageToVideo: { Icon: Film, label: "图生视频" },
-  firstLastFrame: { Icon: Layers, label: "首尾帧生成视频" },
+  allReference: { Icon: Sparkles, labelKey: "node.videoNode.emptyState.allReference" },
+  imageReference: { Icon: Images, labelKey: "node.videoNode.emptyState.imageReference" },
+  firstFrame: { Icon: Film, labelKey: "node.videoNode.emptyState.firstFrame" },
+  imageToVideo: { Icon: Film, labelKey: "node.videoNode.emptyState.imageToVideo" },
+  firstLastFrame: { Icon: Layers, labelKey: "node.videoNode.emptyState.firstLastFrame" },
 };
 
 // 各 genMode 对上游引用数量的硬上限。UI 用这张表把后端字段约束（多图 / 多模态
@@ -377,23 +377,24 @@ function selectedVideoModelReferenceDisabledReason(
   model: ModelOption | null | undefined,
   counts: { images: number; videos: number; audios: number },
   mode: VideoGenMode,
+  t: (key: string, options?: Record<string, unknown>) => string = (key) => key,
 ): string | null {
   const capabilityReason = videoModelReferenceDisabledReason(model, counts);
   if (capabilityReason) return capabilityReason;
   const caps = referenceCapsForMode(model, mode);
   if (!caps) return null;
   if (counts.images > caps.image) {
-    return `该模型最多支持 ${caps.image} 张图片素材`;
+    return t("node.videoNode.capabilities.maxImages", { count: caps.image });
   }
   if (counts.videos > caps.video) {
     return caps.video === 0
-      ? "该模型不支持视频素材"
-      : `该模型最多支持 ${caps.video} 个视频素材`;
+      ? t("node.videoNode.capabilities.noVideo")
+      : t("node.videoNode.capabilities.maxVideos", { count: caps.video });
   }
   if (counts.audios > caps.audio) {
     return caps.audio === 0
-      ? "该模型不支持音频素材"
-      : `该模型最多支持 ${caps.audio} 个音频素材`;
+      ? t("node.videoNode.capabilities.noAudio")
+      : t("node.videoNode.capabilities.maxAudios", { count: caps.audio });
   }
   return null;
 }
@@ -1020,8 +1021,8 @@ export const VideoNode = memo(
       typeof data.durationMs === "number" ? data.durationMs : null;
 
     const resolvedTitle = useMemo(
-      () => resolveNodeDisplayName(CANVAS_NODE_TYPES.video, data),
-      [data],
+      () => resolveNodeDisplayName(CANVAS_NODE_TYPES.video, data, t),
+      [data, t],
     );
     const resolvedWidth = Math.max(
       MIN_WIDTH,
@@ -1331,11 +1332,15 @@ export const VideoNode = memo(
           // 左侧（有 GAP_X 间隔）不会压到视频本身；万一撞上左侧的无关节点，宁可让
           // 用户手动挪开，也不牺牲与视频的对齐。
           const baseY = self.position.y + (selfHeight - FRAME_HEIGHT) / 2;
+          const displayNameKey =
+            mode === "firstFrame"
+              ? "node.videoNode.spawnedNode.firstFrame"
+              : "node.videoNode.spawnedNode.referenceImage";
           const newId = addNode(
             CANVAS_NODE_TYPES.imageGen,
             { x: baseX, y: baseY },
             {
-              displayName: mode === "firstFrame" ? "首帧" : "参考图",
+              displayName: t(displayNameKey),
             },
           );
           if (mode === "firstFrame") {
@@ -1343,15 +1348,15 @@ export const VideoNode = memo(
           } else {
             addEdge(newId, id);
           }
-          const groupLabel =
+          const groupLabelKey =
             mode === "imageReference"
-              ? "图片参考组"
+              ? "node.videoNode.group.imageReference"
               : mode === "firstFrame"
-                ? "首帧生成视频组"
+                ? "node.videoNode.group.firstFrame"
                 : mode === "imageToVideo"
-                  ? "图生视频组"
-                : "全能参考组";
-          state.autoGroupSpawn(id, [newId], { label: groupLabel });
+                  ? "node.videoNode.group.imageToVideo"
+                : "node.videoNode.group.allReference";
+          state.autoGroupSpawn(id, [newId], { label: t(groupLabelKey) });
           // 上游图片直接作为素材喂给对应端点；模式切到用户点的那一个，不预填提示词
           // （尊重用户已写内容）。HappyHorse 下由统一状态机确认（imageToVideo /
           // imageReference 都与「1 张上游图」匹配，不会被改写）；非 HappyHorse 下
@@ -1366,16 +1371,16 @@ export const VideoNode = memo(
         const firstId = addNode(
           CANVAS_NODE_TYPES.upload,
           { x: baseX, y: firstY },
-          { displayName: "首帧" },
+          { displayName: t("node.videoNode.spawnedNode.keyframeFirst") },
         );
         addEdgeWithData(firstId, id, { keyframeSlot: "first" });
         const lastId = addNode(
           CANVAS_NODE_TYPES.upload,
           { x: baseX, y: lastY },
-          { displayName: "尾帧" },
+          { displayName: t("node.videoNode.spawnedNode.keyframeLast") },
         );
         addEdgeWithData(lastId, id, { keyframeSlot: "last" });
-        state.autoGroupSpawn(id, [firstId, lastId], { label: '首尾帧生成视频组' });
+        state.autoGroupSpawn(id, [firstId, lastId], { label: t("node.videoNode.group.firstLastFrame") });
         updateNodeData(id, { genMode: "firstLastFrame" });
       },
       [addEdge, addEdgeWithData, addNode, id, updateNodeData],
@@ -1772,7 +1777,7 @@ export const VideoNode = memo(
             const newNodeId = addNode(CANVAS_NODE_TYPES.video, position, {
               videoUrl: result.url,
               durationMs: Math.round((sourceEnd - sourceStart) * 1000),
-              displayName: "剪辑",
+              displayName: t("node.videoNode.spawnedNode.clip"),
             });
             addEdge(id, newNodeId);
             updateNodeData(id, {
@@ -1782,7 +1787,7 @@ export const VideoNode = memo(
             });
           } else {
             console.warn("[video-node] compose completed without url", result);
-            setClipError("剪辑完成但未返回视频地址");
+            setClipError(t("node.videoNode.clip.errorNoUrl"));
           }
         } catch (error) {
           console.error("[video-node] clip compose failed", error);
@@ -1873,6 +1878,7 @@ export const VideoNode = memo(
       selectedVideoModel,
       upstreamCounts,
       genMode,
+      t,
     );
     // 错误态重试的计费闸门。估价链随操作面板下沉后（选中才挂载、未选中不发请求），
     // 失败态的 RegenerateButton 成了唯一在未选中时也能提交的入口——若不在主体拦截，
@@ -2088,7 +2094,11 @@ export const VideoNode = memo(
           const imageLimit = referenceCaps?.image ?? 5;
           if (allImageUrls.length > imageLimit) {
             toast.warning(
-              `视频编辑最多支持 ${imageLimit} 张参考图，已使用前 ${imageLimit} 张（忽略其余 ${allImageUrls.length - imageLimit} 张）`,
+              t("node.videoNode.videoEdit.tooManyImages", {
+                limit: imageLimit,
+                used: imageLimit,
+                ignored: allImageUrls.length - imageLimit,
+              }),
             );
           }
           const imageUrls = allImageUrls.slice(0, imageLimit);
@@ -2115,8 +2125,8 @@ export const VideoNode = memo(
           if (!supportsAllReference) {
             void showErrorDialog(
               isHappyHorseModel
-                ? "HappyHorse 不支持全能参考模式，请切换为文生视频或图生视频。"
-                : "当前模型不支持全能参考，请切换模型或改用其它生成模式。",
+                ? t("node.videoNode.allReference.happyhorseUnsupported")
+                : t("node.videoNode.allReference.modelUnsupported"),
               t("common.error"),
             );
             updateNodeData(id, {
@@ -2183,7 +2193,7 @@ export const VideoNode = memo(
                 references.push({
                   type: "audio",
                   url,
-                  role: "配乐参考",
+                  role: t("node.videoNode.audio.roleMusic"),
                   label: rawLabel,
                 });
                 audioRefs.push({
@@ -2421,7 +2431,7 @@ export const VideoNode = memo(
                 updateNodeData(id, {
                   isGenerating: false,
                   generationStartedAt: null,
-                  generationError: "视频生成未返回结果",
+                  generationError: t("node.videoNode.generation.noResultUrl"),
                   generationErrorDetails: null,
                   generationErrorRequestId: null,
                 });
@@ -2446,7 +2456,7 @@ export const VideoNode = memo(
             // 刷新页面时 resumeNodeGeneration 会重新接上并回填结果；这里写错误
             // 横幅只会把一个还活着的任务标成失败、并清掉可续接的句柄。
             if (isTaskPollTimeoutError(error)) return;
-            const resolved = resolveErrorContent(error, "视频生成失败");
+            const resolved = resolveErrorContent(error, t("node.videoNode.generation.failed"));
             const displayErrorMessage = backendErrorToastMessage(error, t);
             const diagnostics = resolveGenerationErrorDiagnostics(error, resolved.details);
             // Persist the failure on the node so the 重新生成 entry survives after
@@ -2486,7 +2496,7 @@ export const VideoNode = memo(
             void refreshHistory();
             return;
           }
-          const resolved = resolveErrorContent(firstError, "视频生成失败");
+          const resolved = resolveErrorContent(firstError, t("node.videoNode.generation.failed"));
           const displayErrorMessage = backendErrorToastMessage(firstError, t);
           const diagnostics = resolveGenerationErrorDiagnostics(firstError, resolved.details);
           const haystack = `${displayErrorMessage}\n${diagnostics.details ?? ""}`;
@@ -2497,8 +2507,8 @@ export const VideoNode = memo(
           ) {
             // 素材含真实人脸被拦截：引导用户开启「真人素材审核」后重试。
             void showErrorDialog(
-              "素材包含真实人脸，已被内容安全策略拦截。请在下方打开「真人素材审核」开关后重试（可能增加审核时间，不保证通过）。",
-              "素材被拦截",
+              t("node.videoNode.generation.sensitiveContentBlocked"),
+              t("node.videoNode.generation.sensitiveContentTitle"),
               diagnostics.details ?? undefined,
             );
           } else {
@@ -2685,7 +2695,7 @@ export const VideoNode = memo(
                   key={`album-deck-${index}`}
                   role="button"
                   tabIndex={-1}
-                  title="展开画册"
+                  title={t("node.videoNode.album.expand")}
                   onClick={(event) => {
                     event.stopPropagation();
                     handleToggleAlbumExpanded();
@@ -2879,7 +2889,7 @@ export const VideoNode = memo(
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-2">
                 <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white/90 backdrop-blur">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  新视频生成中…
+                  {t("node.videoNode.generation.newVideoGenerating")}
                 </span>
                 <button
                   type="button"
@@ -2890,7 +2900,7 @@ export const VideoNode = memo(
                   }}
                 >
                   <XIcon className="h-3 w-3" />
-                  返回
+                  {t("node.videoNode.generation.backToLoading")}
                 </button>
               </div>
             </div>
@@ -2914,14 +2924,14 @@ export const VideoNode = memo(
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-red-300">
               <AlertTriangle className="h-7 w-7 opacity-90" />
               <span className="text-center text-[12px] font-medium leading-5 text-red-200">
-                视频生成失败
+                {t("node.videoNode.generation.failed")}
               </span>
               <span className="max-h-[64px] overflow-y-auto break-words text-center text-[11px] leading-5 text-red-200/90 [overflow-wrap:anywhere]">
                 {generationError}
               </span>
               {generationErrorRequestId && (
                 <div className="flex w-full max-w-[240px] items-center gap-1 rounded bg-red-500/10 px-2 py-1">
-                  <span className="shrink-0 text-[10px] text-red-300/70">请求ID</span>
+                  <span className="shrink-0 text-[10px] text-red-300/70">{t("node.videoNode.generation.requestId")}</span>
                   <code
                     className="min-w-0 flex-1 truncate font-mono text-[10px] text-red-200"
                     title={generationErrorRequestId}
@@ -2954,10 +2964,10 @@ export const VideoNode = memo(
               {/* 空态（无入边）才走到这里。CTA 完全按媒体模型目录的 supportedModes
                   决定；目录尚未加载时才使用模型族兜底，避免展示后端会拒绝的入口。 */}
               <div className="flex min-h-0 flex-col justify-center gap-2 py-4">
-                <div className="text-xs text-[var(--canvas-node-input-helper)]">试试：</div>
+                <div className="text-xs text-[var(--canvas-node-input-helper)]">{t("node.videoNode.emptyState.tryThese")}</div>
                 <div className="flex flex-col gap-0.5">
                   {videoEmptyStateCtaModes(selectedVideoModel).map((mode) => {
-                    const { Icon, label } = VIDEO_EMPTY_STATE_CTA_META[mode];
+                    const { Icon, labelKey } = VIDEO_EMPTY_STATE_CTA_META[mode];
                     return (
                       <button
                         key={mode}
@@ -2969,7 +2979,7 @@ export const VideoNode = memo(
                         className="nodrag -mx-2 inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-text-dark transition-colors hover:bg-white/[0.08]"
                       >
                         <Icon className="h-4 w-4 text-text-muted/90" />
-                        <span>{label}</span>
+                        <span>{t(labelKey)}</span>
                       </button>
                     );
                   })}
@@ -2982,7 +2992,7 @@ export const VideoNode = memo(
           {videoSource && videoLoadError && !isGenerating && !isUploading && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg-dark/70 px-4 text-center text-red-200">
               <AlertTriangle className="h-6 w-6 text-red-300" />
-              <span className="text-[12px] font-medium">视频加载失败</span>
+              <span className="text-[12px] font-medium">{t("node.videoNode.loading.failed")}</span>
             </div>
           )}
 
@@ -3014,7 +3024,7 @@ export const VideoNode = memo(
                 handleToggleAlbumExpanded();
               }}
               onPointerDown={(event) => event.stopPropagation()}
-              title={`展开 ${albumTotalSlots} 条生成结果`}
+              title={t("node.videoNode.album.expandResults", { count: albumTotalSlots })}
               className="nodrag group/albumpill absolute right-2 top-2 z-10 hidden items-center gap-1 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-medium tabular-nums text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/85 group-hover:inline-flex"
             >
               {albumPendingCount > 0
@@ -3064,7 +3074,7 @@ export const VideoNode = memo(
           >
             <div className="mb-2 flex items-center gap-1.5 px-1 text-[12px] font-medium text-white/60">
               <VideoIcon className="h-3.5 w-3.5 text-white/45" />
-              画册 · {albumTotalSlots} 条
+              {t("node.videoNode.album.title", { count: albumTotalSlots })}
             </div>
             <div className="grid grid-cols-2 gap-3">
               {albumUrls.map((url, index) => {
@@ -3074,7 +3084,7 @@ export const VideoNode = memo(
                     key={`album-cell-${index}`}
                     role="button"
                     tabIndex={-1}
-                    title="点击设为主视频"
+                    title={t("node.videoNode.album.setAsMain")}
                     onClick={(event) => {
                       event.stopPropagation();
                       // 拖动画册（移动节点）后松手补发的 click 不算选主视频。
@@ -3114,11 +3124,11 @@ export const VideoNode = memo(
                         event.stopPropagation();
                         handleApplyAlbumVideoToCanvas(url);
                       }}
-                      title="把这条视频作为独立视频节点放到画布上"
+                      title={t("node.videoNode.album.applyToCanvasTooltip")}
                       className="nodrag absolute left-2 top-2 z-10 hidden h-7 items-center gap-1 rounded-md bg-black/70 px-2.5 text-[12px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/90 group-hover/albumcell:inline-flex"
                     >
                       <UploadIcon className="h-3.5 w-3.5" />
-                      应用到画布
+                      {t("node.videoNode.album.applyToCanvas")}
                     </button>
                     <button
                       type="button"
@@ -3126,14 +3136,14 @@ export const VideoNode = memo(
                         event.stopPropagation();
                         void handleDownloadAlbumVideo(url, index);
                       }}
-                      title="下载这条视频"
+                      title={t("node.videoNode.album.download")}
                       className="nodrag absolute right-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-colors hover:bg-black/90 group-hover/albumcell:inline-flex"
                     >
                       <Download className="h-3.5 w-3.5" />
                     </button>
                     {isMain && (
                       <span className="absolute bottom-2 left-2 z-10 rounded-md bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
-                        主视频
+                        {t("node.videoNode.album.mainVideo")}
                       </span>
                     )}
                   </div>
@@ -3148,7 +3158,7 @@ export const VideoNode = memo(
                 >
                   <div className="flex flex-col items-center gap-2 text-text-muted/70">
                     <Loader2 className="h-6 w-6 animate-spin" />
-                    <span className="text-[12px]">生成中…</span>
+                    <span className="text-[12px]">{t("node.videoNode.album.generating")}</span>
                   </div>
                 </div>
               ))}
@@ -3179,7 +3189,7 @@ export const VideoNode = memo(
             />
             {clipError && (
               <div className="rounded-md bg-red-500/15 px-3 py-1.5 text-[11px] text-red-300 break-words [overflow-wrap:anywhere]">
-                剪辑失败：{clipError}
+                {t("node.videoNode.clip.error")}: {clipError}
               </div>
             )}
           </div>

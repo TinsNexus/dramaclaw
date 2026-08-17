@@ -352,7 +352,7 @@ def _normalize_ai_reference_image(data: bytes, *, ext: str = "png") -> tuple[byt
             normalized = buffer.getvalue()
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         logger.info(
-            "DramaClawAPI reference image normalize skipped: ext=%s bytes=%d error=%s",
+            "DramaHubAPI reference image normalize skipped: ext=%s bytes=%d error=%s",
             original_ext,
             len(data),
             exc,
@@ -360,7 +360,7 @@ def _normalize_ai_reference_image(data: bytes, *, ext: str = "png") -> tuple[byt
         return data, original_ext
 
     logger.info(
-        "DramaClawAPI reference image normalized: %s %dx%d %s %.1fKB -> "
+        "DramaHubAPI reference image normalized: %s %dx%d %s %.1fKB -> "
         "JPEG %dx%d RGB %.1fKB q=%d",
         original_format,
         original_size[0],

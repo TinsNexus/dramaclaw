@@ -2347,7 +2347,7 @@ async function buildAttachmentAnalysisContext(
 ): Promise<string> {
   const lines = [
     "[DRAMACLAW_ATTACHMENT_CONTEXT]",
-    "The user attached file(s). No explicit video-generation instruction was detected, so do not start the DramaClaw/SuperTale video pipeline unless the user asks for it later. Analyze the attached text when available, and ask a focused follow-up if the intent is ambiguous.",
+    "The user attached file(s). No explicit video-generation instruction was detected, so do not start the DramaHub/SuperTale video pipeline unless the user asks for it later. Analyze the attached text when available, and ask a focused follow-up if the intent is ambiguous.",
   ];
 
   for (const prepared of preparedAttachments) {
@@ -2414,7 +2414,7 @@ function appendIngestAutomationContext(
     result.taskType ? `task_type: ${result.taskType}` : null,
     result.taskKey ? `task_key: ${result.taskKey}` : null,
     result.message ? `message: ${result.message}` : null,
-    "The uploaded novel has already been submitted to the project ingest API. Continue the DramaClaw/SuperTale video creation workflow from this task instead of asking the user to upload a novel again.",
+    "The uploaded novel has already been submitted to the project ingest API. Continue the DramaHub/SuperTale video creation workflow from this task instead of asking the user to upload a novel again.",
     "[/DRAMACLAW_INGEST_AUTOMATION]",
   ].filter((line): line is string => line !== null).join("\n");
 }
@@ -2520,10 +2520,11 @@ export function SuperChatPanel({
       notifiedTaskKeysRef.current.add(dedupeKey);
 
       const label = buildChatTaskLabel(event.task, t);
+      const errorMsg = event.task.error || event.task.current_task || t("superchat.taskFailureNoDetails");
       const text =
         event.type === "task_complete"
-          ? `✅ ${label}已完成。你可以让我查看结果，或继续下一步。`
-          : `${label}失败：${event.task.error || event.task.current_task || "未提供具体错误原因"}\n请根据错误处理前置条件后再继续。`;
+          ? t("superchat.taskCompletedMessage", { label })
+          : t("superchat.taskFailedMessage", { label, error: errorMsg });
       void chat.appendNotification(text);
     });
   }, [chat.appendNotification, params.project, t, taskEventBus]);
@@ -3295,8 +3296,8 @@ export function SuperChatPanel({
                 "absolute bottom-4 left-1/2 z-30 h-9 w-9 -translate-x-1/2 rounded-full border border-white/12 bg-background/88 text-foreground shadow-lg backdrop-blur transition hover:bg-background",
                 isFreezoneLayout && "bottom-3",
               )}
-              title="回到底部"
-              aria-label="回到底部"
+              title={t("superchat.scrollToBottom")}
+              aria-label={t("superchat.scrollToBottom")}
               onClick={() => scrollToChatBottom("auto")}
             >
               <ArrowDown className="h-4 w-4" />

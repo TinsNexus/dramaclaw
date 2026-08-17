@@ -154,9 +154,7 @@ describe("beats sketch/render v2 contract", () => {
       batchPanel.indexOf("{/* Render modes */}"),
     );
 
-    expect(sketchSection).toContain("episode.workbench.batch.autoCombine");
-    expect(sketchSection).toContain('defaultValue: "批量重抽"');
-    expect(sketchSection).not.toContain('defaultValue: "自动组合"');
+    expect(sketchSection).toContain("episode.workbench.batch.sketchAutoCombine");
   });
 
   it("wires NiceGUI Render model/settings into React controls and task payloads", () => {

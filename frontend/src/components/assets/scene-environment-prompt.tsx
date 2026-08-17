@@ -38,20 +38,20 @@ interface SceneEnvironmentSection {
 }
 
 export const SCENE_ENVIRONMENT_SECTIONS: readonly SceneEnvironmentSection[] = [
-  { key: "front", label: "正面", i18nKey: "assets.scenes.environment.front" },
-  { key: "left", label: "左侧", i18nKey: "assets.scenes.environment.left" },
-  { key: "right", label: "右侧", i18nKey: "assets.scenes.environment.right" },
-  { key: "back", label: "背面", i18nKey: "assets.scenes.environment.back" },
-  { key: "light", label: "光源", i18nKey: "assets.scenes.environment.light" },
+  { key: "front", label: "正面", i18nKey: "assets.sceneEnvironment.front" },
+  { key: "left", label: "左侧", i18nKey: "assets.sceneEnvironment.left" },
+  { key: "right", label: "右侧", i18nKey: "assets.sceneEnvironment.right" },
+  { key: "back", label: "背面", i18nKey: "assets.sceneEnvironment.back" },
+  { key: "light", label: "光源", i18nKey: "assets.sceneEnvironment.light" },
   {
     key: "material",
     label: "材质/风格",
-    i18nKey: "assets.scenes.environment.material",
+    i18nKey: "assets.sceneEnvironment.material",
   },
   {
     key: "forbidden",
     label: "禁止元素",
-    i18nKey: "assets.scenes.environment.forbidden",
+    i18nKey: "assets.sceneEnvironment.forbidden",
   },
 ] as const;
 

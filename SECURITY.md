@@ -1,6 +1,6 @@
 # Security Policy
 
-Thanks for helping keep DramaClaw and its users safe.
+Thanks for helping keep DramaHub and its users safe.
 
 ## Supported versions
 

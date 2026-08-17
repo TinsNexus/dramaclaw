@@ -101,12 +101,14 @@ const RESULT_POLL_DELAY_MS = 700;
 const RESULT_POLL_ATTEMPTS = 30;
 const TASK_RECORD_GRACE_MS = 5000;
 const SELECTED_BACKGROUND_CROP_ASPECT_OPTIONS = ['2:3', '16:9'] as const;
-const PROVIDER_LABELS: Record<SkillProvider, string> = {
-  freezone_mainline: '主线技能',
-  agent: 'Agent 技能',
-  tool: '工具技能',
-  workflow: '工作流技能',
-};
+function getProviderLabels(t: (key: string) => string): Record<SkillProvider, string> {
+  return {
+    freezone_mainline: t('node.skillNode.providerMainline'),
+    agent: t('node.skillNode.providerAgent'),
+    tool: t('node.skillNode.providerTool'),
+    workflow: t('node.skillNode.providerWorkflow'),
+  };
+}
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -626,6 +628,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const addNode = useCanvasStore((state) => state.addNode);
   const addEdgeWithData = useCanvasStore((state) => state.addEdgeWithData);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
+  const providerLabels = useMemo(() => getProviderLabels(t), [t]);
   // 只订阅与本节点相连的边、以及入边的源节点。useShallow 逐元素比较,使得拖动「无关」
   // 节点时本 SkillNode 不再重渲染 —— 边对象在拖拽中引用稳定,源节点只在自身变化时换引用。
   const incomingEdges = useCanvasStore(
@@ -828,7 +831,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     const episode = numericField(target.episode);
     const beat = numericField(target.beat);
     if (episode === null || beat === null) {
-      setSourcePickerError('缺少镜头上下文');
+      setSourcePickerError(t('node.skillNode.missingBeatContext'));
       return null;
     }
     const outputNodeId = stageSelectedBackgroundOutputForSkill(
@@ -841,7 +844,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
       },
     );
     if (!outputNodeId) {
-      setSourcePickerError('没有找到当前背景输出节点');
+      setSourcePickerError(t('node.skillNode.noBackgroundOutputNode'));
       return null;
     }
     if (mainlineManaged && !extraData?.committed_at) {
@@ -857,12 +860,12 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const uploadAndStageSelectedBackground = async (blob: Blob, filename: string, label?: string) => {
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      throw new Error('缺少项目或镜头上下文');
+      throw new Error(t('viewer.threeD.directorCombinedMissingContext'));
     }
     const uploaded = await uploadFreezoneImage(projectId, blob, filename, { timeoutMs: false });
     const nodeId = stageSelectedBackground(beatTarget, uploaded.url, label);
     if (!nodeId) {
-      throw new Error('当前背景输出节点不可用');
+      throw new Error(t('node.skillNode.backgroundOutputNodeUnavailable'));
     }
   };
 
@@ -875,7 +878,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     }
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      setSourcePickerError('缺少项目或镜头上下文');
+      setSourcePickerError(t('viewer.threeD.directorCombinedMissingContext'));
       return null;
     }
     setSourcePickerBusy(true);
@@ -1217,10 +1220,10 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     if (!url) {
       setSourcePickerError(
         kind === 'master'
-          ? '当前场景没有 master 图'
+          ? t('node.skillNode.noMasterImage')
           : kind === 'reverse'
-            ? '当前场景没有 reverse 图'
-            : '当前 Beat 还没有导演背景图',
+            ? t('node.skillNode.noReverseImage')
+            : t('node.skillNode.noBeatDirectorBackground'),
       );
       return;
     }
@@ -1230,7 +1233,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const openContextDirectorWorld = async (destination: DirectorWorldDestination) => {
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      setSourcePickerError('缺少项目或镜头上下文');
+      setSourcePickerError(t('viewer.threeD.directorCombinedMissingContext'));
       return;
     }
     setSourcePickerBusy(true);
@@ -1448,14 +1451,14 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-white">
-                {localizedSkillName ?? (isLoading ? '加载技能...' : '未知技能')}
+                {localizedSkillName ?? (isLoading ? t('node.skillNode.loadingSkill') : t('node.skillNode.unknownSkill'))}
               </div>
               <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
                 {localizedSkillDescription ?? loadError ?? data.skill_id}
               </div>
             </div>
             <div className="shrink-0 rounded-full border border-cyan-200/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-medium text-cyan-100">
-              {skill ? PROVIDER_LABELS[skill.provider] : 'skill'}
+              {skill ? providerLabels[skill.provider] : 'skill'}
             </div>
           </div>
         </div>

@@ -14,6 +14,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { quotaSafeStateStorage } from "@/lib/localStorageQuota";
 import type { PikoAccessoryDisplayId } from "@/features/companion/piko-accessories";
 import type { ProjectStatus } from "@/types/project";
+// Lấy từ @/i18n/languages (module thuần, không chạy i18n.init) để store
+// không kéo theo side effect khởi tạo i18next.
+import { DEFAULT_LANGUAGE } from "@/i18n/languages";
 
 export const TASK_PANEL_HEIGHT_MIN = 200;
 export const TASK_PANEL_HEIGHT_DEFAULT = 400;
@@ -123,7 +126,7 @@ function persistedCompanionPet(pet: AppState["companionPet"]): AppState["compani
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      language: "zh",
+      language: DEFAULT_LANGUAGE,
       theme: "dark",
       dashboardTab: "active",
       dashboardView: "card",

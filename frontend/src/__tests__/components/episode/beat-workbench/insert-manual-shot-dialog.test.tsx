@@ -64,6 +64,15 @@ beforeAll(async () => {
                 submit: "插入",
                 success: "已插入手工镜头",
               },
+              insertShot: {
+                variantLabel: "变体",
+                noVariant: "无变体",
+                propsLabel: "出场道具",
+                propsPlaceholderWithExample:
+                  "逗号分隔，如 {{example}}；留空自动从画面描述提取",
+                propsPlaceholderEmpty:
+                  "逗号分隔道具ID；留空自动从画面描述提取",
+              },
             },
           },
         },

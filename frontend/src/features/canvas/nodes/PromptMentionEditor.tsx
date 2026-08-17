@@ -14,6 +14,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 
 export interface MentionCandidate {
   key: string;
@@ -92,7 +93,7 @@ export function truncateChipLabel(text: string, max = CHIP_LABEL_MAX_CHARS): str
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : text;
 }
 
-function buildChipElement(candidate: MentionCandidate): HTMLElement {
+function buildChipElement(candidate: MentionCandidate, t: (key: string, opts?: Record<string, unknown>) => string = (key) => key): HTMLElement {
   const span = document.createElement('span');
   span.contentEditable = 'false';
   span.dataset.mention = candidate.key;
@@ -103,14 +104,14 @@ function buildChipElement(candidate: MentionCandidate): HTMLElement {
   span.className = 'mention-chip';
   const label = mentionChipLabel(candidate);
   if (candidate.imageUrl) {
-    span.title = '双击替换引用';
+    span.title = t('node.promptMention.doubleClickToReplace');
     const img = document.createElement('img');
     img.src = candidate.imageUrl;
     img.alt = '';
     img.draggable = false;
     span.appendChild(img);
   } else if (candidate.videoUrl) {
-    span.title = '双击替换引用';
+    span.title = t('node.promptMention.doubleClickToReplace');
     // 没有静态首帧图时，用 muted 静止 <video> 显示首帧——与候选行 / 引用行一致。
     const video = document.createElement('video');
     video.src = candidate.videoUrl;
@@ -123,14 +124,14 @@ function buildChipElement(candidate: MentionCandidate): HTMLElement {
     // 音频没有缩略图：放一个可点击的 ▶/⏸ 播放按钮（::before 画图标，播放态由
     // chip 上的 data-audio-playing 切换）。hover 时 title 给出完整文件名。
     span.classList.add('mention-chip-audio');
-    span.title = `${label} · 点击播放`;
+    span.title = t('node.promptMention.clickToPlay', { label });
     const play = document.createElement('span');
     play.className = 'mention-chip-audio-play';
     play.dataset.audioPlay = '';
     play.setAttribute('aria-hidden', 'true');
     span.appendChild(play);
   } else {
-    span.title = '双击替换引用';
+    span.title = t('node.promptMention.doubleClickToReplace');
   }
   const labelEl = document.createElement('span');
   labelEl.className = 'mention-chip-label';
@@ -199,7 +200,7 @@ function insertPlainTextAtRange(range: Range, text: string): Range {
   return after;
 }
 
-function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidate[]): void {
+function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidate[], t: (key: string, opts?: Record<string, unknown>) => string = (key) => key): void {
   while (root.firstChild) {
     root.removeChild(root.firstChild);
   }
@@ -222,7 +223,7 @@ function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidat
     const name = match[1];
     const candidate = candidates.find((c) => c.name === name);
     if (candidate) {
-      root.appendChild(buildChipElement(candidate));
+      root.appendChild(buildChipElement(candidate, t));
     } else {
       appendTextWithLineBreaks(root, match[0]);
     }
@@ -318,6 +319,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
     },
     ref,
   ) {
+    const { t } = useTranslation();
     const editorRef = useRef<HTMLDivElement | null>(null);
     const lastSerializedRef = useRef<string>('');
     const isComposingRef = useRef(false);
@@ -342,9 +344,9 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
       const el = editorRef.current;
       if (!el) return;
       if (value === lastSerializedRef.current) return;
-      rebuildDOM(el, value, candidates);
+      rebuildDOM(el, value, candidates, t);
       lastSerializedRef.current = value;
-    }, [value, candidates]);
+    }, [value, candidates, t]);
 
     const commitChange = useCallback(() => {
       const el = editorRef.current;
@@ -488,7 +490,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
           range.setEnd(ctx.textNode, ctx.caretOffset);
         }
         range.deleteContents();
-        const chip = buildChipElement(candidate);
+        const chip = buildChipElement(candidate, t);
         range.insertNode(chip);
 
         // Drop a trailing space and put the caret after it so the next
@@ -507,7 +509,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
         setMention(null);
         commitChange();
       },
-      [mention, commitChange],
+      [mention, commitChange, t],
     );
 
     // 就地替换被双击的 chip：用新候选造一个 chip 顶替旧节点，光标落到其后，
@@ -517,7 +519,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
         const el = editorRef.current;
         setReplaceTarget(null);
         if (!el || !el.contains(chipEl)) return;
-        const fresh = buildChipElement(candidate);
+        const fresh = buildChipElement(candidate, t);
         chipEl.replaceWith(fresh);
         el.focus();
         const sel = window.getSelection();
@@ -530,7 +532,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
         }
         commitChange();
       },
-      [commitChange],
+      [commitChange, t],
     );
 
     // 双击 @ chip → 在它下方打开候选列表，快速替换该引用，省去「删 chip 再 @」。

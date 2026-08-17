@@ -16,6 +16,7 @@
 | Doc | Contents |
 |---|---|
 | [Product User Manual](https://neo-flying.feishu.cn/docx/JGNTdsjJuo748TxJkxecoYs2nth) | Full-featured UI operation manual (Feishu) |
+| [Product User Manual — Tiếng Việt](../vi/product-user-manual.md) | Vietnamese translation (open-source / CE edition) |
 | [Self-Hosting Guide](guides/self-hosting.md) | Deploy / upgrade / back up |
 | [ffmpeg Guide](guides/ffmpeg.md) | Install / locate / licensing obligations |
 | [Telemetry Notes](guides/telemetry.md) | No data collected by default / optional tracing |
@@ -25,7 +26,7 @@
 
 | Doc | Contents |
 |---|---|
-| [Feature Overview](concepts/features.md) | What DramaClaw can do |
+| [Feature Overview](concepts/features.md) | What DramaHub can do |
 | [Architecture](concepts/architecture.md) | How the system works |
 
 ## Reference

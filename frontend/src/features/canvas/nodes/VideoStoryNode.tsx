@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ClaymoreLab
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Handle,
   Position,
@@ -42,7 +43,7 @@ const MAX_HEIGHT = 1200;
 
 interface ColumnDef {
   key: keyof VideoStoryRow;
-  label: string;
+  labelKey: string;
   /** Tailwind min-width class for the table cell. */
   widthClass: string;
   /** True for narrative-style long text columns. */
@@ -50,22 +51,22 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: 'shotNumber', label: '镜号', widthClass: 'min-w-[60px]' },
-  { key: 'startTime', label: '开始时间', widthClass: 'min-w-[90px]' },
-  { key: 'endTime', label: '结束时间', widthClass: 'min-w-[90px]' },
-  { key: 'duration', label: '时长', widthClass: 'min-w-[70px]' },
-  { key: 'visualDescription', label: '画面描述', widthClass: 'min-w-[220px]', wide: true },
-  { key: 'narrative', label: '叙事内容', widthClass: 'min-w-[220px]', wide: true },
-  { key: 'shotSize', label: '景别', widthClass: 'min-w-[80px]' },
-  { key: 'cameraAngle', label: '摄影机角度', widthClass: 'min-w-[100px]' },
-  { key: 'cameraMovement', label: '摄影机运动', widthClass: 'min-w-[120px]' },
-  { key: 'focalAndDof', label: '焦距与景深', widthClass: 'min-w-[120px]' },
-  { key: 'lighting', label: '光线', widthClass: 'min-w-[120px]' },
-  { key: 'backgroundMusic', label: '背景音乐', widthClass: 'min-w-[140px]' },
-  { key: 'voiceAndSfx', label: '人声/音效', widthClass: 'min-w-[140px]' },
-  { key: 'imagePrompt', label: '图像生成提示词', widthClass: 'min-w-[260px]', wide: true },
-  { key: 'videoMotionPrompt', label: '视频运动提示词', widthClass: 'min-w-[240px]', wide: true },
-  { key: 'keyframeUrl', label: '关键帧', widthClass: 'min-w-[120px]' },
+  { key: 'shotNumber', labelKey: 'node.videoStory.columns.shotNumber', widthClass: 'min-w-[60px]' },
+  { key: 'startTime', labelKey: 'node.videoStory.columns.startTime', widthClass: 'min-w-[90px]' },
+  { key: 'endTime', labelKey: 'node.videoStory.columns.endTime', widthClass: 'min-w-[90px]' },
+  { key: 'duration', labelKey: 'node.videoStory.columns.duration', widthClass: 'min-w-[70px]' },
+  { key: 'visualDescription', labelKey: 'node.videoStory.columns.visualDescription', widthClass: 'min-w-[220px]', wide: true },
+  { key: 'narrative', labelKey: 'node.videoStory.columns.narrative', widthClass: 'min-w-[220px]', wide: true },
+  { key: 'shotSize', labelKey: 'node.videoStory.columns.shotSize', widthClass: 'min-w-[80px]' },
+  { key: 'cameraAngle', labelKey: 'node.videoStory.columns.cameraAngle', widthClass: 'min-w-[100px]' },
+  { key: 'cameraMovement', labelKey: 'node.videoStory.columns.cameraMovement', widthClass: 'min-w-[120px]' },
+  { key: 'focalAndDof', labelKey: 'node.videoStory.columns.focalAndDof', widthClass: 'min-w-[120px]' },
+  { key: 'lighting', labelKey: 'node.videoStory.columns.lighting', widthClass: 'min-w-[120px]' },
+  { key: 'backgroundMusic', labelKey: 'node.videoStory.columns.backgroundMusic', widthClass: 'min-w-[140px]' },
+  { key: 'voiceAndSfx', labelKey: 'node.videoStory.columns.voiceAndSfx', widthClass: 'min-w-[140px]' },
+  { key: 'imagePrompt', labelKey: 'node.videoStory.columns.imagePrompt', widthClass: 'min-w-[260px]', wide: true },
+  { key: 'videoMotionPrompt', labelKey: 'node.videoStory.columns.videoMotionPrompt', widthClass: 'min-w-[240px]', wide: true },
+  { key: 'keyframeUrl', labelKey: 'node.videoStory.columns.keyframeUrl', widthClass: 'min-w-[120px]' },
 ];
 
 interface StoryCellProps {
@@ -115,9 +116,10 @@ interface StoryTableProps {
   rows: VideoStoryRow[];
   compact?: boolean;
   onCellCommit?: (rowIndex: number, colKey: keyof VideoStoryRow, nextValue: string) => void;
+  t: (key: string) => string;
 }
 
-function StoryTable({ rows, compact, onCellCommit }: StoryTableProps) {
+function StoryTable({ rows, compact, onCellCommit, t }: StoryTableProps) {
   return (
     <div className="ui-scrollbar h-full w-full overflow-auto rounded border border-[rgba(255,255,255,0.08)]">
       <table className="min-w-full border-collapse text-left text-[12px] text-text-dark">
@@ -128,7 +130,7 @@ function StoryTable({ rows, compact, onCellCommit }: StoryTableProps) {
                 key={col.key as string}
                 className={`${col.widthClass} border-b border-[rgba(255,255,255,0.1)] px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-text-muted`}
               >
-                {col.label}
+                {t(col.labelKey)}
               </th>
             ))}
           </tr>
@@ -163,20 +165,20 @@ function StoryTable({ rows, compact, onCellCommit }: StoryTableProps) {
   );
 }
 
-function EmptyStoryState({ rawResult }: { rawResult?: Record<string, unknown> | null }) {
+function EmptyStoryState({ rawResult, t }: { rawResult?: Record<string, unknown> | null; t: (key: string) => string }) {
   return (
     <div className="flex h-full w-full items-center justify-center p-6">
       <div className="flex max-w-[460px] flex-col items-center gap-3 text-center">
-        <div className="text-sm font-medium text-text-dark">未识别出分镜</div>
+        <div className="text-sm font-medium text-text-dark">{t('node.videoStory.emptyState.title')}</div>
         <div className="text-[12px] leading-5 text-text-muted/80">
-          返回内容中没有可用分镜行。原始返回已保留为辅助信息，可用于排查接口结果。
+          {t('node.videoStory.emptyState.description')}
         </div>
         <details className="w-full rounded-md border border-white/[0.08] bg-bg-dark/45 text-left">
           <summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-medium text-text-dark/82 transition-colors hover:text-text-dark">
-            查看原始返回
+            {t('node.videoStory.emptyState.viewRawButton')}
           </summary>
           <pre className="ui-scrollbar max-h-[120px] overflow-auto border-t border-white/[0.06] p-3 text-[11px] leading-5 text-text-muted/86">
-{rawResult ? JSON.stringify(rawResult, null, 2) : '(空)'}
+{rawResult ? JSON.stringify(rawResult, null, 2) : t('node.videoStory.emptyState.empty')}
           </pre>
         </details>
       </div>
@@ -184,12 +186,12 @@ function EmptyStoryState({ rawResult }: { rawResult?: Record<string, unknown> | 
   );
 }
 
-function ErrorStoryState({ message }: { message: string }) {
+function ErrorStoryState({ message, t }: { message: string; t: (key: string) => string }) {
   return (
     <div className="flex h-full w-full items-center justify-center p-6">
       <div className="flex max-w-[420px] flex-col items-center gap-3 text-center">
         <AlertTriangle className="h-7 w-7 text-red-300/90" />
-        <div className="text-sm font-medium text-red-200">解析失败</div>
+        <div className="text-sm font-medium text-red-200">{t('node.videoStory.errorState.title')}</div>
         <div className="max-h-[88px] overflow-auto break-words text-[12px] leading-5 text-red-200/82 [overflow-wrap:anywhere]">
           {message}
         </div>
@@ -199,14 +201,15 @@ function ErrorStoryState({ message }: { message: string }) {
 }
 
 export const VideoStoryNode = memo(({ id, data, selected, width, height }: VideoStoryNodeProps) => {
+  const { t } = useTranslation();
   const updateNodeInternals = useUpdateNodeInternals();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.videoStory, data),
-    [data],
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.videoStory, data, t),
+    [data, t],
   );
   const resolvedWidth = Math.max(MIN_WIDTH, Math.round(width ?? DEFAULT_WIDTH));
   const resolvedHeight = Math.max(MIN_HEIGHT, Math.round(height ?? DEFAULT_HEIGHT));
@@ -283,13 +286,13 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
         <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-3 py-2">
           <div className="flex items-center gap-2 text-[12px] text-text-muted">
             {isAnalyzing ? (
-              <span>解析中…</span>
+              <span>{t('node.videoStory.status.analyzing')}</span>
             ) : hasError ? (
-              <span className="text-red-300">解析失败</span>
+              <span className="text-red-300">{t('node.videoStory.status.analysisFailed')}</span>
             ) : hasRows ? (
-              <span>{rows.length} 条分镜</span>
+              <span>{t('node.videoStory.status.rowCount', { count: rows.length })}</span>
             ) : (
-              <span>未识别出分镜</span>
+              <span>{t('node.videoStory.status.noRows')}</span>
             )}
           </div>
           <button
@@ -302,18 +305,18 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
             disabled={!hasRows}
           >
             <Expand className="h-3 w-3" />
-            全屏
+            {t('node.videoStory.actions.fullscreen')}
           </button>
         </div>
         <div className="flex-1 overflow-hidden p-2">
           {isAnalyzing ? (
             <div className="h-full w-full" />
           ) : hasError ? (
-            <ErrorStoryState message={data.analysisError ?? '未知错误'} />
+            <ErrorStoryState message={data.analysisError ?? t('node.videoStory.errorState.unknownError')} t={t} />
           ) : hasRows ? (
-            <StoryTable rows={rows} compact onCellCommit={handleCellCommit} />
+            <StoryTable rows={rows} compact onCellCommit={handleCellCommit} t={t} />
           ) : (
-            <EmptyStoryState rawResult={data.rawResult ?? null} />
+            <EmptyStoryState rawResult={data.rawResult ?? null} t={t} />
           )}
         </div>
 
@@ -336,7 +339,7 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
             <div className="flex items-center gap-3">
               <FileVideo2 className="h-5 w-5" />
               <span className="text-base font-medium">{resolvedTitle}</span>
-              <span className="text-sm text-text-muted">共 {rows.length} 条分镜</span>
+              <span className="text-sm text-text-muted">{t('node.videoStory.fullscreen.totalRows', { count: rows.length })}</span>
             </div>
             <button
               type="button"
@@ -344,11 +347,11 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
               onClick={() => setIsFullscreen(false)}
             >
               <X className="h-4 w-4" />
-              关闭
+              {t('node.videoStory.actions.close')}
             </button>
           </div>
           <div className="flex-1 overflow-hidden rounded-lg border border-[rgba(255,255,255,0.12)] bg-surface-dark/95">
-            <StoryTable rows={rows} onCellCommit={handleCellCommit} />
+            <StoryTable rows={rows} onCellCommit={handleCellCommit} t={t} />
           </div>
         </div>,
         document.body,

@@ -380,7 +380,7 @@ async def _generate_via_newapi(
             f.write(image_bytes)
         return output_path
 
-    print(f"[PropRefGen] DramaClawAPI 生成失败: {error_text or 'No response'}")
+    print(f"[PropRefGen] DramaHubAPI 生成失败: {error_text or 'No response'}")
     return None
 
 

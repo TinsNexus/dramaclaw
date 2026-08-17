@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type AudioWaveformPlayerProps = {
   src: string;
@@ -83,6 +84,7 @@ export function AudioWaveformPlayer({
   onLoadedDuration,
   onPlayingChange,
 }: AudioWaveformPlayerProps) {
+  const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrubRef = useRef<HTMLDivElement>(null);
@@ -327,7 +329,7 @@ export function AudioWaveformPlayer({
           <div
             ref={scrubRef}
             role="slider"
-            aria-label="Audio waveform scrubber"
+            aria-label={t('canvas.audioWaveform.scrubber')}
             aria-valuemin={0}
             aria-valuemax={duration}
             aria-valuenow={currentTime}
@@ -374,7 +376,7 @@ export function AudioWaveformPlayer({
           <div className="flex items-center justify-center gap-6">
             <button
               type="button"
-              aria-label="rewind 10s"
+              aria-label={t('canvas.audioWaveform.rewind10s')}
               className="nodrag flex size-[24px] cursor-pointer items-center justify-center text-[#808080] transition-colors hover:text-white/90"
               onClick={(event) => {
                 event.stopPropagation();
@@ -396,7 +398,7 @@ export function AudioWaveformPlayer({
 
             <button
               type="button"
-              aria-label={isPlaying ? 'pause' : 'play'}
+              aria-label={isPlaying ? t('canvas.audioWaveform.pause') : t('canvas.audioWaveform.play')}
               className="nodrag relative flex size-[36px] cursor-pointer items-center justify-center rounded-full bg-[#E5E5E5] transition-colors hover:bg-white"
               onClick={(event) => {
                 event.stopPropagation();
@@ -427,7 +429,7 @@ export function AudioWaveformPlayer({
 
             <button
               type="button"
-              aria-label="fast forward 10s"
+              aria-label={t('canvas.audioWaveform.fastForward10s')}
               className="nodrag flex size-[24px] cursor-pointer items-center justify-center text-[#808080] transition-colors hover:text-white/90"
               onClick={(event) => {
                 event.stopPropagation();

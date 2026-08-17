@@ -40,7 +40,7 @@ export type ProviderId =
 
 export interface ProviderOption {
   id: ProviderId;
-  label: string;
+  labelKey: string;
 }
 
 export interface ModelOption {
@@ -75,10 +75,10 @@ export interface ModelOption {
 }
 
 export const SHARED_PROVIDERS: ProviderOption[] = [
-  { id: 'newapi', label: '虾驿 / NewAPI' },
-  { id: 'huimeng', label: '绘梦 / HuiMeng' },
-  { id: 'openrouter', label: 'OpenRouter' },
-  { id: 'openai', label: 'OpenAI' },
+  { id: 'newapi', labelKey: 'canvas.providerModelPicker.providers.newapi' },
+  { id: 'huimeng', labelKey: 'canvas.providerModelPicker.providers.huimeng' },
+  { id: 'openrouter', labelKey: 'canvas.providerModelPicker.providers.openrouter' },
+  { id: 'openai', labelKey: 'canvas.providerModelPicker.providers.openai' },
 ];
 
 // 兜底模型列表。仅在 /freezone/image/models 拉取失败时顶上 —— 正常路径下模型
@@ -117,8 +117,8 @@ export const DEFAULT_SHARED_MODEL_ID = 'huimeng/gpt-image-2';
 // Video generation models. `id` is the raw backend model id sent to
 // /freezone/video/gen so we don't need a separate apiModel mapping.
 export const VIDEO_PROVIDERS: ProviderOption[] = [
-  { id: 'seedance', label: 'Seedance' },
-  { id: 'huimeng', label: '绘梦 / HuiMeng' },
+  { id: 'seedance', labelKey: 'canvas.providerModelPicker.providers.seedance' },
+  { id: 'huimeng', labelKey: 'canvas.providerModelPicker.providers.huimeng' },
 ];
 
 // 兜底视频模型列表。同 SHARED_MODELS：仅在 /freezone/video/models 拉取失败时

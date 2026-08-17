@@ -845,7 +845,7 @@ function ThreeDDirectorSurface({
   const [error, setError] = useState<string | null>(null);
   const [sceneBusy, setSceneBusy] = useState(false);
   const [sceneStatus, setSceneStatus] = useState<string | null>(
-    initialScene ? "已恢复上次保存的场景" : null,
+    initialScene ? t("viewer.threeD.statusMessages.sceneRestored") : null,
   );
   const lastRestoredSourceIdRef = useRef<string | null>(null);
   const initialSceneRef = useRef(initialScene);
@@ -2288,7 +2288,7 @@ function ThreeDDirectorSurface({
               )}
               {manifest.mode !== "beat" && (
                 <ColorPaletteField
-                  label={t("viewer.threeD.actorColor", { defaultValue: "人物颜色" })}
+                  label={t("viewer.threeD.actorColor")}
                   value={actorColor}
                   palette={anonymousActorPalette}
                   onChange={setActorColor}

@@ -1,10 +1,10 @@
 # 项目治理
 
-> DramaClaw 目前是**由核心团队主导**的 source-available 项目。本文说明决策与参与方式；随社区成长会再演进。
+> DramaHub 目前是**由核心团队主导**的 source-available 项目。本文说明决策与参与方式；随社区成长会再演进。
 
 ## 维护与决策
 
-- 项目由 DramaClaw 核心团队（Claymore Lab）维护，并对路线图与合并拥有最终决策权（maintainer-led）。
+- 项目由 DramaHub 核心团队（Claymore Lab）维护，并对路线图与合并拥有最终决策权（maintainer-led）。
 - 日常：小改动经 review 后合并；**破坏性 / 大型变更**请先开 issue 或 Discussion 讨论达成一致再动手。
 
 ## 如何参与

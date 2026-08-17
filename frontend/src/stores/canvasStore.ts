@@ -10,6 +10,7 @@ import {
   type EdgeChange,
   type NodeChange,
 } from '@xyflow/react';
+import i18n from '@/i18n';
 
 import {
   CANVAS_NODE_TYPES,
@@ -2303,7 +2304,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       (exportNodeData as { resultKind?: ExportImageNodeResultKind }).resultKind = options.resultKind;
       if (!options.defaultTitle) {
         (exportNodeData as { displayName?: string }).displayName =
-          EXPORT_RESULT_DISPLAY_NAME[options.resultKind];
+          i18n.t(EXPORT_RESULT_DISPLAY_NAME[options.resultKind]);
       }
     }
     const node = canvasNodeFactory.createNode(CANVAS_NODE_TYPES.exportImage, position, {

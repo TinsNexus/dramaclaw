@@ -6,33 +6,35 @@ import HttpBackend from "i18next-http-backend";
 import { useAppStore } from "@/stores/app-store";
 import { BUILD_ID } from "@/lib/app-version";
 
-const SUPPORTED = ["zh", "en"] as const;
-type Supported = (typeof SUPPORTED)[number];
+import { SUPPORTED, DEFAULT_LANGUAGE, normalize, type Supported } from "@/i18n/languages";
 
-export function normalize(lng: string | undefined): Supported {
-  const two = (lng ?? "").slice(0, 2).toLowerCase();
-  return (SUPPORTED as readonly string[]).includes(two) ? (two as Supported) : "zh";
-}
+export { SUPPORTED, DEFAULT_LANGUAGE, normalize };
+export type { Supported };
 
 function initialLanguage(): Supported {
   if (typeof window !== "undefined") {
     const queryLanguage = new URLSearchParams(window.location.search).get("lng");
     if (queryLanguage) return normalize(queryLanguage);
   }
-  return normalize(useAppStore.getState().language || "zh");
+  return normalize(useAppStore.getState().language || DEFAULT_LANGUAGE);
 }
 
 i18n
   .use(HttpBackend)
   .use(initReactI18next)
   .init({
-    // Default to Chinese unless the user explicitly selects another supported
-    // language via URL or the app language setting.
+    // Default to Vietnamese unless the user explicitly selects another
+    // supported language via URL or the app language setting.
     lng: initialLanguage(),
-    fallbackLng: "zh",
+    // Fallback theo chuỗi: vi → en. `vi` là ngôn ngữ mặc định nhưng chưa dịch
+    // đủ mọi key, và mỗi lần upstream thêm key mới thì `vi` lại hụt. Nếu chỉ
+    // fallback về chính `vi`, những key đó hiện ra dưới dạng chuỗi key thô
+    // (`settings.pages.models`). Có `en` đứng sau thì phần chưa dịch hiện
+    // tiếng Anh, và bản dịch tiếng Việt bổ sung dần vẫn được ưu tiên.
+    fallbackLng: [DEFAULT_LANGUAGE, "en"],
     supportedLngs: [...SUPPORTED],
-    // `zh-CN` / `en-US` collapse to `zh` / `en`, so the
-    // backend loader only has to serve two translation files.
+    // `zh-CN` / `en-US` / `vi-VN` collapse to `zh` / `en` / `vi`, so the
+    // backend loader only has to serve one translation file per language.
     load: "languageOnly",
     defaultNS: "translation",
     backend: {

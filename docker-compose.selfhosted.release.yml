@@ -1,4 +1,4 @@
-# DramaClaw CE — 官方 release 镜像版(不本地构建):内置 newapi 自建网关(无需 DC key)。
+# DramaHub CE — 官方 release 镜像版(不本地构建):内置 newapi 自建网关(无需 DC key)。
 # 跑法:docker compose -f docker-compose.selfhosted.release.yml up -d
 # 与 docker-compose.selfhosted.yml 服务结构一致,区别仅在镜像来自 Docker Hub release
 # (每次 GitHub Release 自动发布),无需 clone 源码即可运行。

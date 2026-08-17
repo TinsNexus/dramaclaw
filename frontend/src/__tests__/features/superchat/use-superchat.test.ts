@@ -148,7 +148,7 @@ describe("mergeHistorySnapshot", () => {
 });
 
 describe("normalizeMessage", () => {
-  it("strips internal DramaClaw context blocks from displayed text", () => {
+  it("strips internal DramaHub context blocks from displayed text", () => {
     const normalized = normalizeMessage({
       id: "backend-user-1",
       role: "user",

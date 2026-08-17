@@ -1837,7 +1837,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
 
         if not self.api_key:
             raise ValueError(
-                "DramaClawAPI key must be set for DramaClawAPI video generation"
+                "DramaHubAPI key must be set for DramaHubAPI video generation"
             )
 
     @staticmethod
@@ -1889,7 +1889,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                 if resp.status < 200 or resp.status >= 300:
                     request_id = self._extract_request_id(text, resp.headers)
                     raise NewApiVideoError(
-                        f"DramaClawAPI submit failed: HTTP {resp.status} - {text}",
+                        f"DramaHubAPI submit failed: HTTP {resp.status} - {text}",
                         request_id=request_id,
                         status_code=resp.status,
                     )
@@ -1899,7 +1899,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                         data["_newapi_request_id"] = self._extract_request_id(text, resp.headers)
                     return data
                 except json.JSONDecodeError as exc:
-                    raise RuntimeError(f"DramaClawAPI submit returned invalid JSON: {text}") from exc
+                    raise RuntimeError(f"DramaHubAPI submit returned invalid JSON: {text}") from exc
 
     async def _get_json(self, url: str) -> dict:
         async with aiohttp.ClientSession(timeout=self._client_timeout()) as session:
@@ -1908,14 +1908,14 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                 if resp.status < 200 or resp.status >= 300:
                     request_id = self._extract_request_id(text, resp.headers)
                     raise NewApiVideoError(
-                        f"DramaClawAPI task query failed: HTTP {resp.status} - {text}",
+                        f"DramaHubAPI task query failed: HTTP {resp.status} - {text}",
                         request_id=request_id,
                         status_code=resp.status,
                     )
                 try:
                     return json.loads(text)
                 except json.JSONDecodeError as exc:
-                    raise RuntimeError(f"DramaClawAPI task query returned invalid JSON: {text}") from exc
+                    raise RuntimeError(f"DramaHubAPI task query returned invalid JSON: {text}") from exc
 
     async def _download_video(self, url: str, output_path: str) -> bytes:
         if url.startswith("data:"):
@@ -1929,7 +1929,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
             async with aiohttp.ClientSession(timeout=self._client_timeout()) as session:
                 async with session.get(url) as resp:
                     if resp.status != 200:
-                        raise RuntimeError(f"DramaClawAPI result download failed: HTTP {resp.status}")
+                        raise RuntimeError(f"DramaHubAPI result download failed: HTTP {resp.status}")
                     content = await resp.read()
 
         path = Path(output_path)
@@ -2019,7 +2019,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
         references: object,
         log: Callable[[str], None],
     ) -> None:
-        """Populate the stable DramaClaw-to-RelayClaw video media protocol."""
+        """Populate the stable DramaHub-to-RelayClaw video media protocol."""
 
         normalized_mode = {
             "textToVideo": "text_to_video",
@@ -2854,7 +2854,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                 metadata.get("resolution") or self.resolution or ""
             ).strip()
             log(
-                f"正在提交 DramaClawAPI 视频任务 ({model_label}, {duration}s, {request_resolution})..."
+                f"正在提交 DramaHubAPI 视频任务 ({model_label}, {duration}s, {request_resolution})..."
             )
             progress(0.1)
             reservation_id = await _reserve_video_model_call(
@@ -2883,7 +2883,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                 )
                 return VideoGenResult(
                     status=VideoGenStatus.FAILED,
-                    error=f"No task_id in DramaClawAPI response: {submitted}",
+                    error=f"No task_id in DramaHubAPI response: {submitted}",
                 )
             try:
                 await get_usage_meter().mark_current_paid_execution_attempt(
@@ -2910,7 +2910,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                     video_url = self._resolve_result_url(self._extract_video_url(task))
                     if not video_url:
                         update_request_status(
-                            task_id, "failed", "No video url in DramaClawAPI result"
+                            task_id, "failed", "No video url in DramaHubAPI result"
                         )
                         await _refund_video_model_call(
                             reservation_id,
@@ -2921,7 +2921,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                         )
                         return VideoGenResult(
                             status=VideoGenStatus.FAILED,
-                            error=f"No video url in DramaClawAPI result: {task}",
+                            error=f"No video url in DramaHubAPI result: {task}",
                             task_id=task_id,
                         )
                     log("视频生成完成，正在下载...")
@@ -2946,7 +2946,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                                 str(last_frame_output_path),
                             )
                             last_frame_path = last_frame_output_path.as_posix()
-                            log("已保存 DramaClawAPI 返回尾帧")
+                            log("已保存 DramaHubAPI 返回尾帧")
                     progress(1.0)
                     update_request_status(task_id, "completed")
                     await _confirm_video_model_call(
@@ -2975,7 +2975,7 @@ class NewApiVideoGenerator(VideoGeneratorBase):
                     "expired",
                 }:
                     error = (
-                        task.get("error") or task.get("fail_reason") or "DramaClawAPI video task failed"
+                        task.get("error") or task.get("fail_reason") or "DramaHubAPI video task failed"
                     )
                     update_request_status(task_id, "failed", str(error))
                     await _refund_video_model_call(
@@ -2993,13 +2993,13 @@ class NewApiVideoGenerator(VideoGeneratorBase):
 
                 if poll_count % 6 == 0:
                     log(
-                        f"DramaClawAPI task {task_id} status: "
+                        f"DramaHubAPI task {task_id} status: "
                         f"{status or 'queued'} ({poll_count}/{max_polls})"
                     )
                 await asyncio.sleep(poll_interval)
 
             update_request_status(
-                task_id, "failed", "Timeout waiting for DramaClawAPI video task"
+                task_id, "failed", "Timeout waiting for DramaHubAPI video task"
             )
             await _refund_video_model_call(
                 reservation_id,
@@ -3010,14 +3010,14 @@ class NewApiVideoGenerator(VideoGeneratorBase):
             )
             return VideoGenResult(
                 status=VideoGenStatus.FAILED,
-                error="Timeout waiting for DramaClawAPI video task",
+                error="Timeout waiting for DramaHubAPI video task",
                 task_id=task_id,
             )
         except NewApiVideoError as exc:
             if exc.request_id:
-                log(f"DramaClawAPI request_id: {exc.request_id}")
+                log(f"DramaHubAPI request_id: {exc.request_id}")
             if task_id:
-                log(f"DramaClawAPI task_id: {task_id}")
+                log(f"DramaHubAPI task_id: {task_id}")
                 update_request_status(task_id, "failed", str(exc))
             elif is_definite_no_cost_http_rejection(exc.status_code):
                 try:

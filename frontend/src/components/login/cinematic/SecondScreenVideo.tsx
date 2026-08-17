@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ScrollVideoScene } from "./ScrollVideoScene";
 import { cinematicVideos } from "./media";
 
@@ -14,6 +15,8 @@ export function SecondScreenVideo({
   videoExitProgress?: number;
   videoOpacity: number;
 }) {
+  const { t } = useTranslation();
+
   return (
     <ScrollVideoScene
       copyExitProgress={copyExitProgress}
@@ -21,8 +24,8 @@ export function SecondScreenVideo({
       isActive={isActive}
       kicker="ENTER THE FRAME"
       layerBackdropOpacity={1}
-      subtitle="在 DramaClaw 中，创作不再停留在一次提示词和一次生成结果"
-      title="从灵感到项目"
+      subtitle={t("landing.second.subtitle")}
+      title={t("landing.second.title")}
       videoExitProgress={videoExitProgress}
       videoOpacity={videoOpacity}
       videoUrl={cinematicVideos.pk}

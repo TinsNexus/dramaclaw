@@ -31,10 +31,10 @@ function GithubMark() {
 
 export function Brand({ className }: { className?: string }) {
   return (
-    <div className={className ?? styles.brand} aria-label="DramaClaw">
+    <div className={className ?? styles.brand} aria-label="DramaHub">
       <img
         className={styles.brandLogo}
-        src="/brand/dramaclaw-wordmark.png"
+        src="/brand/dramahub-wordmark.svg"
         alt=""
         aria-hidden="true"
       />

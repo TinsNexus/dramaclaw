@@ -28,7 +28,7 @@ FREEZONE_STORY_SCRIPT_MODEL = {
     "id": DEFAULT_FREEZONE_STORY_SCRIPT_MODEL,
     "provider": "newapi",
     "model": DEFAULT_FREEZONE_STORY_SCRIPT_MODEL,
-    "label": "DramaClawAPI Story Script",
+    "label": "DramaHubAPI Story Script",
 }
 LEGACY_FREEZONE_STORY_SCRIPT_MODEL_IDS = {
     "newapi_gemini_flash",

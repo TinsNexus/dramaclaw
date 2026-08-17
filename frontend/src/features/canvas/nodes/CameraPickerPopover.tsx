@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Aperture, Camera, ChevronDown, Focus, X } from 'lucide-react';
 
 import type { ImageGenCameraSelection } from '@/features/canvas/domain/canvasNodes';
@@ -81,6 +82,7 @@ export function CameraPickerPopover({
   onConfirm,
   onClose,
 }: CameraPickerPopoverProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const { options, isLoading } = useFreezoneCameraOptions();
 
@@ -156,12 +158,12 @@ export function CameraPickerPopover({
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex h-11 items-center justify-between px-4">
-        <span className="text-sm font-medium text-text-dark">摄像机</span>
+        <span className="text-sm font-medium text-text-dark">{t('node.cameraPicker.title')}</span>
         <button
           type="button"
           onClick={onClose}
           className="flex size-6 items-center justify-center rounded-md text-text-muted/90 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
-          aria-label="关闭"
+          aria-label={t('node.cameraPicker.close')}
         >
           <X className="size-3.5" />
         </button>
@@ -169,7 +171,7 @@ export function CameraPickerPopover({
 
       <div className="flex items-start justify-center gap-5 px-6 pb-4 pt-3">
         <Column
-          label="相机"
+          label={t('node.cameraPicker.cameraBody')}
           captionLabel={selectedCameraLabel}
           items={cameraBodies.map((item) => ({
             key: item.id,
@@ -181,9 +183,10 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="camera"
           isLoading={isLoading}
+          t={t}
         />
         <Column
-          label="镜头"
+          label={t('node.cameraPicker.lens')}
           captionLabel={selectedLensLabel}
           items={lenses.map((item) => ({
             key: item.id,
@@ -195,9 +198,10 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="lens"
           isLoading={isLoading}
+          t={t}
         />
         <Column
-          label="焦距"
+          label={t('node.cameraPicker.focalLength')}
           captionLabel="mm"
           items={focalLengths.map((value) => ({
             key: String(value),
@@ -208,9 +212,10 @@ export function CameraPickerPopover({
           variant="text"
           fallbackKind="focal"
           isLoading={isLoading}
+          t={t}
         />
         <Column
-          label="光圈"
+          label={t('node.cameraPicker.aperture')}
           captionLabel={draftAperture ?? ''}
           items={apertures.map((value) => ({
             key: value,
@@ -222,6 +227,7 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="aperture"
           isLoading={isLoading}
+          t={t}
         />
       </div>
 
@@ -231,7 +237,7 @@ export function CameraPickerPopover({
           onClick={() => onConfirm(null)}
           className="h-8 rounded-md px-3 text-[12px] font-medium text-text-dark/78 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
         >
-          清除
+          {t('node.cameraPicker.clear')}
         </button>
         <button
           type="button"
@@ -239,7 +245,7 @@ export function CameraPickerPopover({
           disabled={!options}
           className="h-8 min-w-[50px] rounded-md bg-primary px-3 text-[13px] text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-text-muted"
         >
-          使用
+          {t('node.cameraPicker.use')}
         </button>
       </div>
     </div>
@@ -263,6 +269,7 @@ interface ColumnProps {
   variant: 'image' | 'text';
   fallbackKind: FallbackKind;
   isLoading: boolean;
+  t?: (key: string) => string;
 }
 
 function Column({
@@ -274,7 +281,9 @@ function Column({
   variant,
   fallbackKind,
   isLoading,
+  t: tProp = (key: string) => key,
 }: ColumnProps) {
+  const t = tProp;
   const canPrev = selectedIndex > 0;
   const canNext = selectedIndex < items.length - 1;
   const translateY = HIGHLIGHT_TOP - selectedIndex * ITEM_HEIGHT;
@@ -287,7 +296,7 @@ function Column({
           disabled={!canPrev}
           onClick={() => canPrev && onSelect(selectedIndex - 1)}
           className={CAMERA_PICKER_ARROW_CLASS}
-          aria-label="上一项"
+          aria-label={t('node.cameraPicker.prevItem')}
         >
           <ChevronDown className="size-3.5 rotate-180" />
         </button>
@@ -345,7 +354,7 @@ function Column({
 
         {isLoading && items.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-[11px] text-text-muted">
-            加载中…
+            {t('node.cameraPicker.loading')}
           </div>
         )}
       </div>
@@ -356,7 +365,7 @@ function Column({
           disabled={!canNext}
           onClick={() => canNext && onSelect(selectedIndex + 1)}
           className={CAMERA_PICKER_ARROW_CLASS}
-          aria-label="下一项"
+          aria-label={t('node.cameraPicker.nextItem')}
         >
           <ChevronDown className="size-3.5" />
         </button>

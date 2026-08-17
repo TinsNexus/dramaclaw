@@ -434,7 +434,7 @@ class HermesSdkThread:
         """Send a prompt and yield ChatBackendEvent items as hermes streams them.
 
         ``current_project`` is included as a prompt prefix so per-user hermes
-        knows which DramaClaw project the user is talking about (see plan).
+        knows which DramaHub project the user is talking about (see plan).
         """
         if self._closed:
             raise RuntimeError("HermesSdkThread is closed")

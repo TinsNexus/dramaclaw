@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 450" role="img" aria-label="DramaHub">
+  <title>DramaHub</title>
+  <!--
+    Huy hiệu header, thay banner chiến dịch cũ. Giữ nguyên khung 1000x450 của
+    ảnh cũ để không phải sửa CSS (.entry dùng aspect-ratio 16/9 + object-fit
+    contain). Trên header nó chỉ rộng ~86-101px nên thiết kế cố ý tối giản:
+    ở cỡ đó mọi chi tiết nhỏ đều biến mất, chỉ khối lớn còn đọc được.
+    Monogram dùng lại đúng path chữ D và H của wordmark.
+  -->
+  <defs>
+    <linearGradient id="badgeFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eafcff" />
+      <stop offset=".55" stop-color="#8ef0fb" />
+      <stop offset="1" stop-color="#5ad7ea" />
+    </linearGradient>
+    <linearGradient id="badgeEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fe9f5" stop-opacity=".95" />
+      <stop offset=".5" stop-color="#3fb6cc" stop-opacity=".45" />
+      <stop offset="1" stop-color="#7fe9f5" stop-opacity=".95" />
+    </linearGradient>
+    <linearGradient id="badgePlate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16242b" />
+      <stop offset="1" stop-color="#0a1216" />
+    </linearGradient>
+  </defs>
+
+  <!-- Thân huy hiệu: góc vát chéo cho ăn nhập với dáng chữ gãy góc -->
+  <path d="M78 26 H922 L974 82 V368 L922 424 H78 L26 368 V82 Z"
+        fill="url(#badgePlate)" stroke="url(#badgeEdge)" stroke-width="7" />
+
+  <g fill="url(#badgeFill)" fill-rule="evenodd" transform="translate(298 124) scale(.6)">
+    <g transform="translate(-60 -95)">
+      <path d="M60 95 H290 L360 165 V360 L290 430 H60 L128 262 Z
+               M175 168 H272 L296 196 V329 L272 357 H175 L214 262 Z" />
+    </g>
+    <g transform="translate(342 0)">
+      <g transform="translate(-1690 -95)">
+        <path d="M1690 95 H1800 V240 H1912 V95 H2022 V430 H1912 V296 H1800 V430 H1690 Z" />
+      </g>
+    </g>
+  </g>
+</svg>

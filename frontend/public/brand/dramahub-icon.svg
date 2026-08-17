@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="DramaHub">
+  <title>DramaHub</title>
+  <!--
+    Monogram DH: dùng lại nguyên hình chữ D và H đã vẽ trong
+    dramahub-wordmark.svg (cùng toạ độ path) để icon và wordmark không lệch
+    nhau về dáng chữ. Nền khối bo góc giúp favicon đọc được trên cả tab sáng
+    lẫn tối; dải màu cyan kế thừa từ bộ nhận diện cũ.
+  -->
+  <defs>
+    <linearGradient id="dh" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eafcff" />
+      <stop offset=".55" stop-color="#8ef0fb" />
+      <stop offset="1" stop-color="#5ad7ea" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#0b1418" />
+
+  <g fill="url(#dh)" fill-rule="evenodd" transform="translate(74 162) scale(.545)">
+    <!-- D — path lấy từ wordmark, dịch gốc về 0,0 -->
+    <g transform="translate(-60 -95)">
+      <path d="M60 95 H290 L360 165 V360 L290 430 H60 L128 262 Z
+               M175 168 H272 L296 196 V329 L272 357 H175 L214 262 Z" />
+    </g>
+    <!-- H — cùng nguồn, đặt cạnh D với khoảng hở 42 -->
+    <g transform="translate(342 0)">
+      <g transform="translate(-1690 -95)">
+        <path d="M1690 95 H1800 V240 H1912 V95 H2022 V430 H1912 V296 H1800 V430 H1690 Z" />
+      </g>
+    </g>
+  </g>
+</svg>

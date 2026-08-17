@@ -22,7 +22,7 @@ describe("freezone viewer contracts", () => {
     expect(node).toContain("snap4x3");
     expect(node).toContain("sphere_correction_deg");
     expect(node).toContain("selected_background");
-    expect(node).toContain("360 自由画布查看器");
+    expect(node).toContain("t('node.pano360.meta.ready')");
     expect(node).not.toContain("PanoCaptureDialog");
     expect(canvasNodes).toContain("pano360Viewer");
     expect(canvasNodes).toContain("Pano360ViewerNodeData");

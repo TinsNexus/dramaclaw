@@ -104,10 +104,7 @@ interface PickerAnchor {
   top: number;
 }
 
-const AUTO_ASPECT_RATIO_OPTION: AspectRatioChoice = {
-  value: AUTO_REQUEST_ASPECT_RATIO,
-  label: '自动',
-};
+// AUTO_ASPECT_RATIO_OPTION is now created dynamically in the component with i18n support
 const PICKER_FALLBACK_ANCHOR: PickerAnchor = { left: 8, top: 8 };
 
 // 分镜节点永远把渲染好的宫格图作为参考图一起提交，所以模式恒为图生图。
@@ -612,8 +609,8 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   );
   const frameDescriptionDraftsRef = useRef(frameDescriptionDrafts);
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardGen, nodeData),
-    [nodeData]
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardGen, nodeData, t),
+    [nodeData, t]
   );
 
   const incomingImages = useUpstreamImages(id);
@@ -659,16 +656,24 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     });
   }, [effectiveExtraParams, nodeData.size, selectedModel]);
 
+  const autoAspectRatioOption = useMemo<AspectRatioChoice>(
+    () => ({
+      value: AUTO_REQUEST_ASPECT_RATIO,
+      label: t('modelParams.autoAspectRatio'),
+    }),
+    [t]
+  );
+
   const aspectRatioOptions = useMemo<AspectRatioChoice[]>(
-    () => [AUTO_ASPECT_RATIO_OPTION, ...selectedModel.aspectRatios],
-    [selectedModel.aspectRatios]
+    () => [autoAspectRatioOption, ...selectedModel.aspectRatios],
+    [autoAspectRatioOption, selectedModel.aspectRatios]
   );
 
   const selectedAspectRatio = useMemo((): AspectRatioChoice => {
     const nodeAspectRatio = nodeData.requestAspectRatio;
     const found = nodeAspectRatio ? aspectRatioOptions.find((item) => item.value === nodeAspectRatio) : undefined;
-    return found ?? AUTO_ASPECT_RATIO_OPTION;
-  }, [aspectRatioOptions, nodeData.requestAspectRatio]);
+    return found ?? autoAspectRatioOption;
+  }, [aspectRatioOptions, autoAspectRatioOption, nodeData.requestAspectRatio]);
 
   const ratioControlMode: StoryboardRatioControlMode = showStoryboardGenAdvancedRatioControls
     ? (nodeData.ratioControlMode === 'overall' ? 'overall' : 'cell')
@@ -1094,17 +1099,17 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     // 后台一个图片模型都没配时不放行（上面的网格预览是纯本地渲染，不受影响）：
     // selectedModel 此时是占位定义，提交出去后端 `_resolve_catalog_request` 直接 409。
     if (imageModelsEmpty) {
-      const errorMessage = '管理员尚未配置任何图片模型，暂时无法生成';
+      const errorMessage = t('node.imageEdit.noModelAvailable');
       setError(errorMessage);
-      void showErrorDialog(errorMessage, '错误');
+      void showErrorDialog(errorMessage, t('common.error'));
       return;
     }
 
     const prompt = buildPrompt();
     if (!prompt) {
-      const errorMessage = '请填写至少一个宫格候选描述';
+      const errorMessage = t('node.storyboardGen.emptyFrameDescription');
       setError(errorMessage);
-      void showErrorDialog(errorMessage, '错误');
+      void showErrorDialog(errorMessage, t('common.error'));
       return;
     }
 
@@ -1126,7 +1131,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         isGenerating: true,
         generationStartedAt,
         generationDurationMs,
-        displayName: EXPORT_RESULT_DISPLAY_NAME.storyboardGenOutput,
+        displayName: t(EXPORT_RESULT_DISPLAY_NAME.storyboardGenOutput),
         resultKind: 'storyboardGenOutput',
         prompt: '',
         model: selectedModel.id,
@@ -1216,7 +1221,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         ...generationTaskDescriptor(ref),
       });
     } catch (generationError) {
-      const resolvedError = resolveErrorContent(generationError, '生成失败');
+      const resolvedError = resolveErrorContent(generationError, t('node.imageNode.generationFailed'));
       const displayErrorMessage = backendErrorToastMessage(generationError, t);
       const diagnostics = resolveGenerationErrorDiagnostics(
         generationError,

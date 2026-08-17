@@ -3,9 +3,9 @@
 
 # Self-Hosting Handbook (Docker)
 
-> Deploy, configure, upgrade, and back up DramaClaw CE with Docker.
+> Deploy, configure, upgrade, and back up DramaHub CE with Docker.
 
-CE ships two containers by default: `api` + `web`, with **no PostgreSQL / no Redis / no Celery** (`ST_EDITION=ce`; tasks run inline within the process). Models go through the official DramaClaw gateway by default. If you want a purely local, self-hosted gateway, use `docker-compose.selfhosted.yml` (which adds a bundled `newapi` container).
+CE ships two containers by default: `api` + `web`, with **no PostgreSQL / no Redis / no Celery** (`ST_EDITION=ce`; tasks run inline within the process). Models go through the official DramaHub gateway by default. If you want a purely local, self-hosted gateway, use `docker-compose.selfhosted.yml` (which adds a bundled `newapi` container).
 
 ## 1. Prerequisites
 

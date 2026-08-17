@@ -1,4 +1,4 @@
-# DramaClaw 虾导 API 快速参考
+# DramaHub 虾导 API 快速参考
 
 **Base URL**: `$DRAMACLAW_API_URL/api/v1`
 **认证**: `Authorization: Bearer $DRAMACLAW_AGENT_TOKEN`

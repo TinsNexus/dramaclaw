@@ -1264,10 +1264,15 @@ export function IngestPageContent({ project }: { project: string }) {
   const visualStyleOptions = useMemo(() => {
     const styles = stylesRes?.data ?? [];
     if (styles.length > 0) {
-      return styles.map((style) => ({
-        value: style.id,
-        label: style.label || style.name || style.id,
-      }));
+      return styles.map((style) => {
+        // Backend seeds the built-in presets with fixed ids (chinese_period_drama,
+        // anime, …) but Chinese labels — translate those; keep names for custom styles.
+        const preset = VISUAL_STYLE_OPTIONS.find((o) => o.value === style.id);
+        return {
+          value: style.id,
+          label: preset ? t(preset.labelKey) : style.label || style.name || style.id,
+        };
+      });
     }
     return VISUAL_STYLE_OPTIONS.map((option) => ({
       value: option.value,
@@ -1722,11 +1727,11 @@ export function IngestPageContent({ project }: { project: string }) {
                   )}
                 </div>
               )}
-              <div className="mt-2.5 grid grid-cols-2 gap-2.5 px-1 md:flex md:items-center md:gap-3">
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5 px-1 md:flex md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2">
                 <InputModeToggle
                   value={inputMode}
                   onChange={setInputMode}
-                  className="col-span-2 w-full md:w-auto"
+                  className="col-span-2 w-full shrink-0 md:w-auto"
                 />
 
                 {spineTemplateLocked ? (

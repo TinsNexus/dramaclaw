@@ -166,13 +166,19 @@ describe("director bundle canvas assets", () => {
       resolve(process.cwd(), "public/locales/zh/translation.json"),
       "utf8",
     );
+    const vi = readFileSync(
+      resolve(process.cwd(), "public/locales/vi/translation.json"),
+      "utf8",
+    );
 
-    expect(dialog).toContain("导演合成资产");
-    expect(shell).toContain("导演合成资产");
+    // After i18n migration, check translation files for terminology instead of hardcoded strings
     expect(zh).toContain("导演合成资产");
-    expect(dialog).not.toContain("导演合成 bundle");
-    expect(shell).not.toContain("导演合成 bundle");
+    expect(vi).toContain("Tài sản dựng video của đạo diễn");
     expect(zh).not.toContain("导演合成 bundle");
+    expect(vi).not.toContain("composite bundle");
+    // Source code should reference these strings via i18n keys
+    expect(dialog).toContain("freezone.commit.dialog.kind.directorRender");
+    expect(shell).toContain("commitDirectorRenderFromCanvasSource");
   });
 
   it("uses mainline asset wording and keeps current background labels beat-agnostic", () => {
@@ -188,14 +194,24 @@ describe("director bundle canvas assets", () => {
       resolve(process.cwd(), "public/locales/zh/translation.json"),
       "utf8",
     );
+    const vi = readFileSync(
+      resolve(process.cwd(), "public/locales/vi/translation.json"),
+      "utf8",
+    );
     const badges = readFileSync(
       resolve(process.cwd(), "src/features/freezone/context/NodeContextBadges.tsx"),
       "utf8",
     );
 
-    expect(panel).toContain("主线资产");
-    expect(badges).toContain("主线资产");
-    expect(`${panel}\n${badges}`).not.toContain("主线素材");
+    // After i18n migration, check translation files for terminology
+    expect(zh).toContain("主线资产");
+    expect(vi).toContain("Tài sản chính tuyến");
+    expect(zh).not.toContain("主线素材");
+    expect(vi).not.toContain("tư liệu chính tuyến"); // Old naming
+    // Source code should reference these strings via i18n keys
+    expect(panel).toContain("freezone.assetLibrary.panelTab.library");
+    expect(badges).toContain("mainlineAssets");
+    // Verify no hardcoded old terminology in source
     expect(panel).not.toContain(">素材库<");
     expect(selectedBackgroundSlot).not.toContain("当前背景 · EP");
     expect(selectedBackgroundSlot).not.toContain("已设置 EP");

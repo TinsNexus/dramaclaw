@@ -404,10 +404,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
       incomingImages.map((imageUrl, index) => ({
         imageUrl,
         displayUrl: resolveImageDisplayUrl(imageUrl),
-        label: `图${index + 1}`,
+        label: `${t('node.imageEdit.imageLabel', { index: index + 1 })}`,
         sourceNodeId: imageUrlToNodeId.get(imageUrl),
       })),
-    [incomingImages, imageUrlToNodeId]
+    [incomingImages, imageUrlToNodeId, t]
   );
   const incomingImageViewerList = useMemo(
     () => incomingImageItems.map((item) => resolveImageDisplayUrl(item.imageUrl)),
@@ -522,8 +522,8 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
   );
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.imageEdit, data),
-    [data]
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.imageEdit, data, t),
+    [data, t]
   );
   const capability = useMemo(() => getCapability(data.capabilityId), [data.capabilityId]);
   const structuredCapabilities = useMemo(() => listCapabilities(), []);
@@ -658,7 +658,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
     const generationDurationMs = selectedModel.expectedDurationMs ?? 60000;
     const generationStartedAt = Date.now();
     const resultNodeTitle = capability
-      ? `${capability.shortName} · 候选`
+      ? `${capability.shortName} · ${t('node.imageEdit.candidateLabel')}`
       : buildAiResultNodeTitle(prompt, t('node.imageEdit.resultTitle'));
     const runtimeDiagnostics = await getRuntimeDiagnostics();
     const { nodes: currentNodes, edges: currentEdges } = useCanvasStore.getState();
@@ -975,9 +975,9 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         addEdge(newId, id);
         newIds.push(newId);
       });
-      state.autoGroupSpawn(id, newIds, { label: '资产参考组' });
+      state.autoGroupSpawn(id, newIds, { label: t('operationPanel.assetReferenceGroup') });
     },
-    [addEdge, addNode, id],
+    [addEdge, addNode, id, t],
   );
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1085,7 +1085,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         <div className="relative min-h-[190px] flex-[1.25] border-b border-[rgba(255,255,255,0.08)] bg-black/20">
           <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-black/40 px-2 py-1 text-[11px] text-text-muted">
             <ImageIcon className="h-3.5 w-3.5" />
-            图片节点 {incomingImageItems.length > 0 ? incomingImageItems.length : ''}
+            {t('node.imageEdit.nodeBadgeLabel')} {incomingImageItems.length > 0 ? incomingImageItems.length : ''}
           </div>
           {incomingImageItems.length > 0 ? (
             <div className={`grid h-full gap-2 p-3 ${incomingImageItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -1116,7 +1116,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
               ))}
               {incomingImageItems.length > 4 && (
                 <div className="absolute bottom-3 left-3 rounded-full border border-[rgba(255,255,255,0.12)] bg-black/55 px-2 py-0.5 text-[11px] text-text-dark">
-                  +{incomingImageItems.length - 4} 张引用图
+                  {t('node.imageEdit.moreReferencesLabel', { count: incomingImageItems.length - 4 })}
                 </div>
               )}
             </div>
@@ -1131,23 +1131,23 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                   event.stopPropagation();
                   promptRef.current?.focus();
                 }}
-                title="从素材库拖入图片，或从图片节点点击 AI 改图自动连接"
+                title={t('node.imageEdit.uploadButtonTooltip')}
               >
                 <UploadCloud className="h-4 w-4" />
-                连接参考图
+                {t('node.imageEdit.connectReferenceButton')}
               </button>
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-[var(--canvas-node-input-helper)]">试试：</span>
+                <span className="text-[var(--canvas-node-input-helper)]">{t('textNode.tryHint')}</span>
                 <button
                   type="button"
                   className="nodrag rounded-full bg-white/8 px-2 py-1 text-text-dark transition hover:bg-white/12"
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    applyPromptSuggestion('基于参考图生成一个更稳定、更精细的版本，保持主体身份和构图。');
+                    applyPromptSuggestion(t('node.imageEdit.refineImageSuggestion'));
                   }}
                 >
-                  图生图
+                  {t('node.imageEdit.imageToImageButton')}
                 </button>
                 <button
                   type="button"
@@ -1155,10 +1155,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    applyPromptSuggestion('对参考图做高清修复，提升细节、边缘和质感，保持原图内容不变。');
+                    applyPromptSuggestion(t('node.imageEdit.enhanceImageSuggestion'));
                   }}
                 >
-                  图片高清
+                  {t('node.imageEdit.enhanceImageButton')}
                 </button>
               </div>
             </div>
@@ -1172,7 +1172,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
               event.stopPropagation();
               promptRef.current?.focus();
             }}
-            title="聚焦 prompt"
+            title={t('node.imageEdit.focusPromptButton')}
           >
             <Maximize2 className="h-4 w-4" />
           </button>
@@ -1181,12 +1181,12 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         <div className="relative flex min-h-[180px] flex-1 flex-col p-3">
           <div className="mb-2 flex flex-wrap gap-2">
             {[
-              { key: 'text_to_image', label: '文生图', disabled: incomingImages.length > 0 },
-              { key: 'all_reference', label: '全能参考', disabled: false },
-              { key: 'image_reference', label: '图片参考', disabled: false },
-              { key: 'image_to_image', label: '图生图', disabled: false },
-              { key: 'image_to_video', label: '图生视频', disabled: true },
-              { key: 'first_last_frame', label: '首尾帧', disabled: true },
+              { key: 'text_to_image', labelKey: 'node.imageEdit.generationModes.textToImage', disabled: incomingImages.length > 0 },
+              { key: 'all_reference', labelKey: 'node.imageEdit.generationModes.allReference', disabled: false },
+              { key: 'image_reference', labelKey: 'node.imageEdit.generationModes.imageReference', disabled: false },
+              { key: 'image_to_image', labelKey: 'node.imageEdit.generationModes.imageToImage', disabled: false },
+              { key: 'image_to_video', labelKey: 'node.imageEdit.generationModes.imageToVideo', disabled: true },
+              { key: 'first_last_frame', labelKey: 'node.imageEdit.generationModes.firstLastFrame', disabled: true },
             ].map((item) => {
               const active = generationMode === item.key;
               return (
@@ -1214,7 +1214,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                     });
                   }}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </button>
               );
             })}
@@ -1259,7 +1259,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                     {capability.name}
                   </div>
                   <div className="truncate text-[10px] text-text-muted">
-                    候选图能力 · Commit 后才成为资产
+                    {t('node.imageEdit.capabilityHint')}
                   </div>
                 </div>
                 <button
@@ -1278,7 +1278,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                     });
                   }}
                 >
-                  自由提示词
+                  {t('node.imageEdit.freestylePromptButton')}
                 </button>
               </div>
               <div
@@ -1308,7 +1308,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                 promptRef.current?.focus();
               }}
             >
-              标记
+              {t('node.imageEdit.markButton')}
             </button>
             <button
               type="button"
@@ -1316,10 +1316,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
-                applyPromptSuggestion(`${promptDraft}${promptDraft ? '\n' : ''}镜头运动：轻微推进，保持主体稳定，电影级质感。`);
+                applyPromptSuggestion(`${promptDraft}${promptDraft ? '\n' : ''}${t('node.imageEdit.cameraMovementSuggestion')}`);
               }}
             >
-              运镜
+              {t('operationPanel.cameraMovement')}
             </button>
             <button
               type="button"
@@ -1329,9 +1329,9 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                 event.stopPropagation();
                 setIsAssetLibraryOpen(true);
               }}
-              title="从资产库选择参考图（人物 / 场景 / 道具）"
+              title={t('node.imageEdit.assetLibraryTooltip')}
             >
-              资产库
+              {t('operationPanel.characterLibrary')}
             </button>
             {upstreamTextContents.map((content) => (
               <ReferenceTextChip
@@ -1353,7 +1353,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                   event.stopPropagation();
                   insertImageReference(index);
                 }}
-                title={`插入 ${item.label}`}
+                title={t('node.imageEdit.insertReferenceButtonTooltip', { label: item.label })}
               >
                 <CanvasNodeImage
                   src={item.displayUrl}

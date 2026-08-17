@@ -200,7 +200,7 @@ export function NodeToolDialog() {
     if (toolType === NODE_TOOL_TYPES.annotate) {
       return t('toolDialog.annotateResultTitle');
     }
-    return EXPORT_RESULT_DISPLAY_NAME.generic;
+    return t(EXPORT_RESULT_DISPLAY_NAME.generic);
   }, [t]);
 
   const handleApply = useCallback(async () => {

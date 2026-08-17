@@ -416,8 +416,8 @@ describe("HappyHorse 单图默认模式", () => {
       "src/features/canvas/nodes/VideoOperationsPanel.tsx",
       "utf8",
     );
-    expect(source).toContain('if (images === 0) return "需要连接图片节点（1~9个）";');
-    expect(source).toContain('if (images > 9) return "「图片参考」最多支持 9 张图片";');
+    expect(source).toContain('if (images === 0) return t("node.operationPanel.modeError.imageRequired.multi");');
+    expect(source).toContain('if (images > 9) return t("node.operationPanel.modeError.imageTooMany");');
   });
 });
 

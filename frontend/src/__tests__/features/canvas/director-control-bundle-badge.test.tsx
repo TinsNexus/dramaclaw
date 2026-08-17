@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (value: string) => value }),
+}));
 
 import {
   DirectorControlBundleBadge,
@@ -42,7 +46,7 @@ describe("DirectorControlBundleBadge", () => {
       />,
     );
 
-    expect(screen.getByText("导演合成")).toBeInTheDocument();
+    expect(screen.getByText("node.directorControlBundle.badge")).toBeInTheDocument();
   });
 
   it("does not render for ordinary images", () => {

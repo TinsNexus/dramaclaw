@@ -346,6 +346,7 @@ function presetRequestFromMetadata(
 
 async function restoreCurrentMainlinePresetCanvas(
   projectId: string,
+  t: (key: string) => string = (key) => key,
 ): Promise<boolean> {
   const canvasId = readUrl().canvas ?? "default";
   const metadata = getFreezoneCanvasMetadata();
@@ -355,7 +356,7 @@ async function restoreCurrentMainlinePresetCanvas(
   }
   const flushed = await flushFreezoneCanvasRuntime(projectId, canvasId);
   if (flushed === false) {
-    throw new Error("当前画布还有未保存冲突，处理后再同步主线视图");
+    throw new Error(t("node.beatContextNode.errors.unsavedConflicts"));
   }
   const localStateBeforeRestore = useCanvasStore.getState();
   const localNodes = localStateBeforeRestore.nodes;
@@ -741,13 +742,13 @@ export const BeatContextNode = memo(
           {
             kind: "identity" as const,
             id: "identity-template",
-            label: "人物",
+            label: t("node.beatContextNode.mentionCandidates.identity"),
             token: "{{}}",
           },
           {
             kind: "prop" as const,
             id: "prop-template",
-            label: "道具",
+            label: t("node.beatContextNode.mentionCandidates.prop"),
             token: "[[]]",
           },
         ];
@@ -766,7 +767,7 @@ export const BeatContextNode = memo(
           token: `[[${propId}]]`,
         })),
       ];
-    }, [episodeIdentityIds, episodePropIds, isStandaloneContext]);
+    }, [episodeIdentityIds, episodePropIds, isStandaloneContext, t]);
     const filteredMentionCandidates = useMemo(() => {
       if (!mentionContext) return [];
       const query = mentionContext.query;
@@ -819,7 +820,7 @@ export const BeatContextNode = memo(
       ) {
         updateNodeData(id, {
           syncStatus: "error",
-          errorMessage: "缺少 project/episode/beat，无法同步到主线",
+          errorMessage: t("node.beatContextNode.errors.missingProjectEpisodeBeat"),
         });
         return;
       }
@@ -862,7 +863,7 @@ export const BeatContextNode = memo(
           stringList(refreshPatch.snapshot?.detectedIdentities),
           stringList(refreshPatch.snapshot?.detectedProps),
         );
-        await restoreCurrentMainlinePresetCanvas(projectId);
+        await restoreCurrentMainlinePresetCanvas(projectId, t);
         setEditVersion((v) => v + 1);
       } catch (error) {
         updateNodeData(id, {
@@ -885,7 +886,7 @@ export const BeatContextNode = memo(
         ) {
           updateNodeData(id, {
             syncStatus: "error",
-            errorMessage: "缺少 project/episode/beat，无法更新本地上下文",
+            errorMessage: t("node.beatContextNode.errors.missingProjectEpisodeBeatLocal"),
           });
           return;
         }

@@ -25,7 +25,6 @@ import {
   type VideoNodeData,
   type VideoStoryNodeData,
 } from './canvasNodes';
-import { DEFAULT_NODE_DISPLAY_NAME } from './nodeDisplay';
 import { SKILL_SCHEMA_VERSION } from '@/features/freezone/context/skillRoles';
 import { DEFAULT_IMAGE_MODEL_ID } from '../models';
 import {
@@ -78,7 +77,7 @@ const uploadNodeDefinition: CanvasNodeDefinition<UploadImageNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.upload],
+    displayName: '',
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: '1:1',
@@ -105,7 +104,7 @@ const imageEditNodeDefinition: CanvasNodeDefinition<ImageEditNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.imageEdit],
+    displayName: '',
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: DEFAULT_ASPECT_RATIO,
@@ -140,7 +139,7 @@ const imageGenNodeDefinition: CanvasNodeDefinition<ImageGenNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.imageGen],
+    displayName: '',
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: '16:9',
@@ -179,7 +178,7 @@ const exportImageNodeDefinition: CanvasNodeDefinition<ExportImageNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.exportImage],
+    displayName: '',
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: DEFAULT_ASPECT_RATIO,
@@ -206,7 +205,7 @@ const beatContextNodeDefinition: CanvasNodeDefinition<BeatContextNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.beatContext],
+    displayName: '',
     content: '',
     context_scope: 'standalone',
     beat_context: {
@@ -254,7 +253,7 @@ const groupNodeDefinition: CanvasNodeDefinition<GroupNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.group],
+    displayName: '',
     label: '组',
   }),
 };
@@ -277,7 +276,7 @@ const textAnnotationNodeDefinition: CanvasNodeDefinition<TextAnnotationNodeData>
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.textAnnotation],
+    displayName: '',
     content: '',
     model: DEFAULT_SHARED_MODEL_ID,
     extraParams: {},
@@ -303,7 +302,7 @@ const storyboardSplitDefinition: CanvasNodeDefinition<StoryboardSplitNodeData> =
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.storyboardSplit],
+    displayName: '',
     aspectRatio: DEFAULT_ASPECT_RATIO,
     frameAspectRatio: DEFAULT_ASPECT_RATIO,
     gridRows: 2,
@@ -342,7 +341,7 @@ const storyboardGenNodeDefinition: CanvasNodeDefinition<StoryboardGenNodeData> =
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.storyboardGen],
+    displayName: '',
     gridRows: 2,
     gridCols: 2,
     frames: [],
@@ -378,7 +377,7 @@ const videoNodeDefinition: CanvasNodeDefinition<VideoNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.video],
+    displayName: '',
     videoUrl: null,
     previewImageUrl: null,
     aspectRatio: '16:9',
@@ -424,7 +423,7 @@ const audioNodeDefinition: CanvasNodeDefinition<AudioNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.audio],
+    displayName: '',
     audioUrl: null,
     sourceFileName: null,
     durationMs: null,
@@ -460,7 +459,7 @@ const videoStoryNodeDefinition: CanvasNodeDefinition<VideoStoryNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.videoStory],
+    displayName: '',
     sourceVideoUrl: null,
     rows: [],
     rawResult: null,
@@ -488,7 +487,7 @@ const videoComposeNodeDefinition: CanvasNodeDefinition<VideoComposeNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.videoCompose],
+    displayName: '',
     resultVideoUrl: null,
     previewImageUrl: null,
     resolution: '1080p',
@@ -517,7 +516,7 @@ const scriptNodeDefinition: CanvasNodeDefinition<ScriptNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.script],
+    displayName: '',
     prompt: '',
     model: DEFAULT_SCRIPT_MODEL_ID,
     lastAction: null,
@@ -548,7 +547,7 @@ const pano360ViewerNodeDefinition: CanvasNodeDefinition<Pano360ViewerNodeData> =
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.pano360Viewer],
+    displayName: '',
     imageUrl: null,
     previewImageUrl: null,
     sourceNodeId: null,
@@ -577,7 +576,7 @@ const threeDWorldNodeDefinition: CanvasNodeDefinition<ThreeDWorldNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.threeDWorld],
+    displayName: '',
     prompt: '',
     model: 'marble-1.1',
     taskKey: null,
@@ -609,7 +608,7 @@ const skillNodeDefinition: CanvasNodeDefinition<SkillNodeData> = {
     },
   },
   createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.skill],
+    displayName: '',
     skill_id: '',
     skill_schema_version: SKILL_SCHEMA_VERSION,
   }),

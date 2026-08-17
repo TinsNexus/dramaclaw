@@ -38,10 +38,12 @@ import { authRequired, isCeRuntime } from "@/lib/runtime-config";
 import { resetUserSessionState } from "@/lib/reset-region-state";
 import { useModelGatewayConfig } from "@/lib/queries/model-gateway";
 import { useReleaseNotifications } from "@/lib/queries/release-notifications";
+import { normalize, type Supported } from "@/i18n/languages";
 import {
   markUpgradeSeen,
   shouldShowUpgradeNudge,
 } from "@/lib/release-notification-state";
+import { BrandBadge } from "@/components/layout/brand-badge";
 import {
   ProjectHeaderNavigation,
   ProjectSwitcher,
@@ -89,9 +91,7 @@ export function Header() {
   const ceRuntime = isCeRuntime();
   const displayName = username ?? "User";
   const avatarInitial = displayName.slice(0, 1).toUpperCase();
-  const activeLanguage = (i18n.resolvedLanguage ?? i18n.language).startsWith("zh")
-    ? "zh"
-    : "en";
+  const activeLanguage = normalize(i18n.resolvedLanguage ?? i18n.language);
   const modelGatewayConfig = useModelGatewayConfig(ceRuntime);
   const releaseNotifications = useReleaseNotifications(i18n.resolvedLanguage ?? i18n.language);
   const releaseFeed = releaseNotifications.data?.data;
@@ -191,7 +191,7 @@ export function Header() {
     }, 120);
   };
 
-  const switchLanguage = (lang: "zh" | "en") => {
+  const switchLanguage = (lang: Supported) => {
     void i18n.changeLanguage(lang);
     setLanguage(lang);
   };
@@ -228,7 +228,7 @@ export function Header() {
                 }
               >
                 <img
-                  src="/brand/dramaclaw-wordmark.png"
+                  src="/brand/dramahub-wordmark.svg"
                   alt=""
                   aria-hidden="true"
                   className="h-[22.7px] w-auto max-w-[113px] object-contain"
@@ -244,6 +244,7 @@ export function Header() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <BrandBadge />
           <div className="ml-[22px] flex min-w-0 items-center gap-6">
             {project ? <ProjectSwitcher current={project} /> : null}
           </div>
@@ -470,12 +471,12 @@ function AccountPanel({
   visible,
   t,
 }: {
-  activeLanguage: "zh" | "en";
+  activeLanguage: Supported;
   avatarInitial: string;
   avatarUrl: string | null;
   displayName: string;
   onChangeAvatar: () => void;
-  onLanguageChange: (lang: "zh" | "en") => void;
+  onLanguageChange: (lang: Supported) => void;
   onClose: () => void;
   onEnter: () => void;
   onLogout?: () => void;
@@ -484,9 +485,16 @@ function AccountPanel({
   t: (key: string) => string;
 }) {
   const [languageOpen, setLanguageOpen] = useState(false);
-  const activeLanguageLabel = activeLanguage === "zh"
-    ? t("header.account.languageChinese")
-    : t("header.account.languageEnglish");
+  // 语言选项集中在一处，新增语言只改这个数组 + i18n 的 SUPPORTED。
+  const languageOptions: { code: Supported; labelKey: string }[] = [
+    { code: "zh", labelKey: "header.account.languageChinese" },
+    { code: "en", labelKey: "header.account.languageEnglish" },
+    { code: "vi", labelKey: "header.account.languageVietnamese" },
+  ];
+  const activeLanguageLabel = t(
+    languageOptions.find((option) => option.code === activeLanguage)?.labelKey ??
+      "header.account.languageChinese",
+  );
 
   return (
     <div
@@ -527,16 +535,14 @@ function AccountPanel({
           />
           {languageOpen ? (
             <div className="ml-[30px] mr-1 space-y-0.5 pb-1">
-              <PreferenceOption
-                active={activeLanguage === "zh"}
-                label={t("header.account.languageChinese")}
-                onClick={() => onLanguageChange("zh")}
-              />
-              <PreferenceOption
-                active={activeLanguage === "en"}
-                label={t("header.account.languageEnglish")}
-                onClick={() => onLanguageChange("en")}
-              />
+              {languageOptions.map((option) => (
+                <PreferenceOption
+                  key={option.code}
+                  active={activeLanguage === option.code}
+                  label={t(option.labelKey)}
+                  onClick={() => onLanguageChange(option.code)}
+                />
+              ))}
             </div>
           ) : null}
           {onLogout ? (

@@ -1,4 +1,4 @@
-# DramaClaw CE — 内置 newapi 自建网关版(无需 DC key)。
+# DramaHub CE — 内置 newapi 自建网关版(无需 DC key)。
 # 跑法:docker compose -f docker-compose.selfhosted.yml up -d --build
 # 三服务:api + 内置 newapi 网关(:3000)+ web(:8080)。api 与 newapi 共享 SQLite
 # 数据卷，首次启动可直接在 DramaClaw 的“本地 NewAPI”页完成初始化。
