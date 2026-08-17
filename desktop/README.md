@@ -74,20 +74,56 @@ pnpm -C desktop dev:vite        # Electron trỏ vào http://localhost:5173
 | `DRAMACLAW_SHELL_PORT` | `5178` | Cổng server tĩnh + proxy nội bộ |
 | `DRAMACLAW_DEV_URL` | *(trống)* | Nếu đặt, cửa sổ load thẳng URL này (bỏ qua dist/proxy) |
 
-## Giới hạn (bản tối thiểu)
+## Đóng gói installer (.dmg / .exe)
 
-- **Chưa đóng gói installer** (`.dmg`/`.exe`). Chưa thêm `electron-builder`, vì một
-  installer thật phải **freeze Python + ffmpeg + model gateway (NewAPI) + SQLite**
-  vào bản build để chạy trên máy *không* có repo — đó là một hạng mục riêng, đáng
-  kể. Bản này cố tình dừng ở mức "vỏ desktop cho máy đã có mã nguồn + `uv`".
-- **Không sửa backend**: không thêm StaticFiles mount vào FastAPI (tránh đổi hành vi
-  deploy chỉ vì nhu cầu desktop). Việc serve tĩnh nằm hoàn toàn trong Electron.
+Khi chạy **đóng gói** (không phải dev), app nhúng sẵn một **trình thông dịch Python
+tự chứa** + backend + `frontend/dist`, không cần repo/`uv` trên máy đích. Backend
+đông cứng bằng cách copy một CPython relocatable (python-build-standalone do `uv`
+quản) rồi cài repo (`supertale-ce`) + `imageio-ffmpeg` vào đó — **không** dùng
+PyInstaller (cognee/lancedb/pyarrow/litellm import động + kèm data file, PyInstaller
+xử lý kém).
 
-## Hướng đóng gói đầy đủ (khi cần, làm sau)
+```bash
+pnpm -C desktop install
+pnpm -C desktop dist:mac    # → desktop/dist-installers/DramaClaw-<ver>-arm64.dmg
+# hoặc: pnpm -C desktop dist:win   (chạy TRÊN Windows)
+```
 
-1. Freeze backend: PyInstaller (hoặc ship môi trường `uv`) → 1 binary `novelvideo`.
-2. Kèm `ffmpeg` và cấu hình model gateway (NewAPI) như sidecar.
-3. Thêm `electron-builder` (target `dmg`/`nsis`), đưa binary backend + `frontend/dist`
-   vào `extraResources`; sửa `main.js` để spawn binary đã đóng gói thay vì `uv run`.
-4. (Tùy chọn) auto-update qua `electron-updater` — khớp với pipeline desktop chính
-   thức hiện có (`latest.yml` / `latest-mac.yml`).
+`dist:mac` tự chạy `prep` = `build:frontend` + `bundle:backend`
+([scripts/bundle-backend.sh](scripts/bundle-backend.sh)) rồi `electron-builder`.
+Kết quả kiểm chứng trên máy này: `.app` ~1.6GB, **DMG ~592MB**.
+
+Khi đóng gói, `main.js` (nhánh `app.isPackaged`) tự lo:
+
+- Spawn `resources/pybackend` (python nhúng) chạy `-m novelvideo.cli api`.
+- Đặt `NOVELVIDEO_DATA_ROOT` = `app.getPath('userData')/data` (thư mục **ghi được**;
+  `resourcesPath` trong `.app` là chỉ-đọc) — SQLite (`data.db`/`settings.db`/
+  `projects.db`), kho Cognee và media đều nằm ở đó.
+- **Hai cạm bẫy đã xử lý sẵn** (nếu tự đóng gói lại, đừng bỏ):
+  1. **`ST_EDITION=ce`** — backend từ chối khởi động nếu thiếu (`ensure_bootstrap`
+     yêu cầu `ST_CONTROL_PLANE_DSN` hoặc `ST_EDITION=ce`). Dev lấy từ `.env`; bản
+     đóng gói có env sạch nên `main.js` set thẳng.
+  2. Xoá **`ANTHROPIC_BASE_URL`** khỏi env backend — nếu người dùng có biến này (ví
+     dụ đang dùng Claude Code), nó trỏ SDK Anthropic sang endpoint chặn-auth khiến
+     backend **treo** ở lifespan startup. CE định tuyến model qua gateway riêng
+     (settings.db / NewAPI), không cần biến này.
+- Cognee ghi vào `state/cognee_system` qua `SYSTEM_ROOT_DIRECTORY` (Cognee **không**
+  theo `NOVELVIDEO_STATE_DIR`), ffmpeg lấy từ wheel `imageio-ffmpeg`.
+
+### Lưu ý quan trọng khi phát hành
+
+- **Build theo từng nền tảng/kiến trúc.** Wheel native (`numpy`, `Pillow`,
+  `psycopg[binary]`, `pyarrow`, `lance`…) gắn với OS+arch. Máy này build được
+  **macOS Apple Silicon**; muốn Intel Mac / Windows / Linux phải build **trên đúng
+  nền đó** (hoặc CI). `bundle-backend.sh` hiện dành cho macOS/Linux; Windows cần bản
+  `.ps1` theo layout `python.exe`.
+- **Kích thước ~1.2–1.5GB** (nén DMG ~0.6GB). Muốn nhỏ hơn thì tỉa bundle —
+  ứng viên: `claude_agent_sdk` (~207M), `pyarrow` (~122M).
+- **Chưa ký (unsigned).** `mac.identity=null` nên DMG sẽ bị Gatekeeper chặn trên máy
+  khác. Muốn phát hành rộng cần chứng chỉ Apple Developer để **ký + notarize** (đặt
+  `identity` và cấu hình notarize trong `build.mac`).
+- **Không bundle NewAPI gateway**: dùng gateway official/BYO từ xa (dán DC key trong
+  Settings). Muốn hoàn toàn offline thì phải kèm thêm NewAPI như sidecar — ngoài
+  phạm vi bản này.
+- (Tùy chọn) auto-update qua `electron-updater` — khớp pipeline desktop chính thức
+  (`latest.yml` / `latest-mac.yml`).

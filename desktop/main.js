@@ -19,13 +19,36 @@ const { app, BrowserWindow, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-const { spawn } = require("node:child_process");
+const { spawn, execFileSync } = require("node:child_process");
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
+// Packaged (.app/.exe) vs. dev (run from the repo). When packaged, the frontend
+// build and a self-contained Python interpreter are bundled under resourcesPath;
+// in dev we use the repo's frontend/dist and `uv run` against the checkout.
+const PACKAGED = app.isPackaged;
 const REPO_ROOT = path.resolve(__dirname, "..");
-const DIST_DIR = path.join(REPO_ROOT, "frontend", "dist");
+const RES_DIR = process.resourcesPath; // <app>/Contents/Resources (mac) — only meaningful when packaged
+
+const DIST_DIR = PACKAGED
+  ? path.join(RES_DIR, "dist")
+  : path.join(REPO_ROOT, "frontend", "dist");
 const INDEX_HTML = path.join(DIST_DIR, "index.html");
+
+// Bundled Python: python-build-standalone lays out bin/python3.11 on POSIX and
+// python.exe at the root on Windows.
+const PY_BUNDLE = path.join(RES_DIR, "pybackend");
+const PY_EXE =
+  process.platform === "win32"
+    ? path.join(PY_BUNDLE, "python.exe")
+    : path.join(PY_BUNDLE, "bin", "python3.11");
+
+// Writable data root for a packaged app — resourcesPath is READ-ONLY, so the
+// backend's SQLite (data.db/settings.db/projects.db), Cognee graph/vector store,
+// and generated media must all land here. NOVELVIDEO_DATA_ROOT relocates
+// novelvideo's own dirs; Cognee needs its OWN env vars (it does not honor
+// NOVELVIDEO_STATE_DIR), verified empirically.
+const DATA_DIR = path.join(app.getPath("userData"), "data");
 
 const BACKEND_PORT = Number(process.env.DRAMACLAW_BACKEND_PORT || 8780);
 const BACKEND_ORIGIN = `http://127.0.0.1:${BACKEND_PORT}`;
@@ -61,23 +84,88 @@ function probeBackend(timeoutMs = 1500) {
   });
 }
 
+// Build the (command, args, options) for spawning the backend, differing by
+// packaged vs. dev. In both cases detached:true puts the child in its own
+// process group so teardown can signal the whole tree.
+function backendSpawnSpec() {
+  if (!PACKAGED) {
+    // Dev: run against the repo checkout via uv.
+    return {
+      cmd: "uv",
+      args: ["run", "novelvideo", "api", "--port", String(BACKEND_PORT)],
+      opts: { cwd: REPO_ROOT, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env } },
+      label: `uv run novelvideo api --port ${BACKEND_PORT} (cwd=${REPO_ROOT})`,
+    };
+  }
+
+  // Packaged: bundled interpreter + writable data dirs. Resolve ffmpeg from the
+  // bundled imageio-ffmpeg wheel (falls back to PATH's ffmpeg if unavailable).
+  const stateDir = path.join(DATA_DIR, "state");
+  const cogneeSystem = path.join(stateDir, "cognee_system");
+  const cogneeData = path.join(stateDir, "cognee_data");
+  const logsDir = path.join(DATA_DIR, "logs");
+  for (const d of [DATA_DIR, stateDir, cogneeSystem, cogneeData, logsDir]) {
+    fs.mkdirSync(d, { recursive: true });
+  }
+
+  let ffmpegPath = "";
+  try {
+    ffmpegPath = execFileSync(
+      PY_EXE,
+      ["-c", "import imageio_ffmpeg,sys;sys.stdout.write(imageio_ffmpeg.get_ffmpeg_exe())"],
+      { timeout: 15000 },
+    )
+      .toString()
+      .trim();
+  } catch (err) {
+    log(`could not resolve bundled ffmpeg (will rely on PATH): ${err.message}`);
+  }
+
+  const env = {
+    ...process.env,
+    PYTHONUNBUFFERED: "1",
+    // CE bootstrap gate: novelvideo.ports.registry.ensure_bootstrap() refuses to
+    // start unless ST_CONTROL_PLANE_DSN is set OR ST_EDITION is explicitly "ce".
+    // In dev this comes from the repo's .env (dotenv); a packaged app has a clean
+    // env, so we must set it here or the lifespan startup raises and the server
+    // never binds. This desktop build is CE-only.
+    ST_EDITION: "ce",
+    ST_CONTROL_PLANE_DSN: "",
+    NOVELVIDEO_DATA_ROOT: DATA_DIR,
+    SYSTEM_ROOT_DIRECTORY: cogneeSystem,
+    DATA_ROOT_DIRECTORY: cogneeData,
+    COGNEE_LOGS_DIR: logsDir,
+  };
+  if (ffmpegPath) env.FFMPEG_PATH = ffmpegPath;
+
+  // A caller's ANTHROPIC_BASE_URL (commonly set by other local AI tooling, e.g.
+  // Claude Code) points the Anthropic SDK at an auth-gated proxy the backend
+  // can't reach — its LLM init then stalls the lifespan startup and the server
+  // never binds. The CE backend routes models through its own gateway
+  // (settings.db / NewAPI), not this SDK env var, so drop it for a clean boot.
+  delete env.ANTHROPIC_BASE_URL;
+
+  return {
+    cmd: PY_EXE,
+    args: ["-u", "-m", "novelvideo.cli", "api", "--port", String(BACKEND_PORT), "--host", "127.0.0.1"],
+    opts: { cwd: DATA_DIR, detached: true, stdio: ["ignore", "pipe", "pipe"], env },
+    label: `bundled python -m novelvideo.cli api --port ${BACKEND_PORT} (data=${DATA_DIR})`,
+  };
+}
+
 async function ensureBackend() {
   if (await probeBackend()) {
     log(`backend already listening on ${BACKEND_ORIGIN} — reusing it (won't spawn or kill)`);
     return;
   }
-  log(`spawning backend: uv run novelvideo api --port ${BACKEND_PORT} (cwd=${REPO_ROOT})`);
+  const spec = backendSpawnSpec();
+  log(`spawning backend: ${spec.label}`);
   // detached:true → the child leads its own process group, so on quit we can
-  // signal the WHOLE group (`uv` + the uvicorn grandchild) and not orphan the
-  // process holding the port. stdio piped so backend logs surface in our console.
-  backendProc = spawn("uv", ["run", "novelvideo", "api", "--port", String(BACKEND_PORT)], {
-    cwd: REPO_ROOT,
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env },
-  });
+  // signal the WHOLE group (uv/python + the uvicorn grandchild) and not orphan
+  // the process holding the port. stdio piped so backend logs surface here.
+  backendProc = spawn(spec.cmd, spec.args, spec.opts);
   backendProc.on("error", (err) => {
-    log(`failed to spawn backend (is 'uv' on PATH?): ${err.message}`);
+    log(`failed to spawn backend (${spec.cmd}): ${err.message}`);
   });
   backendProc.stdout.on("data", (d) => process.stdout.write(`[backend] ${d}`));
   backendProc.stderr.on("data", (d) => process.stderr.write(`[backend] ${d}`));
