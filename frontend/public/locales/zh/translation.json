@@ -3800,6 +3800,14 @@
       "storyboardGroupTooltip": "分镜组仅支持图片节点，且组内节点数量不可超过25个",
       "verticalLayout": "垂直排列"
     },
+    "assetCommitHandle": {
+      "title": "按住拖到左侧素材库，替换同类型素材",
+      "label": "替换素材"
+    },
+    "nodeReplaceDragPreview": {
+      "overTarget": "松开替换该素材",
+      "default": "拖到左侧同类型素材上替换"
+    },
     "nodeActionToolbar": {
       "arrange": "排列",
       "arrangeHorizontal": "横向排列",

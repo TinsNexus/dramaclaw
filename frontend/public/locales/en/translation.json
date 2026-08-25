@@ -3800,6 +3800,14 @@
       "storyboardGroupTooltip": "Storyboard groups only support image nodes, and the number of nodes cannot exceed 25",
       "verticalLayout": "Vertical Layout"
     },
+    "assetCommitHandle": {
+      "title": "Hold and drag to the asset library on the left to replace assets of the same type",
+      "label": "Replace asset"
+    },
+    "nodeReplaceDragPreview": {
+      "overTarget": "Release to replace this asset",
+      "default": "Drag onto a matching asset on the left to replace"
+    },
     "nodeActionToolbar": {
       "arrange": "Arrange",
       "arrangeHorizontal": "Arrange horizontally",

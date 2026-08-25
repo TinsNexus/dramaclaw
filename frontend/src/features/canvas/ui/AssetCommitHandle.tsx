@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { Replace } from 'lucide-react';
 import { Position } from '@xyflow/react';
+import { useTranslation } from 'react-i18next';
 
 import {
   deriveNodeDropInfo,
@@ -21,6 +22,7 @@ import {
  * 并在松手命中左侧同类型素材时触发替换。
  */
 export function AssetCommitHandle({ node }: { node: CanvasNode }) {
+  const { t } = useTranslation();
   const dropInfo = deriveNodeDropInfo(node);
   const sourceUrl = dropInfo?.sourceUrl ?? null;
 
@@ -85,12 +87,12 @@ export function AssetCommitHandle({ node }: { node: CanvasNode }) {
       <button
         type="button"
         onPointerDown={handlePointerDown}
-        title="按住拖到左侧素材库,替换同类型素材"
+        title={t('canvas.assetCommitHandle.title')}
         className={`${NODE_SIDE_ACTION_BUTTON_CLASS} active:cursor-grabbing`}
         style={{ cursor: 'grab' }}
       >
         <Replace className={NODE_SIDE_ACTION_ICON_CLASS} />
-        替换素材
+        {t('canvas.assetCommitHandle.label')}
       </button>
     </NodeSideActionRail>
   );

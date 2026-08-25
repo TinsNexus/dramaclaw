@@ -3841,6 +3841,14 @@
       "sourceScene": "Bối cảnh",
       "sourceProp": "Đạo cụ"
     },
+    "assetCommitHandle": {
+      "title": "Giữ và kéo sang thư viện tư liệu bên trái để thay thế tư liệu cùng loại",
+      "label": "Thay tư liệu"
+    },
+    "nodeReplaceDragPreview": {
+      "overTarget": "Thả để thay tư liệu này",
+      "default": "Kéo lên tư liệu cùng loại bên trái để thay thế"
+    },
     "nodeActionToolbar": {
       "mainlineProjectionLocked": "Dự án chính · Bị khóa",
       "opening": "Đang mở...",
