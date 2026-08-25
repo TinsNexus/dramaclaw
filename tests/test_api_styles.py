@@ -5,6 +5,34 @@ from fastapi.testclient import TestClient
 pytestmark = pytest.mark.m04
 
 
+def test_custom_style_lifecycle_uses_explicit_state_dir(tmp_path):
+    from novelvideo.models import StyleConfig
+    from novelvideo.services.style_service import StyleService
+
+    state_dir = tmp_path / "state" / "_scopes" / "scope_123" / "alice" / "demo"
+    style = StyleConfig(id="scope_style", name="Scope Style")
+
+    assert StyleService.save_custom_style(
+        "scope_style",
+        style,
+        username="alice",
+        project="demo",
+        project_dir=tmp_path / "output",
+        state_dir=state_dir,
+    )
+    assert (state_dir / "project_config.json").is_file()
+    assert StyleService.list_custom_styles(state_dir=state_dir) == ["scope_style"]
+    assert StyleService.delete_custom_style(
+        "scope_style",
+        username="alice",
+        project="demo",
+        project_dir=tmp_path / "output",
+        state_dir=state_dir,
+    )
+    assert StyleService.list_custom_styles(state_dir=state_dir) == []
+
+
+
 def test_style_preview_upload_is_staged_and_finalized(tmp_path):
     from novelvideo.services.style_service import StyleService
 
@@ -167,6 +195,8 @@ def test_custom_style_list_includes_project_media_preview_url(monkeypatch, tmp_p
     from novelvideo.api.routes import styles
     from novelvideo.services.style_service import StyleService
 
+    captured: dict[str, object] = {}
+
     async def fake_resolve_project_scope(project, user, *, required_role="viewer"):
         return ProjectResolution(
             ctx=None,
@@ -179,22 +209,23 @@ def test_custom_style_list_includes_project_media_preview_url(monkeypatch, tmp_p
         )
 
     monkeypatch.setattr(styles, "resolve_project_scope", fake_resolve_project_scope)
-    monkeypatch.setattr(
-        StyleService,
-        "list_all_styles",
-        lambda **kwargs: [
+    def fake_list_all_styles(**kwargs):
+        captured.update(kwargs)
+        return [
             {
                 "id": "custom_drama",
                 "name": "Custom drama",
                 "type": "custom",
                 "preview_path": "assets/styles/custom_drama/reference.png",
             }
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(StyleService, "list_all_styles", fake_list_all_styles)
 
     response = _client().get("/styles", params={"project": "demo"})
 
     assert response.status_code == 200
+    assert captured["state_dir"] == str(tmp_path / "state")
     assert response.json()["data"][0]["preview_url"] == (
         "/api/v1/projects/demo/media/"
         "assets/styles/custom_drama/reference.png"
@@ -207,6 +238,8 @@ def test_custom_style_detail_includes_project_media_preview_url(monkeypatch, tmp
     from novelvideo.models import StyleConfig
     from novelvideo.services.style_service import StyleService
 
+    captured: dict[str, object] = {}
+
     async def fake_resolve_project_scope(project, user, *, required_role="viewer"):
         return ProjectResolution(
             ctx=None,
@@ -219,19 +252,20 @@ def test_custom_style_detail_includes_project_media_preview_url(monkeypatch, tmp
         )
 
     monkeypatch.setattr(styles, "resolve_project_scope", fake_resolve_project_scope)
-    monkeypatch.setattr(
-        StyleService,
-        "get_style",
-        lambda *args, **kwargs: StyleConfig(
+    def fake_get_style(*args, **kwargs):
+        captured.update(kwargs)
+        return StyleConfig(
             id="custom_drama",
             name="Custom drama",
             preview_path="assets/styles/custom_drama/reference.png",
-        ),
-    )
+        )
+
+    monkeypatch.setattr(StyleService, "get_style", fake_get_style)
 
     response = _client().get("/styles/custom_drama", params={"project": "demo"})
 
     assert response.status_code == 200
+    assert captured["state_dir"] == str(tmp_path / "state")
     assert response.json()["data"]["preview_url"] == (
         "/api/v1/projects/demo/media/"
         "assets/styles/custom_drama/reference.png"
@@ -320,7 +354,129 @@ def test_create_style_accepts_frontend_payload_with_top_level_id_and_name(monkey
     assert config.id == "custom_drama"
     assert config.name == "自定义剧集风格"
     assert config.label == "自定义剧集风格"
-    assert kwargs == {"username": "alice", "project": "demo"}
+    assert kwargs == {
+        "username": "alice",
+        "project": "demo",
+        "project_dir": tmp_path,
+        "state_dir": str(tmp_path / "state"),
+    }
+
+
+def test_create_style_accepts_existing_published_preview_path(monkeypatch, tmp_path):
+    from novelvideo.api.deps import ProjectResolution
+    from novelvideo.api.routes import styles
+    from novelvideo.services.style_service import StyleService
+
+    saved = []
+
+    async def fake_resolve_project_scope(project, user, *, required_role="viewer"):
+        return ProjectResolution(
+            ctx=None,
+            username="alice",
+            project_name=project,
+            project_dir=tmp_path,
+            output_dir=str(tmp_path),
+            state_dir=str(tmp_path / "state"),
+            runtime_dir=str(tmp_path / "runtime"),
+        )
+
+    monkeypatch.setattr(styles, "resolve_project_scope", fake_resolve_project_scope)
+    monkeypatch.setattr(
+        StyleService,
+        "save_custom_style",
+        lambda style_id, config, **kwargs: saved.append(config) or True,
+    )
+    preview = tmp_path / "assets/styles/custom_drama/reference.png"
+    preview.parent.mkdir(parents=True)
+    preview.write_bytes(b"image")
+
+    response = _client().post(
+        "/styles",
+        json={
+            "id": "custom_drama",
+            "name": "自定义剧集风格",
+            "project": "demo",
+            "preview_path": "assets/styles/custom_drama/reference.png",
+            "config": {"style_instructions": "cinematic live action"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert saved[0].preview_path == "assets/styles/custom_drama/reference.png"
+
+
+def test_create_style_associates_published_preview_without_request_path(monkeypatch, tmp_path):
+    from novelvideo.api.deps import ProjectResolution
+    from novelvideo.api.routes import styles
+    from novelvideo.services.style_service import StyleService
+
+    saved = []
+    preview = tmp_path / "assets/styles/custom_drama/reference.webp"
+    preview.parent.mkdir(parents=True)
+    preview.write_bytes(b"image")
+
+    async def fake_resolve_project_scope(project, user, *, required_role="viewer"):
+        return ProjectResolution(
+            ctx=None,
+            username="alice",
+            project_name=project,
+            project_dir=tmp_path,
+            output_dir=str(tmp_path),
+            state_dir=str(tmp_path / "state"),
+            runtime_dir=str(tmp_path / "runtime"),
+        )
+
+    monkeypatch.setattr(styles, "resolve_project_scope", fake_resolve_project_scope)
+    monkeypatch.setattr(
+        StyleService,
+        "save_custom_style",
+        lambda style_id, config, **kwargs: saved.append(config) or True,
+    )
+
+    response = _client().post(
+        "/styles",
+        json={
+            "id": "custom_drama",
+            "name": "Custom drama",
+            "project": "demo",
+            "config": {},
+        },
+    )
+
+    assert response.status_code == 200
+    assert saved[0].preview_path == "assets/styles/custom_drama/reference.webp"
+
+
+def test_create_style_rejects_missing_published_preview_path(monkeypatch, tmp_path):
+    from novelvideo.api.deps import ProjectResolution
+    from novelvideo.api.routes import styles
+
+    async def fake_resolve_project_scope(project, user, *, required_role="viewer"):
+        return ProjectResolution(
+            ctx=None,
+            username="alice",
+            project_name=project,
+            project_dir=tmp_path,
+            output_dir=str(tmp_path),
+            state_dir=str(tmp_path / "state"),
+            runtime_dir=str(tmp_path / "runtime"),
+        )
+
+    monkeypatch.setattr(styles, "resolve_project_scope", fake_resolve_project_scope)
+
+    response = _client().post(
+        "/styles",
+        json={
+            "id": "custom_drama",
+            "name": "Custom drama",
+            "project": "demo",
+            "preview_path": "assets/styles/custom_drama/reference.png",
+            "config": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Custom style preview does not exist"
 
 
 def test_create_style_accepts_existing_published_preview_path(monkeypatch, tmp_path):

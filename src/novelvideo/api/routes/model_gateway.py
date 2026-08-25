@@ -29,6 +29,7 @@ from novelvideo.model_gateway_settings import (
     save_newapi_embedding_model_config,
     save_newapi_media_model_mappings,
     get_newapi_media_model_mappings,
+    get_newapi_embedding_model_config,
     save_newapi_provider_channels,
     get_newapi_provider_channel,
     get_newapi_provider_channels,
@@ -38,6 +39,10 @@ from novelvideo.official_media_catalog_remote import (
     check_official_media_catalog_update,
 )
 from novelvideo.model_gateway_runtime import refresh_model_gateway_runtime
+from novelvideo.service_operation_gate import (
+    ServiceOperationExcluded,
+    require_legacy_local_service_operation,
+)
 from novelvideo.shared.runtime_env import is_ce_effective
 from novelvideo.media_model_request_schema import validate_media_model_catalog_config
 from novelvideo.newapi_provisioner import (
@@ -51,6 +56,7 @@ from novelvideo.newapi_provisioner import (
     list_channel_types,
     mask_token,
     NewApiSetupCredentials,
+    ServiceControlEgressDenied,
     require_provisioner_enabled,
     upsert_channel,
     update_provider_channel_credentials,
@@ -139,8 +145,12 @@ def _comfyui_media_model_config(
 
 def require_ce_gateway_management() -> None:
     """Reject CE-local gateway mutations from an EE-composed process."""
+    try:
+        require_legacy_local_service_operation()
+    except ServiceOperationExcluded as exc:
+        raise PermissionError(exc.code) from None
     if not is_ce_effective():
-        raise PermissionError("model gateway management is only available in CE")
+        raise ServiceControlEgressDenied()
     require_provisioner_enabled()
 
 
@@ -463,6 +473,28 @@ def _media_relay_status() -> dict[str, Any]:
     )
 
 
+def _provisioner_status() -> dict[str, Any]:
+    if is_ce_effective():
+        return build_provisioner_status()
+    return {
+        "enabled": False,
+        "adminBaseUrl": "",
+        "dbConfigured": False,
+        "database": {
+            "configured": False,
+            "available": False,
+            "source": "unavailable",
+        },
+        "adminUsername": "",
+        "relayTokenName": "",
+        "providers": {},
+        "providerChannels": [],
+        "mediaModels": {},
+        "embeddingModel": {},
+        "relayBaseUrl": "",
+    }
+
+
 @router.get("/config")
 async def get_model_gateway_config() -> dict[str, Any]:
     return {
@@ -472,7 +504,7 @@ async def get_model_gateway_config() -> dict[str, Any]:
                 official_base_url=app_config.OFFICIAL_NEWAPI_BASE_URL,
                 official_api_key=app_config.NEWAPI_API_KEY,
             ),
-            "provisioner": build_provisioner_status(),
+            "provisioner": _provisioner_status(),
             "mediaRelay": _media_relay_status(),
         },
     }
@@ -839,6 +871,8 @@ async def save_custom_newapi_provider_channels(
                         ),
                     }
             save_newapi_media_model_mappings(media_mappings)
+        media_models = get_newapi_media_model_mappings()
+        embedding_model = get_newapi_embedding_model_config()
     except PermissionError as exc:
         raise _permission_error(exc) from exc
     except ValueError as exc:
@@ -865,7 +899,9 @@ async def save_custom_newapi_provider_channels(
                     "settings": channel.get("settings", {}),
                 }
                 for channel in saved
-            ]
+            ],
+            "mediaModels": media_models,
+            "embeddingModel": embedding_model or None,
         },
     }
 

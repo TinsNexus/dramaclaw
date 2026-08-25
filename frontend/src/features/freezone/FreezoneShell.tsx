@@ -124,11 +124,7 @@ export function startProjectionStatusRefresh(
   return stop;
 }
 
-function renderCommitSuccessMessage(
-  target: PushTarget,
-  result: PushResult,
-  t: (key: string, opts?: Record<string, unknown>) => string = (key) => key,
-): string {
+function renderCommitSuccessMessage(target: PushTarget, result: PushResult): string {
   if (target.kind === "director_render") {
     return t("viewer.threeD.directorControlCommitted", { path: result.target_path });
   }

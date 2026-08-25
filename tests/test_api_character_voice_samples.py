@@ -23,12 +23,19 @@ class _CharacterStore:
     def get_all_characters(self):
         return list(self.characters.values())
 
+    async def list_characters(self):
+        return list(self.characters.values())
+
     async def update_character(self, name: str, **updates):
         self.updates.append((name, updates))
         character = self.characters[name]
         for key, value in updates.items():
             setattr(character, key, value)
         return True
+
+    async def repair_path_unsafe_asset_names(self, kind: str, move_assets=None):
+        # 这里的名字都是干净的，list 接口上那道存量自愈是空跑。
+        return {}
 
 
 def _patch_project(
@@ -37,17 +44,34 @@ def _patch_project(
     project_dir: Path,
     store: _CharacterStore,
 ) -> None:
-    async def fake_resolve_project(project: str, user: dict, *, required_role: str = "editor"):
-        return (
-            SimpleNamespace(project_id="proj_demo", output_dir=project_dir, is_home_node=True),
-            "admin",
-            "demo",
-            project_dir,
-            str(project_dir),
-            store,
+    # 函数内 import：``tests/contract/test_m01_auth.py`` 会把 ``novelvideo.api.*``
+    # 整片从 ``sys.modules`` 里弹掉重建 app，模块级绑定到那时是死对象，patch 会落空。
+    from novelvideo.api import deps
+
+    ctx = SimpleNamespace(project_id="proj_demo", output_dir=project_dir, is_home_node=True)
+
+    # 打在解析层，不打 ``_resolve_character_project``：角色列表和 identities 两条读取
+    # 路径走的是 ``_character_project_scope``，只打裸版本会打空。塞在这一层，两条路上
+    # 的 ``async with`` / ``try/finally`` 跑的都是真代码。
+    async def fake_resolve_project_scope(project: str, user: dict, *, required_role: str = "viewer"):
+        return SimpleNamespace(
+            ctx=ctx,
+            username="admin",
+            project_name="demo",
+            project_dir=project_dir,
+            output_dir=str(project_dir),
+            state_dir=str(project_dir),
+            runtime_dir=str(project_dir),
         )
 
-    monkeypatch.setattr(module, "_resolve_character_project", fake_resolve_project)
+    async def fake_make_store_for_context(_ctx, *, load_graph_state: bool = True):
+        return store
+
+    monkeypatch.setattr(module, "resolve_project_scope", fake_resolve_project_scope)
+    # 裸 helper 用 ``characters`` 上 import 进来的名字；scope 里的
+    # ``sqlite_store_for_context_scope`` 是在 ``deps`` 上按模块全局解析工厂的。两处都要打。
+    monkeypatch.setattr(module, "make_sqlite_store_for_context", fake_make_store_for_context)
+    monkeypatch.setattr(deps, "make_sqlite_store_for_context", fake_make_store_for_context)
     monkeypatch.setattr(
         module,
         "make_static_url_for_context",
@@ -104,6 +128,7 @@ async def test_list_characters_returns_indextts2_voice_fields(tmp_path, monkeypa
 
     response = await characters.list_characters(
         project="demo",
+        summary=True,
         user={"username": "admin"},
     )
 
@@ -112,7 +137,7 @@ async def test_list_characters_returns_indextts2_voice_fields(tmp_path, monkeypa
     assert "fish_voice_id" not in asset
     assert asset["reference_audio_path"] == "assets/characters/秦/voices/voice_default.wav"
     assert asset["reference_audio_url"] == (
-        "/static/projects/proj_demo/assets/characters/秦/voices/voice_default.wav"
+        "/static/projects/proj_demo/assets/characters/%E7%A7%A6/voices/voice_default.wav"
     )
     assert asset["reference_audio_sha256"] == "default-sha"
     assert asset["reference_audio_updated_at"] == "2026-05-13T00:00:00+00:00"

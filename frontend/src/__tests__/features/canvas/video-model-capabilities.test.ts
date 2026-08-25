@@ -19,14 +19,33 @@ import {
   referenceDurationLimitsMs,
   resolveVideoKeyframeUrls,
   videoEmptyStateCtaModes,
+  videoModeForcesAutomaticAspectRatio,
+  videoModeRequiresMedia,
   videoModeRequiresPrompt,
+  videoModelDefaultGenerateAudio,
+  videoModelSupportsGenerateAudio,
   videoModelReferenceDisabledReason,
   videoMultiImageAutoSwitchMode,
+  videoNoUpstreamResetMode,
   videoReferenceAutoSwitchAction,
   type VideoReferenceAutoSwitchAction,
   videoSubmitMediaRejectionReason,
   videoUpstreamImageDefaultMode,
 } from "@/features/canvas/nodes/shared/videoModelCapabilities";
+
+describe("视频模式有效比例", () => {
+  it.each([
+    ["firstFrame", true],
+    ["firstLastFrame", true],
+    ["videoEdit", true],
+    ["textToVideo", false],
+    ["imageToVideo", false],
+    ["imageReference", false],
+    ["allReference", false],
+  ] as const)("%s 是否强制跟随输入素材", (mode, expected) => {
+    expect(videoModeForcesAutomaticAspectRatio(mode)).toBe(expected);
+  });
+});
 
 // 对齐后端 freezone/video_node.py 的真实模型 id（apiModel == id == 后端 model）。
 const SEEDANCE2_FAST = "newapi_seedance-2.0-fast";
@@ -65,6 +84,27 @@ describe("video model family detection", () => {
     }
     // 分隔符不敏感：normalize 后 `seedance20` 仍是 2.0，不会漏成 1.x。
     expect(isSeedance2VideoModel("SEEDANCE 2.0 FAST")).toBe(true);
+  });
+});
+
+describe("video native audio capability", () => {
+  it("preserves legacy support and default when catalog fields are absent", () => {
+    expect(videoModelSupportsGenerateAudio(SEEDANCE2_FAST)).toBe(true);
+    expect(videoModelDefaultGenerateAudio({ apiModel: SEEDANCE2_FAST })).toBe(true);
+  });
+
+  it("defaults native audio on whenever the model supports it", () => {
+    expect(videoModelSupportsGenerateAudio({ supportsGenerateAudio: true })).toBe(true);
+    expect(
+      videoModelDefaultGenerateAudio({
+        supportsGenerateAudio: true,
+      }),
+    ).toBe(true);
+    expect(
+      videoModelDefaultGenerateAudio({
+        supportsGenerateAudio: false,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -289,6 +329,28 @@ describe("videoSubmitMediaRejectionReason — 提交前素材守卫 (P1/P2)", ()
       videoSubmitMediaRejectionReason("imageReference", HAPPYHORSE, { images: 5, videos: 0, audios: 0 }),
     ).toBeNull();
   });
+
+  it("目录显式开放音频后，视频编辑消费独立音频", () => {
+    const audioVideoEditModel = {
+      apiModel: "custom-video-editor",
+      supportedModes: ["video_edit"],
+      referenceAudioMax: 2,
+    };
+    expect(
+      videoSubmitMediaRejectionReason("videoEdit", audioVideoEditModel, {
+        images: 0,
+        videos: 1,
+        audios: 1,
+      }),
+    ).toBeNull();
+    expect(
+      videoSubmitMediaRejectionReason(
+        "videoEdit",
+        { ...audioVideoEditModel, referenceAudioMax: 0 },
+        { images: 0, videos: 1, audios: 1 },
+      ),
+    ).toBeTruthy();
+  });
 });
 
 describe("videoMultiImageAutoSwitchMode — 首帧接多图时的自动改模式", () => {
@@ -498,6 +560,19 @@ describe("videoModelReferenceDisabledReason — 模型选择器置灰守卫", ()
       videoModelReferenceDisabledReason(
         { apiModel: HAPPYHORSE, supportedModes: [...withoutVideoEdit.supportedModes, "video_edit"] },
         { ...none, videos: 1 },
+      ),
+    ).toBeNull();
+  });
+
+  it("目录声明 video_edit 且音频上限大于 0 时，带音频仍可选择模型", () => {
+    expect(
+      videoModelReferenceDisabledReason(
+        {
+          apiModel: "custom-video-editor",
+          supportedModes: ["video_edit"],
+          referenceAudioMax: 1,
+        },
+        { ...none, videos: 1, audios: 1 },
       ),
     ).toBeNull();
   });
@@ -1109,5 +1184,90 @@ describe("videoModeRequiresPrompt — submit validation by mode", () => {
     ] as VideoGenMode[]) {
       expect(videoModeRequiresPrompt(mode)).toBe(false);
     }
+  });
+});
+
+describe("videoModeRequiresMedia — 该模式是否必须有上游素材", () => {
+  it("文生视频是唯一不需要素材的模式", () => {
+    expect(videoModeRequiresMedia("textToVideo")).toBe(false);
+  });
+
+  it("全能参考同样需要素材（omni 端点没素材就发不出去）", () => {
+    // 与 videoModeRequiresPrompt 是**并列**关系而非二选一：全能参考两条都要。
+    // 只看提示词的话，素材撤空后按钮仍然可点，点了却被 handleSubmit 的
+    // references.length === 0 静默拦下 —— 用户看到的就是「点了没反应」。
+    expect(videoModeRequiresMedia("allReference")).toBe(true);
+    expect(videoModeRequiresPrompt("allReference")).toBe(true);
+  });
+
+  it("其余生成模式都要素材", () => {
+    for (const mode of [
+      "firstFrame",
+      "imageToVideo",
+      "imageReference",
+      "firstLastFrame",
+      "videoEdit",
+    ] as VideoGenMode[]) {
+      expect(videoModeRequiresMedia(mode)).toBe(true);
+    }
+  });
+});
+
+describe("videoNoUpstreamResetMode — 素材撤空后退回文生视频", () => {
+  const EMPTY = { images: 0, videos: 0, audios: 0 };
+
+  it("上游清空后，任何素材模式都退回文生视频", () => {
+    for (const mode of [
+      "allReference",
+      "imageReference",
+      "firstFrame",
+      "imageToVideo",
+      "firstLastFrame",
+      "videoEdit",
+    ] as VideoGenMode[]) {
+      expect(videoNoUpstreamResetMode(mode, EMPTY)).toBe("textToVideo");
+    }
+  });
+
+  it("已经是文生视频就不动（避免每帧都发一次 patch）", () => {
+    expect(videoNoUpstreamResetMode("textToVideo", EMPTY)).toBeNull();
+  });
+
+  it.each([
+    ["图片", { images: 1, videos: 0, audios: 0 }],
+    ["视频", { images: 0, videos: 1, audios: 0 }],
+    ["音频", { images: 0, videos: 0, audios: 1 }],
+  ] as const)("上游还有%s素材时不动", (_label, counts) => {
+    expect(videoNoUpstreamResetMode("allReference", counts)).toBeNull();
+  });
+});
+
+describe("VideoNode 接线：素材撤空 → 文生视频", () => {
+  const source = readFileSync("src/features/canvas/nodes/VideoNode.tsx", "utf8");
+
+  it("反向复位 effect 按节点类型口径判定，不用已解析 URL 口径", () => {
+    // upstreamCounts（已解析 URL）会把空态 CTA 刚铺好、还没出图的图片节点算成 0 张，
+    // 用它当场就会把三个 CTA 顶回文生视频。
+    expect(source).toContain(
+      "videoNoUpstreamResetMode(genMode, upstreamTypeCounts)",
+    );
+  });
+
+  it("复位不进撤销栈", () => {
+    // 这是「用户删素材」的衍生结果而非独立改动；记进 past 会让 ⌘Z 被本 effect 立刻
+    // 撤销回去、redo 栈还被清空，等于把「回到连线之前」这条路堵死。
+    expect(source).toContain(
+      "updateNodeData(id, { genMode: target }, { recordHistory: false });",
+    );
+  });
+
+  it("提交闸门把提示词与素材拆成两条并列判定", () => {
+    expect(source).toContain(
+      "(videoModeRequiresPrompt(genMode) && !hasPromptText) ||\n      (videoModeRequiresMedia(genMode) && !hasRequiredMediaForMode);",
+    );
+    // 旧的三元写法：要提示词的模式就不再看素材 —— 全能参考因此漏网。
+    expect(source).not.toContain(
+      "videoModeRequiresPrompt(genMode)\n        ? !hasPromptText\n        : !hasRequiredMediaForMode",
+    );
   });
 });

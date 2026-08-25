@@ -73,9 +73,9 @@ interface EraseOverlayProps {
 type Tool = 'brush' | 'rect' | 'eraser';
 
 // 比例与分辨率档位来自后台「媒体模型」对选中模型的配置，这里只留下渲染用的
-// i18n key（未命中时直接显示原值）。
+// 中文别名（未命中时直接显示原值）。
 const ASPECT_RATIO_LABELS: Partial<Record<FreezoneRedrawAspectRatio, string>> = {
-  original: 'canvas.eraseOverlay.aspectRatioOriginal',
+  original: '原图',
 };
 
 const NUM_IMAGE_OPTIONS = [1, 2, 3, 4] as const;

@@ -17,6 +17,9 @@ beforeAll(async () => {
     resources: {
       vi: {
         translation: {
+          common: {
+            cancel: "取消",
+          },
           assets: {
             common: {
               edit: "Sửa",
@@ -54,6 +57,11 @@ beforeAll(async () => {
                 masterToPly: "Mặt trước→Director World",
                 reverseToPly: "Mặt sau→Director World",
                 panoToPly: "360→Director World",
+                singleFaceFeature: "场景单面转 SOG",
+                panoFeature: "场景全景转 SOG",
+                confirmTitle: "确认启动转换",
+                confirmDescription: "{{feature}}，确认后将立即启动任务。",
+                confirmAction: "确认并启动",
                 openWorld: "Mở Director World",
                 worldNotReady: "Director World (phim trường chưa sẵn sàng)",
               },
@@ -83,6 +91,8 @@ function renderCard(scene: SceneAsset, overrides = {}) {
     onUploadCustomPackage: vi.fn(),
     onDeleteCustomPackage: vi.fn(),
     onGenerateStagePly: vi.fn(),
+    singleFaceStageCost: "6",
+    panoStageCost: "8",
     ...overrides,
   };
   render(
@@ -190,10 +200,47 @@ describe("SceneAssetCard", () => {
     expect(handlers.onOpenStageViewer).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: "Mặt trước→Director World" }));
+    expect(handlers.onGenerateStagePly).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "场景单面转 SOG，确认后将立即启动任务。",
+    );
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("6");
+    fireEvent.click(screen.getByRole("button", { name: "确认并启动" }));
     expect(handlers.onGenerateStagePly).toHaveBeenCalledWith("master");
 
     fireEvent.click(screen.getByRole("button", { name: "360→Director World" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "场景全景转 SOG，确认后将立即启动任务。",
+    );
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("8");
+    fireEvent.click(screen.getByRole("button", { name: "确认并启动" }));
     expect(handlers.onGenerateStagePly).toHaveBeenCalledWith("pano");
+  });
+
+  it("disables Director World conversion when the organization price is unavailable", () => {
+    renderCard(
+      {
+        name: "皇宫大殿",
+        scene_type: "interior",
+        environment_prompt: "",
+        description: "",
+        aliases: [],
+        notes: "",
+        master_url: "/static/master.png",
+        reverse_master_url: "/static/reverse.png",
+        pano_url: "/static/pano.png",
+      },
+      {
+        singleFaceStageCost: "需配置",
+        singleFaceStageDisabledReason: "计费规则未配置，请联系管理员设置积分规则",
+        panoStageCost: "需配置",
+        panoStageDisabledReason: "计费规则未配置，请联系管理员设置积分规则",
+      },
+    );
+
+    expect(screen.getByRole("button", { name: "master→导演世界" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "reverse→导演世界" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "360→导演世界" })).toBeDisabled();
   });
 
   it("falls back to text-to-360 when master is missing", () => {

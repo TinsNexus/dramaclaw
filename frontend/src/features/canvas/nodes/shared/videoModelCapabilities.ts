@@ -64,174 +64,46 @@ export const GEN_MODE_TO_CATALOG_MODE: Record<VideoGenMode, string> = {
   videoEdit: "video_edit",
 };
 
-export interface VideoKeyframeCandidate {
-  url: string;
-  slot?: VideoKeyframeSlot | null;
-  legacyDisplayName?: string | null;
-}
-
-/**
- * 从视频节点的上游图片中解析稳定的首帧/尾帧槽位。
- *
- * 新画布以 edge.data.keyframeSlot 为准，节点名称只负责展示，用户重命名不会改变语义。
- * 旧画布没有槽位字段时才兼容“首帧/尾帧”标题，最后按连线顺序补齐未分配图片。
- */
-export function resolveVideoKeyframeUrls(
-  candidates: readonly VideoKeyframeCandidate[],
-): { firstFrameUrl: string | null; lastFrameUrl: string | null } {
-  let firstFrameUrl: string | null = null;
-  let lastFrameUrl: string | null = null;
-  const unassigned: string[] = [];
-
-  for (const candidate of candidates) {
-    if (candidate.slot === "first") {
-      if (!firstFrameUrl) firstFrameUrl = candidate.url;
-      continue;
-    }
-    if (candidate.slot === "last") {
-      if (!lastFrameUrl) lastFrameUrl = candidate.url;
-      continue;
-    }
-
-    const displayName = String(candidate.legacyDisplayName ?? "").trim();
-    if (displayName.includes("首帧") && !firstFrameUrl) {
-      firstFrameUrl = candidate.url;
-    } else if (displayName.includes("尾帧") && !lastFrameUrl) {
-      lastFrameUrl = candidate.url;
-    } else {
-      unassigned.push(candidate.url);
-    }
-  }
-
-  if (!firstFrameUrl) firstFrameUrl = unassigned.shift() ?? null;
-  if (!lastFrameUrl) lastFrameUrl = unassigned.shift() ?? null;
-  return { firstFrameUrl, lastFrameUrl };
-}
-
-/**
- * 模型入参的统一形态：既可以只给一个 id 字符串，也可以给媒体目录下发的模型对象
- * （`supportedModes` 存在时以它为准，那是 Admin 显式配置的能力声明）。
- */
-export type VideoModelRef =
-  | string
-  | {
-      id?: string;
-      apiModel?: string;
-      supportedModes?: string[];
+      referenceAudioMax?: number | null;
+      supportsGenerateAudio?: boolean;
     }
   | null
   | undefined;
 
-/** 从模型入参里取出用于能力启发式判定的 id（优先 apiModel，它才是打给上游的名字）。 */
-function videoModelIdOf(model: VideoModelRef): string | null | undefined {
-  return typeof model === "string" ? model : (model?.apiModel ?? model?.id);
+ * 该 genMode 是否**必须有上游素材**才能提交：只有文生视频不需要，其余模式的提交
+ * 分支都会在素材为空时直接 return（见 VideoNode 的 handleSubmit）。
+ *
+ * 和 `videoModeRequiresPrompt` 是**并列**关系，不是二选一 —— 全能参考两条都要：
+ * 后端 omni 端点强校验 prompt，而 references 为空又根本没得可发。曾经写成「要提示词
+ * 的模式就只看提示词」，于是「接过图 → 又把图撤走 → 只打字」这条路上按钮看着可点、
+ * 点下去却被 handleSubmit 的 `references.length === 0` 静默拦掉，表现为「点了没反应」。
+ * 正常情况下 `videoNoUpstreamResetMode` 会先把模式退回文生视频，这条是兜底：上游节点
+ * 还连着、里面的图却被清空时（typeCounts>0 而 counts==0）退回不触发，仍要拦住提交。
+ */
+export function videoModeRequiresMedia(mode: VideoGenMode): boolean {
+  return mode !== "textToVideo";
 }
 
 /**
- * 指定模型是否支持某 genMode（与可见 tab / 切模型时是否重置残留模式口径一致）。
- * - HappyHorse：文生 / 首帧(i2v) / 图片参考(r2v) / 视频编辑。
- * - 非 HappyHorse：视频编辑是 HappyHorse 专属；全能参考与「真尾帧」首尾帧只有
- *   Seedance 2.0 后端支持（非 2.0 打 omni→400、首尾帧静默丢尾帧）；文生 / 首帧 /
- *   图片参考其余视频模型均支持。
+ * 上游素材被全部撤走后该退回哪个模式：`"textToVideo"` = 退回文生视频，null = 不动。
+ *
+ * 视频节点的模式推导原本是**单向**的：接入图片/视频/音频时有一堆 effect 把模式推进
+ * 到能消费该素材的模式，却没有任何一条在素材撤空后把它推回来。于是「连一张图 → 又把
+ * 图删掉」之后节点卡在全能参考上，界面上看不出异常，提交却必然被静默拦下。
+ * HappyHorse 那条统一状态机早就有「无上游 → 文生视频」这一档，这里把同一条规则补给
+ * 其余模型。
+ *
+ * 素材计数要传**按节点类型**的口径（`upstreamTypeCounts`，空的图片节点也算），不能用
+ * 「已解析 URL」的口径：空态 CTA（全能参考 / 图片参考 / 首尾帧）正是先铺一个还没出图
+ * 的图片/上传节点、再把模式切过去，按 URL 口径这一瞬间素材数是 0，会被这条规则当场
+ * 顶回文生视频，等于把三个 CTA 全废掉。
  */
-export function isVideoModeSupportedByModel(
+export function videoNoUpstreamResetMode(
   mode: VideoGenMode,
-  model: VideoModelRef,
-): boolean {
-  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
-    return model.supportedModes?.includes(GEN_MODE_TO_CATALOG_MODE[mode]) ?? false;
-  }
-  const modelId = videoModelIdOf(model);
-  if (isHappyHorseVideoModel(modelId)) {
-    return (
-      mode === "textToVideo" ||
-      mode === "firstFrame" ||
-      mode === "imageToVideo" ||
-      mode === "imageReference" ||
-      mode === "videoEdit"
-    );
-  }
-  if (isSeedance1xVideoModel(modelId)) {
-    return mode === "textToVideo" || mode === "firstFrame";
-  }
-  if (mode === "videoEdit") return false;
-  if (mode === "allReference" || mode === "firstLastFrame") {
-    return isSeedance2VideoModel(modelId);
-  }
-  return true;
-}
-
-/**
- * 空态 CTA 只覆盖「铺素材起步」的图片 / 首尾帧模式——文生视频无需素材、视频编辑走
- * 独立入口，都不在空态 CTA 里。与 `spawnFrameUploads` 接受的模式一一对应。
- */
-export type VideoEmptyStateCtaMode =
-  | "allReference"
-  | "imageReference"
-  | "firstFrame"
-  | "imageToVideo"
-  | "firstLastFrame";
-
-/**
- * 视频节点「空态」CTA 的模式顺序——只列该模型**真正能起步**的图片 / 首尾帧模式：
- * - HappyHorse：首帧 → 图片参考；
- * - Seedance 2.0：全能参考 → 图片参考 → 首尾帧；
- * - Seedance 1.x 及其它非 2.0 非 HappyHorse：全能参考会 400、首尾帧尾帧被静默丢弃、
- *   多图参考也不支持，只给确实可用的「首帧」。
- */
-export function videoEmptyStateCtaModes(
-  model: VideoModelRef,
-): VideoEmptyStateCtaMode[] {
-  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
-    const order: VideoEmptyStateCtaMode[] = [
-      "allReference",
-      "imageToVideo",
-      "firstFrame",
-      "imageReference",
-      "firstLastFrame",
-    ];
-    return order.filter((mode) => isVideoModeSupportedByModel(mode, model));
-  }
-  const modelId = videoModelIdOf(model);
-  if (isHappyHorseVideoModel(modelId)) {
-    return ["imageToVideo", "firstFrame", "imageReference"];
-  }
-  if (isSeedance2VideoModel(modelId)) {
-    return ["allReference", "imageToVideo", "firstFrame", "imageReference", "firstLastFrame"];
-  }
-  return ["firstFrame"];
-}
-
-/**
- * 非 HappyHorse 模型「首次接入图片素材」后的默认模式：Seedance 2.0 用全能参考
- * （omni，1-9 图 + 视频 + 音频的通用入口），其余（Seedance 1.x）不支持全能参考，
- * 退到确实可用的「首帧」，避免默认推导把 1.x 顶进一个提交必 400 的模式。
- */
-export function videoUpstreamImageDefaultMode(
-  model: VideoModelRef,
+  counts: { images: number; videos: number; audios: number },
 ): VideoGenMode | null {
-  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
-    for (const mode of [
-      "allReference",
-      "imageToVideo",
-      "firstFrame",
-      "imageReference",
-    ] as const) {
-      if (isVideoModeSupportedByModel(mode, model)) return mode;
-    }
-    return null;
-  }
-  const modelId = videoModelIdOf(model);
-  if (isHappyHorseVideoModel(modelId)) return "imageToVideo";
-  return isSeedance2VideoModel(modelId) ? "allReference" : "firstFrame";
-}
-
-/**
- * 该 genMode 是否**必须带提示词**才能提交：文生 / 全能参考 后端强校验 prompt；
- * 首帧 / 图生视频 / 图片参考 / 首尾帧 / 视频编辑允许空提示词（只要素材齐备即可提交）。
- */
-export function videoModeRequiresPrompt(mode: VideoGenMode): boolean {
-  return mode === "textToVideo" || mode === "allReference";
+  if (counts.images > 0 || counts.videos > 0 || counts.audios > 0) return null;
+  return mode === "textToVideo" ? null : "textToVideo";
 }
 
 /**
@@ -500,7 +372,8 @@ export function formatAudioDurationClips(
  * 规则对齐后端 freezone i2v / omni-gen 端点（src/novelvideo/api/routes/freezone.py）：
  * - 视频素材：仅「全能参考」(omni，Seedance 2.0) 与「视频编辑」(HappyHorse) 消费，
  *   其余模式静默丢弃 → 拦；
- * - 音频素材：仅「全能参考」(omni，Seedance 2.0) 消费，其余模式静默丢弃 → 拦；
+ * - 音频素材：「全能参考」消费；「视频编辑」仅在媒体目录显式配置音频上限时消费；
+ *   其余模式静默丢弃 → 拦；
  * - 多图(>1)：i2v 端点仅 Seedance 2.0 / HappyHorse 放行，非 2.0 非 HappyHorse
  *   （Seedance 1.x）传 >1 图后端直接 400 → 拦。
  *
@@ -516,7 +389,14 @@ export function videoSubmitMediaRejectionReason(
   if (counts.videos > 0 && mode !== "allReference" && mode !== "videoEdit") {
     return "该模型不支持视频素材";
   }
-  if (counts.audios > 0 && mode !== "allReference") {
+  const videoEditAcceptsAudio =
+    mode === "videoEdit" &&
+    typeof model === "object" &&
+    model !== null &&
+    isVideoModeSupportedByModel("videoEdit", model) &&
+    typeof model.referenceAudioMax === "number" &&
+    model.referenceAudioMax > 0;
+  if (counts.audios > 0 && mode !== "allReference" && !videoEditAcceptsAudio) {
     return "该模型不支持音频素材";
   }
   if (counts.images > 1 && !videoModelAcceptsMultipleImages(model)) {
@@ -557,7 +437,11 @@ export function videoModelReferenceDisabledReason(
     if (counts.videos > 0 && !supportsAllReference && !supportsVideoEdit) {
       return "该模型不支持视频素材";
     }
-    if (counts.audios > 0 && !supportsAllReference) {
+    const supportsVideoEditAudio =
+      supportsVideoEdit &&
+      typeof model.referenceAudioMax === "number" &&
+      model.referenceAudioMax > 0;
+    if (counts.audios > 0 && !supportsAllReference && !supportsVideoEditAudio) {
       return "该模型不支持音频素材";
     }
     if (counts.images > 1 && !videoModelAcceptsMultipleImages(model)) {

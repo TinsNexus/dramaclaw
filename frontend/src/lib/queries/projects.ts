@@ -185,6 +185,8 @@ export interface ProjectGrant {
   principal_username?: string | null;
   role: Exclude<ProjectRole, "owner">;
   created_at?: string | null;
+  effective?: boolean;
+  inactive_reason?: "principal_access_changed" | null;
 }
 
 export interface UserSearchResult {
@@ -203,18 +205,18 @@ export function useProjectGrants(project: string, enabled = true) {
   });
 }
 
-export function useUserSearch(query: string) {
+export function useUserSearch(project: string, query: string) {
   const trimmed = query.trim();
   return useQuery({
-    queryKey: queryKeys.userSearch(trimmed),
+    queryKey: queryKeys.userSearch(project, trimmed),
     queryFn: ({ signal }) =>
       api
         .get("api/v1/users/search", {
-          searchParams: { q: trimmed },
+          searchParams: { project, q: trimmed },
           signal,
         })
         .json<OkResponse<UserSearchResult[]>>(),
-    enabled: trimmed.length >= 3,
+    enabled: Boolean(project) && trimmed.length >= 3,
   });
 }
 

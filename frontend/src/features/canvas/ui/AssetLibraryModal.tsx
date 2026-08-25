@@ -2,61 +2,79 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslation } from 'react-i18next';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Folder,
   Loader2,
+  MoreHorizontal,
   Music,
+  Plus,
   RefreshCw,
+  Send,
   Trash2,
-  Upload,
   Video as VideoIcon,
   X,
 } from 'lucide-react';
 
 import {
+  createFreezoneAssetLibraryFolder,
+  deleteFreezoneAssetLibraryFolder,
   deleteFreezoneVideoCharacterLibraryItem,
+  fetchFreezoneAssetLibraryFolders,
   fetchFreezoneVideoCharacterLibrary,
   submitFreezoneAddVideoCharacterLibraryItem,
   syncFreezoneAssetLibraryFromMainline,
+  updateFreezoneAssetLibraryFolder,
   uploadFreezoneImage,
   uploadFreezoneVideo,
-  type FreezoneAssetLibraryMedia,
-  type FreezoneAssetLibrarySource,
+  type FreezoneAssetLibraryFolder,
 } from '@/api/ops';
 import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
+import { AssetLibraryItemMedia } from './AssetLibraryItemMedia';
 import { Button } from '@/components/ui/button';
+import { confirmDialog } from '@/components/confirm-dialog-host';
+import { AssetLibraryFolderCoverDialog } from './AssetLibraryFolderCoverDialog';
+import { AssetLibraryNewFolderDialog } from './AssetLibraryNewFolderDialog';
+import {
+  AssetLibraryUploadDialog,
+  type AssetLibraryUploadPick,
+} from './AssetLibraryUploadDialog';
+// 条目模型与类目定义和左侧面板的「资产库」tab 共用，见 ./assetLibraryItems
+import {
+  ALL_CATEGORY_KEY,
+  ASSET_CATEGORIES,
+  ASSET_LIBRARY_CARD_CLASS,
+  ASSET_LIBRARY_CARD_HOVER_CLASS,
+  SOURCE_LABEL,
+  buildAssetFolders,
+  folderCoverUrl,
+  formatFolderDate,
+  normalizeLibraryList,
+  systemFolderLabel,
+  type AssetCategory,
+  type AssetFolder,
+  type AssetFolderKey,
+  type AssetLibraryMedia,
+  type AssetLibraryTabKey,
+  type LibraryItem,
+} from './assetLibraryItems';
+
+/** 每页条数可选档位，第一个是默认值。 */
+const ASSET_LIBRARY_PAGE_SIZES = [20, 40, 80, 100] as const;
 
 const ASSET_LIBRARY_MODAL_CLASS =
-  'relative flex h-[min(720px,82vh)] w-[min(1120px,92vw)] flex-col overflow-hidden rounded-[10px] border border-white/[0.12] bg-[#15161b]/96 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-md';
-const ASSET_LIBRARY_CARD_CLASS =
-  'overflow-hidden rounded-[12px] border border-white/[0.10] bg-white/[0.04] transition-colors';
-const ASSET_LIBRARY_CARD_HOVER_CLASS =
-  'hover:border-white/[0.18] hover:bg-white/[0.06]';
-const ASSET_LIBRARY_UPLOAD_CARD_CLASS =
-  'flex aspect-square flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-white/[0.12] bg-white/[0.04] px-4 text-text-dark transition-colors hover:border-white/[0.18] hover:bg-white/[0.06]';
+  'relative flex h-[min(880px,90vh)] w-[min(1440px,94vw)] flex-col overflow-hidden rounded-[10px] border border-white/[0.12] bg-[#15161b]/96 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-md';
 
-export type AssetLibraryMedia = FreezoneAssetLibraryMedia;
+export type { AssetLibraryMedia };
 
 interface PendingUpload {
   id: string;
   fileName: string;
   previewUrl: string;
   media: AssetLibraryMedia;
-  status: 'uploading' | 'failed';
-  error?: string;
-}
-
-interface LibraryItem {
-  id: string | null;
-  name: string;
-  media: AssetLibraryMedia;
-  source: FreezoneAssetLibrarySource;
-  /** 该条目在其 media 类型下的主展示 / 引用地址。 */
-  url: string;
-  raw: Record<string, unknown>;
-}
-
 export interface AssetLibrarySelection {
   media: AssetLibraryMedia;
   url: string;
@@ -72,65 +90,12 @@ export interface AssetLibraryModalProps {
   maxSelectable?: number;
   /** 允许的媒体类型 Tab;缺省三类都开。生图/图片编辑节点只传 ['image']。 */
   allowedMedia?: AssetLibraryMedia[];
+  /**
+   * 把整个文件夹的素材发到画布并编成一组（组名 = 文件夹名）。不传时文件夹卡片上
+   * 不出现「发送到画布」——节点里打开的选素材弹窗没有「发到画布」这个语义。
+   */
+  onSendFolderToCanvas?: (folder: AssetFolder) => void;
 }
-
-type AssetTabKey = 'image' | 'scene' | 'video' | 'audio';
-
-interface AssetTab {
-  key: AssetTabKey;
-  label: string;
-  /** 该 Tab 对应的媒体类型——决定上传接口、卡片渲染与 accept。 */
-  media: AssetLibraryMedia;
-  accept: string;
-  /** 是否允许在该 Tab 本地上传。场景为主线同步的只读类目。 */
-  allowUpload: boolean;
-  /** 该 Tab 展示哪些库条目。 */
-  matches: (entry: LibraryItem) => boolean;
-}
-
-// 场景在数据上仍是 image（master 静帧），但按产品要求单独成一个浏览 Tab；
-// 「图片」Tab 因此要排除掉场景条目，避免场景静帧混在人物/道具参考图里。
-const ASSET_TABS: AssetTab[] = [
-  {
-    key: 'image',
-    label: '图片',
-    media: 'image',
-    accept: 'image/*',
-    allowUpload: true,
-    matches: (e) => e.media === 'image' && e.source !== 'scene',
-  },
-  {
-    key: 'scene',
-    label: '场景',
-    media: 'image',
-    accept: 'image/*',
-    allowUpload: false,
-    matches: (e) => e.media === 'image' && e.source === 'scene',
-  },
-  {
-    key: 'video',
-    label: '视频',
-    media: 'video',
-    accept: 'video/*',
-    allowUpload: true,
-    matches: (e) => e.media === 'video',
-  },
-  {
-    key: 'audio',
-    label: '音频',
-    media: 'audio',
-    accept: 'audio/*',
-    allowUpload: true,
-    matches: (e) => e.media === 'audio',
-  },
-];
-
-const SOURCE_LABEL_KEYS: Record<FreezoneAssetLibrarySource, string> = {
-  upload: 'canvas.assetLibraryModal.sourceUpload',
-  character: 'canvas.assetLibraryModal.sourceCharacter',
-  scene: 'canvas.assetLibraryModal.sourceScene',
-  prop: 'canvas.assetLibraryModal.sourceProp',
-};
 
 function makeId(): string {
   return `al_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -141,56 +106,6 @@ function stripExtension(name: string): string {
   return dot > 0 ? name.slice(0, dot) : name;
 }
 
-function itemUrl(media: AssetLibraryMedia, it: Record<string, unknown>): string {
-  if (media === 'video') return typeof it.video_url === 'string' ? it.video_url : '';
-  if (media === 'audio') return typeof it.audio_url === 'string' ? it.audio_url : '';
-  const urls = it.image_urls ?? it.imageUrls ?? it.images;
-  if (Array.isArray(urls)) {
-    const first = urls.find((u): u is string => typeof u === 'string');
-    if (first) return first;
-  }
-  return typeof it.cover_url === 'string' ? it.cover_url : '';
-}
-
-function normalizeLibraryList(payload: unknown): LibraryItem[] {
-  let arr: unknown[] = [];
-  if (Array.isArray(payload)) {
-    arr = payload;
-  } else if (payload && typeof payload === 'object') {
-    const rec = payload as Record<string, unknown>;
-    for (const key of ['items', 'data', 'characters', 'list', 'records']) {
-      if (Array.isArray(rec[key])) {
-        arr = rec[key] as unknown[];
-        break;
-      }
-    }
-  }
-  return arr
-    .filter(
-      (it): it is Record<string, unknown> =>
-        Boolean(it && typeof it === 'object' && !Array.isArray(it)),
-    )
-    .map((it) => {
-      const idRaw = it.id ?? it.item_id ?? it.itemId ?? null;
-      const id =
-        typeof idRaw === 'string' ? idRaw : idRaw != null ? String(idRaw) : null;
-      const name = typeof it.name === 'string' ? it.name : '';
-      // 缺省 image 兼容老数据（历史条目没有 media 字段）。
-      const mediaRaw = typeof it.media === 'string' ? it.media : 'image';
-      const media: AssetLibraryMedia =
-        mediaRaw === 'video' || mediaRaw === 'audio' ? mediaRaw : 'image';
-      const sourceRaw = typeof it.source === 'string' ? it.source : 'upload';
-      const source: FreezoneAssetLibrarySource =
-        sourceRaw === 'character' ||
-        sourceRaw === 'scene' ||
-        sourceRaw === 'prop'
-          ? sourceRaw
-          : 'upload';
-      return { id, name, media, source, url: itemUrl(media, it), raw: it };
-    })
-    .filter((it) => Boolean(it.url));
-}
-
 export function AssetLibraryModal({
   open,
   project,
@@ -199,45 +114,64 @@ export function AssetLibraryModal({
   onConfirm,
   maxSelectable = 9,
   allowedMedia,
+  onSendFolderToCanvas,
 }: AssetLibraryModalProps) {
-  const { t } = useTranslation();
-  const tabs = useMemo(
+  // 类目（标签）按用途分，不按媒介分；allowedMedia 只在两个地方起作用：整类都装
+  // 不下的类目（如只收音频的「音效」在只要图片的节点里）不出现在 tab 条上，条目
+  // 本身再过滤一遍。
+  const categories = useMemo(
     () =>
-      ASSET_TABS.filter(
-        (tab) => !allowedMedia || allowedMedia.includes(tab.media),
+      ASSET_CATEGORIES.filter(
+        (category) =>
+          !allowedMedia || category.media.some((m) => allowedMedia.includes(m)),
       ),
     [allowedMedia],
   );
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   // 把 onSuccess 收进 ref，避免它进 initializeLibrary 依赖后，父组件每次渲染换新
   // 函数身份就触发「打开自动同步」effect 反复重跑。
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
   const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
-  const [libraryError, setLibraryError] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
-  const pendingRef = useRef<PendingUpload[]>([]);
-  pendingRef.current = pendingUploads;
-  const [isDragging, setIsDragging] = useState(false);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [activeTabKey, setActiveTabKey] = useState<AssetTabKey>(
-    tabs[0]?.key ?? 'image',
+  const [activeTabKey, setActiveTabKey] =
+    useState<AssetLibraryTabKey>(ALL_CATEGORY_KEY);
+  // 「全部」下先看文件夹，点进去才看条目；非空即当前打开的文件夹。选中状态跨层级
+  // 保留（selectedKeys 与视图无关），所以进出文件夹不会掉勾。
+  const [openFolderKey, setOpenFolderKey] = useState<AssetFolderKey | null>(null);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  // 批量操作 = 管理态：卡片上的勾选改为「选中待删除」，底部换成删除条。平时的勾选
+  // 是「挑素材给节点用」，两者各存各的，互不影响。
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkIds, setBulkIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  // 文件夹卡片上的「…」菜单与它派生的两个弹窗。都按 key 存而不是存整个 folder
+  // 对象——folders 每次刷新都是新对象，存 key 才能跟着最新数据走。
+  const [folderMenuKey, setFolderMenuKey] = useState<AssetFolderKey | null>(null);
+  const [renameFolderKey, setRenameFolderKey] = useState<AssetFolderKey | null>(
+    null,
   );
-  const activeTab = useMemo(
-    () => tabs.find((tab) => tab.key === activeTabKey) ?? tabs[0],
-    [tabs, activeTabKey],
+  const [coverFolderKey, setCoverFolderKey] = useState<AssetFolderKey | null>(
+    null,
   );
-  const activeMedia = activeTab?.media ?? 'image';
+  // 分页只管当前网格：「全部」顶层分文件夹，其余分条目。切 Tab / 进出文件夹 /
+  // 改每页条数都回到第一页——留在第 3 页看一个只有 2 页的目录没有意义。
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(ASSET_LIBRARY_PAGE_SIZES[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTabKey, openFolderKey, pageSize]);
 
   // allowedMedia 变了(不同节点复用同一弹窗)时，把当前 Tab 收敛回允许集合。
   useEffect(() => {
-    if (!tabs.some((tab) => tab.key === activeTabKey)) {
-      setActiveTabKey(tabs[0]?.key ?? 'image');
+    if (
+      activeTabKey !== ALL_CATEGORY_KEY &&
+      !categories.some((category) => category.key === activeTabKey)
+    ) {
+      setActiveTabKey(ALL_CATEGORY_KEY);
     }
-  }, [tabs, activeTabKey]);
+  }, [categories, activeTabKey]);
 
   // 纯加载已有库：失败不弹红条(缺库文件/后端未就绪都当空处理)，返回加载到的条目。
   const refreshLibrary = useCallback(async (): Promise<LibraryItem[]> => {
@@ -254,14 +188,7 @@ export function AssetLibraryModal({
     }
   }, [project]);
 
-  // 打开即自动同步：先加载已有库(静默兜底)，再从主线自动同步合并。只有当
-  // 既无已有库、同步又失败时，才提示错误(通常代表后端还没重启/路由缺失)。
-  const initializeLibrary = useCallback(
-    async (isCancelled?: () => boolean) => {
-      if (!project) return;
-      setIsLoadingLibrary(true);
-      setLibraryError(null);
-      const base = await refreshLibrary();
+      const [base] = await Promise.all([refreshLibrary(), refreshFolders()]);
       if (isCancelled?.()) return;
       setIsSyncing(true);
       try {
@@ -282,7 +209,7 @@ export function AssetLibraryModal({
         }
       }
     },
-    [project, refreshLibrary],
+    [project, refreshLibrary, refreshFolders],
   );
 
   useEffect(() => {
@@ -302,11 +229,13 @@ export function AssetLibraryModal({
       pendingRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       setPendingUploads([]);
       setLibrary([]);
-      setLibraryError(null);
-      setDeletingId(null);
-      setIsDragging(false);
-      setIsSyncing(false);
-      setSelectedKeys([]);
+      setActiveTabKey(ALL_CATEGORY_KEY);
+      setOpenFolderKey(null);
+      setCreateMenuOpen(false);
+      setNewFolderOpen(false);
+      setUploadOpen(false);
+      setBulkMode(false);
+      setBulkIds([]);
     }, 240);
     return () => window.clearTimeout(timer);
   }, [open]);
@@ -332,6 +261,16 @@ export function AssetLibraryModal({
       setIsSyncing(false);
     }
   }, [project, isSyncing, onSuccess]);
+
+  const handleCreateFolder = useCallback(
+    async (name: string): Promise<AssetFolderKey> => {
+      if (!project) throw new Error('项目未就绪');
+      const folder = await createFreezoneAssetLibraryFolder(project, name);
+      await refreshFolders();
+      return folder.id;
+    },
+    [project, refreshFolders],
+  );
 
   const removePending = useCallback((id: string) => {
     setPendingUploads((prev) => {
@@ -374,38 +313,34 @@ export function AssetLibraryModal({
     [project, refreshLibrary, onSuccess],
   );
 
-  const acceptsFile = useCallback(
-    (file: File, media: AssetLibraryMedia) => {
-      if (media === 'image') return file.type.startsWith('image/');
-      if (media === 'video') return file.type.startsWith('video/');
-      return file.type.startsWith('audio/');
-    },
-    [],
-  );
-
-  const handleFiles = useCallback(
-    (files: FileList | File[]) => {
-      if (!project || !activeTab?.allowUpload) return;
-      const media = activeMedia;
-      const accepted: { entry: PendingUpload; file: File }[] = [];
-      Array.from(files).forEach((file) => {
-        if (!acceptsFile(file, media)) return;
-        const entry: PendingUpload = {
+  const startUploads = useCallback(
+    (
+      picks: AssetLibraryUploadPick[],
+      folder: AssetFolderKey,
+      category: AssetCategory | null,
+    ) => {
+      if (!project || picks.length === 0) return;
+      const accepted = picks.map(({ file, media }) => ({
+        file,
+        entry: {
           id: makeId(),
           fileName: file.name,
           previewUrl: URL.createObjectURL(file),
           media,
-          status: 'uploading',
-        };
-        accepted.push({ entry, file });
-      });
-      if (accepted.length === 0) return;
+          category,
+          folder,
+          status: 'uploading' as const,
+        },
+      }));
       setPendingUploads((prev) => [...prev, ...accepted.map((a) => a.entry)]);
+      // 把视图切到目标文件夹，否则上传进度落在用户看不见的地方。
+      setActiveTabKey(ALL_CATEGORY_KEY);
+      setOpenFolderKey(folder);
       accepted.forEach(({ entry, file }) => {
         void uploadOne(entry, file);
       });
     },
-    [project, activeMedia, activeTab, acceptsFile, uploadOne],
+    [project, uploadOne],
   );
 
   const handleDeleteEntry = useCallback(
@@ -431,28 +366,41 @@ export function AssetLibraryModal({
     [project, refreshLibrary],
   );
 
-  const handleDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      setIsDragging(false);
-      if (event.dataTransfer?.files?.length) {
-        handleFiles(event.dataTransfer.files);
-      }
+      const files = event.dataTransfer?.files;
+      if (!files?.length || !dropTarget) return;
+      const picks: AssetLibraryUploadPick[] = [];
+      Array.from(files).forEach((file) => {
+        const media = file.type.startsWith('image/')
+          ? ('image' as const)
+          : file.type.startsWith('video/')
+            ? ('video' as const)
+            : file.type.startsWith('audio/')
+              ? ('audio' as const)
+              : null;
+        if (!media) return;
+        if (allowedMedia && !allowedMedia.includes(media)) return;
+        picks.push({ file, media });
+      });
+      startUploads(picks, dropTarget.folder, dropTarget.category);
     },
-    [handleFiles],
+    [dropTarget, allowedMedia, startUploads],
   );
 
-  const visibleItems = useMemo(
-    () => (activeTab ? library.filter((entry) => activeTab.matches(entry)) : []),
-    [library, activeTab],
-  );
-  const visiblePending = useMemo(
-    () =>
-      activeTab && activeTab.allowUpload
-        ? pendingUploads.filter((p) => p.media === activeTab.media)
-        : [],
-    [pendingUploads, activeTab],
-  );
+  const visibleItems = useMemo(() => {
+    if (showFolders) return [];
+    if (activeTabKey === ALL_CATEGORY_KEY) return openFolder?.items ?? [];
+    return allowedItems.filter((entry) => entry.category === activeTabKey);
+  }, [showFolders, activeTabKey, openFolder, allowedItems]);
+
+  const visiblePending = useMemo(() => {
+    if (showFolders) return [];
+    if (activeTabKey === ALL_CATEGORY_KEY) {
+      return openFolder
+        ? pendingUploads.filter((p) => p.folder === openFolder.key)
+        : [];
+    }
+    return pendingUploads.filter((p) => p.category === activeTabKey);
+  }, [showFolders, activeTabKey, openFolder, pendingUploads]);
 
   const isSelected = useCallback(
     (key: string) => selectedKeys.includes(key),
@@ -482,34 +430,35 @@ export function AssetLibraryModal({
     [maxSelectable],
   );
 
-  const handleConfirm = useCallback(() => {
-    if (selectedKeys.length === 0) {
-      onClose();
-      return;
-    }
-    if (onConfirm) {
-      const byKey = new Map(library.map((entry) => [selectionKey(entry), entry]));
-      const selections: AssetLibrarySelection[] = [];
-      for (const key of selectedKeys) {
-        const entry = byKey.get(key);
-        if (entry && entry.url) {
-          selections.push({ media: entry.media, url: entry.url, name: entry.name });
-        }
-      }
-      onConfirm(selections);
-    }
-    onClose();
-  }, [library, onClose, onConfirm, selectedKeys, selectionKey]);
-
-  if (typeof document === 'undefined' || !open) return null;
-
-  const totalCount = library.length + pendingUploads.length;
+  // 分页作用在当前网格上。上传中的占位卡不参与分页——它们几秒后就变成正式条目，
+  // 被翻到后面反而看不到进度。
+  const pagedTotal = showFolders ? folders.length : visibleItems.length;
+  const pageCount = Math.max(1, Math.ceil(pagedTotal / pageSize));
+  // 删素材会让总页数缩水，停在已经不存在的页上就成空白了，这里兜一下。
+  const safePage = Math.min(page, pageCount);
+  const pageStart = (safePage - 1) * pageSize;
+  const pagedFolders = showFolders
+    ? folders.slice(pageStart, pageStart + pageSize)
+    : [];
+  const pagedItems = showFolders
+    ? []
+    : visibleItems.slice(pageStart, pageStart + pageSize);
   const selectedCount = selectedKeys.length;
-  // 当前 Tab（媒介）内已选数量，用于配额显示与「选满禁选」判断；确定按钮仍看全局。
-  const activeSelectedCount = selectedKeys.filter((k) =>
-    k.startsWith(`${activeMedia}:`),
-  ).length;
+  // 配额按媒介算（selectionKey 前缀即 media），所以「选满禁选」也得按条目自己的
+  // 媒介判断——文件夹里图片和视频是混着的。
+  const selectedCountOf = (media: AssetLibraryMedia) =>
+    selectedKeys.filter((k) => k.startsWith(`${media}:`)).length;
   const hasSelection = selectedCount > 0;
+  const tabs: Array<{ key: AssetLibraryTabKey; label: string }> = [
+    { key: ALL_CATEGORY_KEY, label: '全部' },
+    ...categories.map((category) => ({
+      key: category.key,
+      label: category.label,
+    })),
+  ];
+
+  const headerButtonClass =
+    'inline-flex h-8 items-center gap-1.5 rounded-md bg-white/[0.08] px-3 text-xs font-medium text-text-dark transition-colors hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50';
 
   return createPortal(
     <div className="fixed inset-0 z-[300] flex items-center justify-center">
@@ -566,7 +515,11 @@ export function AssetLibraryModal({
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTabKey(tab.key)}
+                onClick={() => {
+                  setActiveTabKey(tab.key);
+                  // 换 tab 一律退回文件夹层，免得「全部」里还留着上次点进去的目录。
+                  setOpenFolderKey(null);
+                }}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   tab.key === activeTabKey
                     ? 'bg-white/[0.12] text-text-dark'
@@ -707,51 +660,38 @@ export function AssetLibraryModal({
             ))}
 
             {/* Existing items */}
-            {visibleItems.map((entry, idx) => {
+            {pagedItems.map((entry, idx) => {
               const isDeleting = deletingId != null && entry.id === deletingId;
               const key = selectionKey(entry);
-              const selected = isSelected(key);
-              const disabledSelect =
-                !selected && activeSelectedCount >= maxSelectable;
+              // 批量态下只有本地上传的条目可选——主线条目删了也会被下次同步拉回来。
+              const bulkEligible = bulkMode && entry.source === 'upload' && !!entry.id;
+              const selected = bulkMode
+                ? Boolean(entry.id && bulkIds.includes(entry.id))
+                : isSelected(key);
+              const disabledSelect = bulkMode
+                ? !bulkEligible
+                : !selected && selectedCountOf(entry.media) >= maxSelectable;
+              const activate = () => {
+                if (disabledSelect) return;
+                if (bulkMode) {
+                  if (entry.id) toggleBulk(entry.id);
+                } else {
+                  toggleSelect(key);
+                }
+              };
               return (
                 <div
                   key={entry.id ?? `idx-${idx}`}
                   className={`group relative aspect-square ${ASSET_LIBRARY_CARD_CLASS} ${
                     selected
-                      ? 'border-accent/70 ring-1 ring-accent/45'
+                      ? bulkMode
+                        ? 'border-red-400/70 ring-1 ring-red-400/45'
+                        : 'border-accent/70 ring-1 ring-accent/45'
                       : ASSET_LIBRARY_CARD_HOVER_CLASS
-                  } cursor-pointer`}
-                  onClick={() => {
-                    if (disabledSelect) return;
-                    toggleSelect(key);
-                  }}
+                  } ${disabledSelect ? 'cursor-default' : 'cursor-pointer'}`}
+                  onClick={activate}
                 >
-                  {entry.media === 'image' ? (
-                    <img
-                      src={resolveImageDisplayUrl(entry.url)}
-                      alt={entry.name}
-                      className="h-full w-full object-cover"
-                      draggable={false}
-                    />
-                  ) : entry.media === 'video' ? (
-                    <video
-                      src={resolveImageDisplayUrl(entry.url)}
-                      className="h-full w-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-white/[0.03] text-text-muted/70">
-                      <Music className="h-9 w-9" />
-                      <audio
-                        src={resolveImageDisplayUrl(entry.url)}
-                        controls
-                        className="w-[86%]"
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </div>
-                  )}
+                  <AssetLibraryItemMedia entry={entry} />
 
                   {/* Checkbox top-left */}
                   <button
@@ -783,7 +723,7 @@ export function AssetLibraryModal({
                   {/* Source badge top-right */}
                   {entry.source !== 'upload' && (
                     <span className="pointer-events-none absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90">
-                      {t(SOURCE_LABEL_KEYS[entry.source])}
+                      {SOURCE_LABEL[entry.source]}
                     </span>
                   )}
 

@@ -210,7 +210,7 @@ export function MaskEditor({
         maskUrl: uploaded.url.split("?")[0],
         prompt,
       });
-      setProgressMsg(t("pipelineImport.maskEditor.processing"));
+      setProgressMsg("处理中（30-60s）...");
       const completed = await awaitTaskCompletion(ref.task_key, project, { taskType: ref.task_type });
       const directUrl =
         (completed.result?.["output_url"] as string | undefined) || undefined;
@@ -339,7 +339,7 @@ export function MaskEditor({
               ) : error ? (
                 <span className="text-red-400">{error}</span>
               ) : (
-                <>{t("pipelineImport.maskEditor.instructionText")}</>
+                <>红色 = 待编辑区域 · LingShan-G2 · 可能 30-60 秒</>
               )}
             </div>
             <div className="flex gap-2">

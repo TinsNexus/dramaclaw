@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CreditBalanceBadge } from "@/components/layout/credit-balance-badge";
+import { BrandLockup } from "@/components/layout/brand-lockup";
 import { NotificationDrawer } from "@/components/notifications/notification-drawer";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { UserManualDialog } from "@/components/UserManualDialog";
@@ -39,13 +40,13 @@ import { useAppStore } from "@/stores/app-store";
 import { authRequired, isCeRuntime } from "@/lib/runtime-config";
 import { resetUserSessionState } from "@/lib/reset-region-state";
 import { useModelGatewayConfig } from "@/lib/queries/model-gateway";
+import { useOrgBranding } from "@/lib/queries/org-branding";
 import { useReleaseNotifications } from "@/lib/queries/release-notifications";
 import { normalize, type Supported } from "@/i18n/languages";
 import {
   markUpgradeSeen,
   shouldShowUpgradeNudge,
 } from "@/lib/release-notification-state";
-import { BrandBadge } from "@/components/layout/brand-badge";
 import {
   ProjectHeaderNavigation,
   ProjectSwitcher,
@@ -92,6 +93,13 @@ export function Header() {
   const setLanguage = useAppStore((s) => s.setLanguage);
   const showLogout = authRequired();
   const ceRuntime = isCeRuntime();
+  const orgBranding = useOrgBranding(!ceRuntime && Boolean(username));
+  const brandName = orgBranding.data?.branding
+    ? orgBranding.data.organization?.name ?? null
+    : null;
+  const homeLinkLabel = brandName
+    ? `${t("app.logoHomeTooltip")} — ${brandName}`
+    : t("app.logoHomeTooltip");
   const displayName = username ?? "User";
   const avatarInitial = displayName.slice(0, 1).toUpperCase();
   const activeLanguage = normalize(i18n.resolvedLanguage ?? i18n.language);
@@ -225,17 +233,12 @@ export function Header() {
                 render={
                   <Link
                     to="/"
-                    aria-label={t("app.logoHomeTooltip")}
+                    aria-label={homeLinkLabel}
                     className="flex min-w-0 shrink-0 items-center"
                   />
                 }
               >
-                <img
-                  src="/brand/dramahub-wordmark.svg"
-                  alt=""
-                  aria-hidden="true"
-                  className="h-[22.7px] w-auto max-w-[113px] object-contain"
-                />
+                <BrandLockup value={orgBranding.data} />
               </TooltipTrigger>
               <TooltipContent
                 side="bottom"
@@ -247,7 +250,6 @@ export function Header() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <BrandBadge />
           <div className="ml-[22px] flex min-w-0 items-center gap-6">
             {project ? <ProjectSwitcher current={project} /> : null}
           </div>
@@ -257,17 +259,6 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-[32px] text-sidebar-foreground/82 transition-colors duration-150 ease-[var(--ease-out-quint)] hover:bg-white/[0.05] hover:text-white aria-expanded:bg-white/[0.05] aria-expanded:text-white"
-            aria-label={t("userManual.title")}
-            aria-expanded={manualOpen}
-            onClick={() => setManualOpen(true)}
-          >
-            <CircleHelp className="size-[17px]" />
-          </Button>
           {/* 设置仅在 CE 版显示,EE 版隐藏 */}
           {ceRuntime ? (
             <div ref={settingsAnchorRef} className="relative">
@@ -294,6 +285,17 @@ export function Header() {
               </Button>
             </div>
           ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-[32px] text-sidebar-foreground/82 transition-colors duration-150 ease-[var(--ease-out-quint)] hover:bg-white/[0.05] hover:text-white aria-expanded:bg-white/[0.05] aria-expanded:text-white"
+            aria-label={t("userManual.title")}
+            aria-expanded={manualOpen}
+            onClick={() => setManualOpen(true)}
+          >
+            <CircleHelp className="size-[17px]" />
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -534,13 +536,11 @@ function AccountPanel({
           </span>
         </div>
         <div className="space-y-0.5">
-          {!isCeRuntime() ? (
-            <AccountMenuRow
-              icon={<Camera className="size-3.5" />}
-              label={t("header.account.changeAvatar")}
-              onClick={onChangeAvatar}
-            />
-          ) : null}
+          <AccountMenuRow
+            icon={<Camera className="size-3.5" />}
+            label={t("header.account.changeAvatar")}
+            onClick={onChangeAvatar}
+          />
           <AccountMenuRow
             active={languageOpen}
             icon={<Languages className="size-3.5" />}
@@ -586,12 +586,8 @@ function AccountMenuRow({
   meta?: string;
   onClick?: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      className="flex h-9 w-full items-center gap-2 rounded-[8px] px-1.5 text-left text-[13px] font-normal text-slate-100 transition-colors duration-150 hover:bg-white/[0.05]"
-      onClick={onClick}
-    >
+  const content = (
+    <>
       <span className="ml-1 flex size-3.5 shrink-0 items-center justify-center text-slate-100/58" aria-hidden="true">
         {icon}
       </span>
@@ -604,6 +600,13 @@ function AccountMenuRow({
           active ? "rotate-90" : ""
         }`}
       />
+    </>
+  );
+  const className =
+    "flex h-9 w-full items-center gap-2 rounded-[8px] px-1.5 text-left text-[13px] font-normal text-slate-100 transition-colors duration-150 hover:bg-white/[0.05]";
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
     </button>
   );
 }

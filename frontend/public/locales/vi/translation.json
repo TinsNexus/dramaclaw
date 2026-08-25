@@ -469,7 +469,11 @@
         "minutes": "{{count}} phút trước",
         "hours": "{{count}} giờ trước",
         "days": "{{count}} ngày trước"
-      }
+      },
+      "backToSource": "Quay lại canvas luồng chính gốc",
+      "deleteCurrent": "Xóa canvas này",
+      "restoreMenu": "Đồng bộ với luồng chính",
+      "switcher": "Chuyển canvas"
     },
     "projections": {
       "staleCount": "{{count}} hình chiếu mạch chính có cập nhật",
@@ -936,7 +940,16 @@
       "status": "Trạng thái",
       "change": "Thay đổi điểm",
       "balance": "Số dư sau thay đổi"
-    }
+    },
+    "dormantPersonalBalance": "Điểm cá nhân (không dùng được ở đây)",
+    "dormantPersonalHint": "Số điểm này vẫn nằm trong tài khoản cá nhân của bạn. Tài khoản này thanh toán bằng điểm tổ chức và sẽ không dùng đến số điểm cá nhân đó.",
+    "lowBalanceNotice": "Số dư khả dụng {{balance}} của bạn đã chạm ngưỡng nhắc nhở {{threshold}} do tổ chức thiết lập. Hãy liên hệ quản trị viên tổ chức để nạp thêm hạn mức.",
+    "orgAccount": "Điểm được cấp cho bạn",
+    "orgBalance": "Số dư khả dụng",
+    "orgCenterDescription": "Xem lại hạn mức điểm tổ chức đã cấp cho bạn, cùng các khoản thanh toán và hoàn tiền.",
+    "orgPromotionBadge": "Khuyến mãi tổ chức",
+    "orgScopeBadge": "Điểm được cấp",
+    "orgScopeNotice": "Số dư và hoạt động bên dưới đến từ điểm tổ chức mà {{name}} đã cấp cho bạn. Mức sử dụng tác vụ của bạn được tính vào hạn mức đó."
   },
   "nav": {
     "home": "Trang chủ",
@@ -1559,7 +1572,9 @@
       "toastPermissionUpdated": "Quyền đã được cập nhật",
       "toastPermissionUpdateFailed": "Cập nhật quyền không thành công",
       "toastMemberRemoved": "Đã xóa thành viên chia sẻ",
-      "toastRemoveFailed": "Xóa không thành công"
+      "toastRemoveFailed": "Xóa không thành công",
+      "inactive": "Không còn hiệu lực",
+      "inactiveAccessChanged": "Người dùng hiện không thể truy cập dự án này"
     }
   },
   "assets": {
@@ -1643,7 +1658,14 @@
         "reverseToPly": "Mặt sau→Director World",
         "panoToPly": "360→Director World",
         "openWorld": "Mở Director World",
-        "worldNotReady": "Director World (phim trường chưa sẵn sàng)"
+        "worldNotReady": "Director World (phim trường chưa sẵn sàng)",
+        "confirmAction": "Xác nhận và bắt đầu",
+        "confirmDescription": "{{feature}} sẽ bắt đầu ngay sau khi xác nhận.",
+        "confirmTitle": "Xác nhận chuyển đổi",
+        "costLoading": "Đang tải giá hiện tại của tổ chức",
+        "costUnavailable": "Giá tạm thời không khả dụng. Vui lòng thử lại sau.",
+        "panoFeature": "Cảnh toàn cảnh sang SOG",
+        "singleFaceFeature": "Cảnh một mặt sang SOG"
       },
       "fields": {
         "name": "Tên bối cảnh",
@@ -1671,7 +1693,9 @@
       "buildingEmpty": {
         "title": "Đang xây dựng bối cảnh",
         "description": "Hệ thống đang trích xuất các bối cảnh từ biểu đồ. Chúng sẽ xuất hiện ở đây khi sẵn sàng."
-      }
+      },
+      "deleteTitle": "Xóa cảnh",
+      "emptyDescriptionPerEpisode": "Cảnh của dự án có lời dẫn được tạo tự động khi bạn lên kế hoạch từng tập, hoặc bạn có thể thêm thủ công."
     },
     "props": {
       "title": "Quản lý đạo cụ",
@@ -1797,7 +1821,15 @@
     "retry": "Thử lại",
     "novelImportRequired": "Vui lòng trước tiên nhập một tiểu thuyết",
     "generateNew": "Tạo mới",
-    "refreshDone": "Đã làm mới"
+    "refreshDone": "Đã làm mới",
+    "nodeDefaultQueueFull": "Hàng đợi mặc định của node hiện tại đã đầy",
+    "nodeQueueFull": "Hàng đợi {{queue}} của node hiện tại đã đầy",
+    "organizationDefaultQueueFull": "Hàng đợi mặc định của tổ chức hiện tại đã đầy",
+    "organizationQueueFull": "Hàng đợi {{queue}} của tổ chức hiện tại đã đầy",
+    "platformDefaultQueueFull": "Hàng đợi mặc định của nền tảng đã đầy",
+    "platformQueueFull": "Hàng đợi {{queue}} của nền tảng đã đầy",
+    "userDefaultQueueFull": "Bạn đã đạt giới hạn hàng đợi mặc định cá nhân",
+    "userQueueFull": "Bạn đã đạt giới hạn hàng đợi {{queue}} cá nhân"
   },
   "ingest": {
     "title": "Nguồn truyện",
@@ -2392,7 +2424,12 @@
       "scriptReviewFailed": "Kịch bản không qua kiểm duyệt, hãy tạo lại: {{summary}}",
       "modeLabel": "Chế độ hiện tại:",
       "modeLiteral": "Chế độ: mỗi dòng một Beat",
-      "sourceWorkbenchHint": "Văn bản nguồn bên phải tự động lưu"
+      "sourceWorkbenchHint": "Văn bản nguồn bên phải tự động lưu",
+      "identityCharactersBuilding": "Nhân vật đang được xây dựng; lên kế hoạch nhận diện sẽ mở khóa khi hoàn tất",
+      "identityCharactersLoading": "Đang kiểm tra dữ liệu nhân vật",
+      "identityCharactersRequired": "Hãy xây dựng nhân vật từ đồ thị tri thức trước",
+      "sceneCatalogBuilding": "Cảnh đang được xây dựng; lên kế hoạch cảnh sẽ mở khóa khi hoàn tất",
+      "sceneCatalogLoading": "Đang kiểm tra trạng thái xây dựng cảnh"
     },
     "beat": {
       "badge": "Beat {{n}}",
@@ -3156,7 +3193,12 @@
       "replanScenes": "Lên kế hoạch lại bối cảnh",
       "planProps": "Lên kế hoạch đạo cụ",
       "replanProps": "Lên kế hoạch lại đạo cụ",
-      "viewDetails": "Xem chi tiết"
+      "viewDetails": "Xem chi tiết",
+      "identityCharactersBuilding": "Nhân vật đang được xây dựng; lên kế hoạch nhận diện sẽ mở khóa khi hoàn tất",
+      "identityCharactersLoading": "Đang kiểm tra dữ liệu nhân vật",
+      "identityCharactersRequired": "Hãy xây dựng nhân vật từ đồ thị tri thức trước",
+      "sceneCatalogBuilding": "Cảnh đang được xây dựng; lên kế hoạch cảnh sẽ mở khóa khi hoàn tất",
+      "sceneCatalogLoading": "Đang kiểm tra trạng thái xây dựng cảnh"
     },
     "beats": {
       "genFailed": "Tạo thất bại",
@@ -5619,7 +5661,7 @@
         "setupPasswordPlaceholder": "Ít nhất 8 ký tự",
         "setupConfirmPasswordPlaceholder": "Nhập lại mật khẩu",
         "setupPasswordOnlyOnce": "Tài khoản và mật khẩu này chỉ được gửi tới NewAPI của bạn khi tạo quản trị viên lần đầu trên một bản NewAPI hoàn toàn mới. Nếu NewAPI đã khởi tạo thì dù có điền mật khẩu ở đây cũng không đổi mật khẩu quản trị viên hiện có. DramaHub không lưu mật khẩu và cũng không dùng nó cho các thao tác sau; sau khi khởi tạo lần đầu xong hãy tự lưu lại để đăng nhập trang quản trị NewAPI.",
-        "setupRequired": "NewAPI hiện tại chưa hoàn tất khởi tạo, vui lòng điền tên đăng nhập quản trị viên, mật khẩu khởi tạo và xác nhận mật khẩu ở đây rồi mới bấm khởi tạo cấu hình.",
+        "setupRequired": "NewAPI hiện tại chưa hoàn tất khởi tạo. Vui lòng điền mật khẩu khởi tạo và xác nhận mật khẩu ở đây rồi thử lại.",
         "setupAlreadyInitializedPasswordIgnored": "Phát hiện NewAPI của bạn đã được khởi tạo, lần này không gọi API khởi tạo của NewAPI và cũng không đổi mật khẩu quản trị viên hiện có; mật khẩu bạn vừa nhập đã bị bỏ qua và xoá trống.",
         "setupPasswordMissingUsername": "Vui lòng điền tên đăng nhập quản trị viên.",
         "setupPasswordIncomplete": "Vui lòng điền cả mật khẩu khởi tạo và xác nhận mật khẩu.",
@@ -5734,7 +5776,38 @@
         "clearComfyConfirm": "Thao tác này sẽ xoá kênh ComfyUI, các Workflow và ánh xạ model media liên quan khỏi cài đặt cục bộ và NewAPI. Các dự án và media đã tạo sẽ không bị xoá.",
         "comfyCleared": "Đã xoá cấu hình ComfyUI.",
         "multimodalRequiredBadge": "Cần đa phương thức",
-        "cogneeDescription": "Nhập tiểu thuyết và truy xuất tri thức cần cấu hình đồng thời model hiểu nội dung và model vector; cả hai cùng tạo nên kho tri thức tiểu thuyết Cognee."
+        "cogneeDescription": "Nhập tiểu thuyết và truy xuất tri thức cần cấu hình đồng thời model hiểu nội dung và model vector; cả hai cùng tạo nên kho tri thức tiểu thuyết Cognee.",
+        "addChannelShort": "Thêm",
+        "capabilities": {
+          "all": "Tất cả khả năng",
+          "audio": "Âm thanh",
+          "embedding": "Vector",
+          "image": "Ảnh",
+          "rerank": "Xếp hạng lại",
+          "text": "Văn bản",
+          "video": "Video",
+          "vision": "Thị giác"
+        },
+        "channelAction": "Hành động",
+        "channelCapabilities": "Khả năng",
+        "channelCapabilityFilter": "Lọc theo khả năng của kênh",
+        "channelCatalogDescription": "Xem các kênh mà RelayClaw CE hỗ trợ cùng khả năng của chúng, sau đó thêm hoặc bớt nhà cung cấp cho model của bạn.",
+        "channelCatalogSearch": "Tìm theo tên kênh hoặc ID",
+        "channelCatalogTitle": "Quản lý kênh nhà cung cấp",
+        "channelDescription": "Mô tả",
+        "channelTypesLoadFailed": "Không tải được danh sách kênh nhà cung cấp. Kiểm tra RelayClaw CE đang chạy rồi thử lại.",
+        "channelTypesLoading": "Đang tải kênh nhà cung cấp…",
+        "channelUnavailable": "Không khả dụng",
+        "manageChannels": "Quản lý kênh",
+        "noCapabilityData": "Không có dữ liệu khả năng",
+        "noMatchingChannels": "Không có kênh phù hợp.",
+        "removeChannelConfirm": "Xóa “{{provider}}” cũng sẽ xóa {{featureCount}} ánh xạ model nghiệp vụ, {{mediaCount}} ánh xạ model media, và {{embeddingCount}} cấu hình embedding. Thao tác này cập nhật cấu hình hiện tại ngay lập tức.",
+        "removeChannelShort": "Xóa",
+        "removeChannelTitle": "Xóa kênh nhà cung cấp?",
+        "replaceComfyModel": "Chuyển và tải",
+        "replaceComfyModelConfirm": "Kênh ComfyUI này hiện đang gắn với {{currentModel}}. Tải template sẽ chuyển sang {{nextModel}} và cập nhật cấu hình model media do workflow quản lý. Tiếp tục?",
+        "replaceComfyModelTitle": "Chuyển sang model MiniMax H3?",
+        "retryChannelTypes": "Tải lại"
       },
       "embeddingModel": {
         "title": "Cấu hình model Embedding",
@@ -6277,7 +6350,18 @@
     }
   },
   "loginCinematic": {
-    "moreInfo": "Thêm thông tin"
+    "moreInfo": "Thêm thông tin",
+    "announcement": {
+      "close": "Đóng thông báo",
+      "collapse": "Thu gọn thông báo này",
+      "confirm": "Xác nhận",
+      "expand": "Mở rộng thông báo này",
+      "markAllRead": "Đánh dấu đã đọc tất cả",
+      "open": "Xem thông báo",
+      "pinned": "Đã ghim",
+      "title": "Thông báo",
+      "unread": "{{n}} chưa đọc"
+    }
   },
   "userManual": {
     "title": "Hướng dẫn sử dụng",
@@ -6286,5 +6370,179 @@
     "toc": "Mục lục",
     "tocSearch": "Tìm trong mục lục…",
     "tocEmpty": "Không có mục nào khớp."
+  },
+  "downloadPage": {
+    "capability": {
+      "eyebrow": "Khả năng",
+      "items": {
+        "autoUpdate": {
+          "description": "Phiên bản mới tự tải ngầm và áp dụng ở lần khởi động sau — bạn không bao giờ phải quay lại tải trình cài đặt nữa.",
+          "title": "Cài một lần, luôn cập nhật"
+        },
+        "localExport": {
+          "description": "Bảng cảnh, khung hình đầu và bản dựng hoàn chỉnh được lưu vào thư mục cục bộ theo từng tập, thay vì chất đống trong danh sách tải xuống của trình duyệt.",
+          "title": "Xuất file thẳng vào ổ đĩa của bạn"
+        },
+        "localFiles": {
+          "description": "Video, hình ảnh và âm thanh có thể kéo thả trực tiếp từ Finder hoặc File Explorer theo đường dẫn cục bộ — không cần tải lên trước.",
+          "title": "Kéo thả file cục bộ vào canvas"
+        },
+        "longTasks": {
+          "description": "Dựng cả tập và tạo hàng loạt khung hình đầu chạy trong ứng dụng tới hàng chục phút, nên việc đóng tab trình duyệt sẽ không làm mất công việc đang chạy.",
+          "title": "Tác vụ dựng dài không bị ảnh hưởng bởi trình duyệt"
+        }
+      },
+      "lede": "Mọi thứ bản web làm được, ứng dụng cũng làm được. Đây là 4 điều chỉ có khi cài đặt ứng dụng.",
+      "title": "4 điều chỉ ứng dụng desktop mới làm được"
+    },
+    "changelog": {
+      "v120": {
+        "description": "Giá tính năng, chi phí ước tính và lịch sử sử dụng nằm cùng một chỗ; các agent cục bộ như Claude Code có thể điều khiển DramaHub CE qua MCP.",
+        "title": "Điểm tính năng minh bạch, hỗ trợ agent bên ngoài"
+      },
+      "v121": {
+        "description": "Tỷ lệ khung hình video, độ phân giải và tham số riêng theo model được truyền nguyên vẹn với kích thước 2K/4K đã sửa đúng; nhập tiểu thuyết hiển thị giai đoạn, phần trăm và thời gian đã trôi qua xuyên suốt.",
+        "title": "Tham số media đáng tin cậy hơn, tiến trình nhập rõ ràng hơn"
+      },
+      "v130": {
+        "description": "Model ảnh và video, tham số và giới hạn ảnh tham chiếu giờ lấy từ cấu hình backend. MiniMax-H3 đi kèm preset chính thức, và ComfyUI cục bộ có thể đảm nhận việc tạo sinh.",
+        "title": "Kênh model và khả năng được cung cấp từ backend"
+      },
+      "v131": {
+        "description": "Cài đặt có thể kiểm tra danh mục model media chính thức thủ công hoặc tự động; tùy chọn model ảnh và video sẽ làm mới ngay khi danh mục mới có hiệu lực.",
+        "title": "Danh mục media chính thức có thể cập nhật"
+      },
+      "v132": {
+        "description": "MiniMax H3 bao phủ nhiều workflow chỉ qua một mục model, và các chế độ canvas như khung hình đầu luôn nhất quán trong khâu kiểm tra, tính phí và thực thi.",
+        "title": "Thiết lập ComfyUI cục bộ đơn giản hơn, chế độ video nhất quán"
+      }
+    },
+    "faq": {
+      "eyebrow": "Câu hỏi thường gặp",
+      "items": {
+        "macGatekeeper": {
+          "answer": "Tìm DramaHub trong Finder → Applications, giữ Control rồi click vào biểu tượng, chọn Open, sau đó xác nhận Open trong hộp thoại. Bạn chỉ cần làm việc này một lần; sau đó ứng dụng sẽ mở bình thường.",
+          "question": "macOS báo không xác minh được nhà phát triển. Giờ phải làm sao?"
+        },
+        "offline": {
+          "answer": "Có. Việc tạo kịch bản, dựng khung hình đầu và ráp video đều chạy trên hạ tầng đám mây; ứng dụng chỉ điều phối, quản lý media và ghi kết quả xuống đĩa. Các bản dựng đã tải về vẫn phát được khi offline.",
+          "question": "Ứng dụng có còn cần kết nối internet không?"
+        },
+        "openSource": {
+          "answer": "Được cấp phép theo Elastic-2.0: tự do sử dụng, chỉnh sửa và tự triển khai, nhưng không được bán lại dưới dạng dịch vụ lưu trữ. Mã nguồn ở",
+          "linkLabel": "github.com/dramaclaw/dramaclaw",
+          "question": "Đây có phải mã nguồn mở không?"
+        },
+        "storage": {
+          "answer": "Dữ liệu dự án nằm trên đám mây gắn với tài khoản của bạn, nên mọi thiết bị đã đăng nhập đều thấy cùng các tập phim. Bảng cảnh xuất ra, khung hình đầu và bản dựng hoàn chỉnh được ghi xuống đĩa cục bộ, và bạn có thể đổi đường dẫn đó trong cài đặt.",
+          "question": "Dự án và file xuất được lưu ở đâu?"
+        },
+        "update": {
+          "answer": "Bạn không cần làm gì cả. Ứng dụng tự kiểm tra khi khởi động, tải phiên bản mới ngầm và áp dụng ở lần khởi động tiếp theo. Để cài thủ công một phiên bản cụ thể, xem",
+          "linkLabel": "GitHub Releases",
+          "question": "Làm sao để nâng cấp?"
+        },
+        "winSmartScreen": {
+          "answer": "Nhấn More info rồi chọn Run anyway. SmartScreen mặc định chặn trình cài đặt cho tới khi đủ lượt tải; điều này không nói lên gì về việc file có nguyên vẹn hay không.",
+          "question": "Windows báo đã bảo vệ PC của bạn. Giờ phải làm sao?"
+        }
+      },
+      "title": "Những câu hỏi thường gặp"
+    },
+    "footer": {
+      "meta": "© 2026 CLAYMORELAB · ELASTIC-2.0 · MACOS 12+ / WINDOWS 10+"
+    },
+    "hero": {
+      "history": "Các bản phát hành trước đây cho mọi nền tảng có tại",
+      "note": "Trình cài đặt tải thẳng từ CDN và tự cập nhật — chỉ cần cài một lần là xong.",
+      "subtitle": "Từ tiểu thuyết đến bản dựng hoàn chỉnh: lên kế hoạch tập phim, thiết kế nhân vật, storyboard, khung hình đầu, tạo video và ráp cuối. Luồng chính dẫn bạn qua từng bước, trong khi canvas sắp xếp cùng công việc đó dưới dạng đồ thị node — cả hai dùng chung một bộ tài nguyên. Ứng dụng desktop đảm nhận media cục bộ, tác vụ dựng dài và tự động cập nhật."
+    },
+    "nav": {
+      "capability": "Khả năng",
+      "faq": "Câu hỏi thường gặp",
+      "release": "Phát hành"
+    },
+    "platform": {
+      "arch": "Kiến trúc",
+      "detected": "Hệ thống của bạn",
+      "format": "Định dạng",
+      "mac": {
+        "arch": "Apple silicon (arm64)",
+        "cta": "Tải cho macOS",
+        "format": ".dmg",
+        "name": "macOS",
+        "requirement": "macOS 12 trở lên"
+      },
+      "requirement": "Yêu cầu",
+      "windows": {
+        "arch": "x64",
+        "cta": "Tải cho Windows",
+        "format": ".exe",
+        "name": "Windows",
+        "requirement": "Windows 10 trở lên"
+      }
+    },
+    "preview": {
+      "alt": "Phác thảo canvas desktop của DramaHub: tab các tập ở trên cùng, danh sách shot bên trái, canvas node ở giữa, bảng tham số bên phải.",
+      "caption": "Minh họa (chế độ xem canvas)",
+      "eyebrow": "Giao diện",
+      "lede": "Luồng chính chia tiểu thuyết thành các tập, nhân vật, storyboard, khung hình đầu, video và bản dựng cuối, mỗi bước một trang riêng. Canvas chiếu bất kỳ shot nào trong số đó lên đồ thị node để bạn tự do chỉnh sửa rồi đồng bộ kết quả trở lại. Cả hai phía đều đọc từ cùng một bộ tài nguyên.",
+      "title": "Quy trình dẫn dắt từng bước và canvas tự do",
+      "windowTitle": "DramaHub — Tập 03 · Canvas"
+    },
+    "release": {
+      "checksum": {
+        "copied": "Đã sao chép",
+        "copy": "Sao chép",
+        "label": "SHA-512",
+        "note": "base64, mỗi dòng khớp với trình cài đặt của nền tảng tương ứng ở trên",
+        "pending": "Đang kiểm tra"
+      },
+      "eyebrow": "Phát hành",
+      "spec": {
+        "autoUpdate": "Tự động cập nhật",
+        "autoUpdateValue": "Đã bật",
+        "license": "Giấy phép",
+        "macValue": "12+ · Apple silicon",
+        "pending": "Đang kiểm tra",
+        "released": "Ngày phát hành",
+        "version": "Phiên bản",
+        "windowsValue": "10+ · x64"
+      },
+      "title": "Phiên bản hiện tại và thay đổi gần đây"
+    }
+  },
+  "modelTaskAccess": {
+    "blocked": {
+      "MODEL_ACCESS_DENIED": "Quyền truy cập model đã bị tắt cho tài khoản này. Hãy liên hệ quản trị viên tổ chức.",
+      "ORG_AUTHZ_STALE": "Quyền truy cập của bạn đã thay đổi. Hãy tải lại trước khi thử lại.",
+      "ORG_CREDENTIAL_DISABLED": "Khóa gateway của tổ chức hiện không khả dụng. Hãy liên hệ quản trị viên tổ chức.",
+      "ORG_CREDENTIAL_GATEWAY_MISMATCH": "Khóa gateway của tổ chức đang gắn với một gateway khác. Hãy nhờ quản trị viên tổ chức gắn lại.",
+      "ORG_CREDENTIAL_MISSING": "Tổ chức chưa gắn khóa gateway nào. Hãy nhờ quản trị viên tổ chức gắn một khóa.",
+      "ORG_MEMBERSHIP_INACTIVE": "Tư cách thành viên tổ chức của bạn không còn hoạt động. Hãy liên hệ quản trị viên tổ chức.",
+      "ORG_SUSPENDED": "Tổ chức này đã bị tạm ngưng nên không thể tạo sinh.",
+      "generic": "Hiện không thể tạo sinh. Hãy tải lại hoặc liên hệ quản trị viên tổ chức."
+    }
+  },
+  "organization": {
+    "access": {
+      "available": "Tác vụ model khả dụng",
+      "back": "Quay lại danh sách dự án",
+      "loading": "Đang tải quyền truy cập model",
+      "reasons": {
+        "MODEL_ACCESS_DENIED": "Quyền truy cập model đã bị tắt cho tài khoản này.",
+        "ORG_AUTHZ_STALE": "Quyền truy cập của bạn đã thay đổi. Hãy tải lại trước khi thử lại.",
+        "ORG_CREDENTIAL_DISABLED": "Khóa gateway của tổ chức hiện không khả dụng.",
+        "ORG_CREDENTIAL_GATEWAY_MISMATCH": "Khóa gateway của tổ chức đã gắn với một gateway khác. Hãy nhờ quản trị viên gắn lại.",
+        "ORG_CREDENTIAL_MISSING": "Tổ chức không có khóa gateway khả dụng.",
+        "ORG_MEMBERSHIP_INACTIVE": "Tư cách thành viên tổ chức của bạn không còn hoạt động.",
+        "ORG_SUSPENDED": "Tổ chức này đã bị tạm ngưng.",
+        "generic": "Quyền truy cập model hiện không khả dụng."
+      },
+      "retry": "Thử lại quyền truy cập",
+      "title": "Quyền truy cập model",
+      "unavailable": "Tác vụ model không khả dụng"
+    },
+    "unavailable": "Kiểm tra quyền truy cập tổ chức không khả dụng trong phiên bản này."
   }
 }
