@@ -36,6 +36,7 @@ import {
 
 import {
   useBuildCharacters,
+  useCharacterDetails,
   useCharacterAssetHistory,
   useCharacterIdentities,
   useCharacters,
@@ -81,14 +82,10 @@ import { NarratorVoicePanel } from "@/components/assets/narrator-voice-panel";
 import { ProjectStyleChip } from "@/components/assets/project-style-chip";
 import { ScenesPanel } from "@/components/assets/scenes-panel";
 import { PropsPanel } from "@/components/assets/props-panel";
-import { UsageCountBadge } from "@/components/assets/usage-count-badge";
+import { ViewportLazyImage } from "@/components/viewport-lazy-image";
 import { CopyAssetLinkButton } from "@/components/assets/copy-asset-link-button";
-import { AssetBeatReferences } from "@/components/assets/asset-beat-references";
-import {
-  useAssetReferenceIndex,
-  type AssetRefType,
-  type BeatReference,
-} from "@/lib/queries/asset-references";
+import { LazyAssetBeatReferences } from "@/components/assets/asset-beat-references";
+import type { AssetRefType } from "@/lib/queries/asset-references";
 import { useAssetsDeepLink } from "@/hooks/use-assets-deep-link";
 import { useAssetFocus } from "@/hooks/use-asset-focus";
 import { LightboxImage } from "@/components/lightbox-image";
@@ -504,13 +501,17 @@ function CharacterAvatar({
   );
   const dim = size === "lg" ? "size-16" : size === "sm" ? "size-9" : "size-10";
   const textSize = size === "lg" ? "text-xl" : "text-sm";
-  if (character.portrait_url) {
+  const portraitUrl = character.portrait_url ?? "";
+  const [failedPortraitUrl, setFailedPortraitUrl] = useState("");
+  useEffect(() => {
+    setFailedPortraitUrl("");
+  }, [portraitUrl]);
+  if (portraitUrl && failedPortraitUrl !== portraitUrl) {
     return (
-      <img
-        src={resolveMediaUrl(character.portrait_url) ?? ""}
+      <ViewportLazyImage
+        src={resolveMediaUrl(portraitUrl) ?? ""}
         alt={character.name}
-        loading="lazy"
-        decoding="async"
+        onError={() => setFailedPortraitUrl(portraitUrl)}
         className={cn(
           "shrink-0 rounded-full border border-border object-cover",
           dim,
@@ -1323,8 +1324,6 @@ function IdentityCard({
   imageModel,
   ageLabel,
   roleLabel,
-  referenceCount = 0,
-  references = [],
   onAttempt,
 }: {
   identity: Identity;
@@ -1334,8 +1333,6 @@ function IdentityCard({
   imageModel?: string;
   ageLabel: string;
   roleLabel: string;
-  referenceCount?: number;
-  references?: BeatReference[];
   onAttempt: () => void;
 }) {
   const { t } = useTranslation();
@@ -1628,7 +1625,6 @@ function IdentityCard({
               {ageLabel}
             </span>
           )}
-          <UsageCountBadge count={referenceCount} />
         </div>
         <CopyAssetLinkButton type="identity" id={identity.identity_id} />
         <Button
@@ -2198,9 +2194,9 @@ function IdentityCard({
         )}
       </div>
 
-      <AssetBeatReferences
+      <LazyAssetBeatReferences
         project={project}
-        references={references}
+        asset={{ type: "identity", id: identity.identity_id }}
         className="border-t border-white/[0.06] pt-3"
       />
 
@@ -2371,7 +2367,6 @@ function IdentitiesGridSection({
     project,
     character.name,
   );
-  const refIndex = useAssetReferenceIndex(project);
   const deepLink = useAssetsDeepLink();
   const createIdentity = useCreateIdentity(project, character.name);
   const identities = identitiesRes?.data ?? [];
@@ -2470,8 +2465,6 @@ function IdentitiesGridSection({
                 imageModel={imageModel}
                 ageLabel={ageLabel}
                 roleLabel={roleLabel}
-                referenceCount={refIndex.countFor("identity", id.identity_id)}
-                references={refIndex.referencesFor("identity", id.identity_id)}
                 onAttempt={onAttempt}
               />
             </div>
@@ -2935,6 +2928,9 @@ function CharactersSplit({
   selectedName,
   setSelectedName,
   selectedChar,
+  selectedDetailLoading,
+  selectedDetailError,
+  onRetrySelectedDetail,
   attempts,
   handleAttempt,
   onRebuild,
@@ -2955,6 +2951,9 @@ function CharactersSplit({
   selectedName: string | null;
   setSelectedName: (name: string | null) => void;
   selectedChar: Character | null;
+  selectedDetailLoading: boolean;
+  selectedDetailError: boolean;
+  onRetrySelectedDetail: () => void;
   attempts: Record<string, number>;
   handleAttempt: (name: string) => void;
   onRebuild: () => void;
@@ -3088,7 +3087,19 @@ function CharactersSplit({
     </>
   );
 
-  const detailPane = (
+  const detailPane = selectedDetailLoading ? (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <Loader2 className="mr-2 size-4 animate-spin" />
+      {t("common.loading")}
+    </div>
+  ) : selectedDetailError ? (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+      <span>{t("common.error")}</span>
+      <Button type="button" variant="outline" size="sm" onClick={onRetrySelectedDetail}>
+        {t("common.refresh")}
+      </Button>
+    </div>
+  ) : (
     <DetailPanel
       character={selectedChar}
       project={project}
@@ -3127,12 +3138,23 @@ function CharactersSplit({
 function CharactersPageContent() {
   const { t } = useTranslation();
   const { project } = Route.useParams();
-  const { data: charsRes, isLoading } = useCharacters(project);
+  const deepLink = useAssetsDeepLink();
+  const [assetTab, setAssetTab] = useState<AssetTab>(() =>
+    deepLink.type ? TAB_BY_ASSET_TYPE[deepLink.type] : readStoredAssetTab(project),
+  );
+  const charactersVisible = assetTab === "characters" || assetTab === "voices";
+  const { data: charsRes, isLoading } = useCharacters(project, charactersVisible);
   const { data: projectRes } = useProject(project);
-  const { data: imageSelectionRes } = useCharacterImageSelection(project);
+  const { data: imageSelectionRes } = useCharacterImageSelection(
+    project,
+    assetTab === "characters",
+  );
   const buildChars = useBuildCharacters(project);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const buildCharactersCost = useGenerationCreditCost("feature", "mainline.build_characters");
+  const buildCharactersCost = useGenerationCreditCost(
+    "feature",
+    assetTab === "characters" ? "mainline.build_characters" : null,
+  );
   const buildCharactersCostDisplay =
     buildCharactersCost.data?.data.display ??
     (buildCharactersCost.error instanceof BillingRuleNotConfiguredError
@@ -3145,12 +3167,8 @@ function CharactersPageContent() {
   const [rebuildDialogOpen, setRebuildDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [attempts, setAttempts] = useState<Record<string, number>>({});
-  const deepLink = useAssetsDeepLink();
-  const ownerIndex = useIdentityOwnerIndex(project);
+  const ownerIndex = useIdentityOwnerIndex(project, charactersVisible);
   const appliedIdentityDeepLink = useRef<string | null>(null);
-  const [assetTab, setAssetTab] = useState<AssetTab>(() =>
-    deepLink.type ? TAB_BY_ASSET_TYPE[deepLink.type] : readStoredAssetTab(project),
-  );
   const [searchQuery, setSearchQuery] = useState("");
   const [imageModel, setImageModel] = useState("");
 
@@ -3209,8 +3227,16 @@ function CharactersPageContent() {
         : -1,
     [filteredCharacters, selectedName],
   );
-  const selectedChar =
+  const selectedSummaryChar =
     selectedIndex >= 0 ? filteredCharacters[selectedIndex] : null;
+  const selectedCharacterDetail = useCharacterDetails(
+    project,
+    selectedSummaryChar?.name ?? null,
+    assetTab === "characters",
+  );
+  const selectedChar = selectedCharacterDetail.data
+    ? (selectedCharacterDetail.data.data[0] ?? null)
+    : selectedSummaryChar;
 
   // Auto-select first character when nothing is selected
   useEffect(() => {
@@ -3301,6 +3327,9 @@ function CharactersPageContent() {
             selectedName={selectedName}
             setSelectedName={setSelectedName}
             selectedChar={selectedChar}
+            selectedDetailLoading={selectedCharacterDetail.isLoading}
+            selectedDetailError={selectedCharacterDetail.isError}
+            onRetrySelectedDetail={() => void selectedCharacterDetail.refetch()}
             attempts={attempts}
             handleAttempt={handleAttempt}
             onRebuild={() => setRebuildDialogOpen(true)}
@@ -3364,7 +3393,10 @@ function CharactersPageContent() {
   );
 }
 
-function CharactersPage() {
+// 导出只为页面级网络合同测试（``characters-identities-contract.test.tsx``）：那条断言
+// 要的是"整页渲染出来一共发了哪些请求"，hook 单测覆盖不到组合层重新接回全角色
+// identities 扇出的情况。路由本身仍只用下面那个 ``Route``。
+export function CharactersPage() {
   const { project } = Route.useParams();
   // `TaskControllerProvider` wraps the page so `useTaskController` on
   // character-scoped tasks (e.g. character_portrait) can resolve a registry.

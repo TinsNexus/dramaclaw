@@ -25,6 +25,7 @@ export const DEFAULT_NODE_DISPLAY_NAME: Record<CanvasNodeType, string> = {
   [CANVAS_NODE_TYPES.pano360Viewer]: 'node.displayName.pano360Viewer',
   [CANVAS_NODE_TYPES.threeDWorld]: 'node.displayName.threeDWorld',
   [CANVAS_NODE_TYPES.skill]: 'node.displayName.skill',
+  [CANVAS_NODE_TYPES.style]: 'node.displayName.style',
 };
 
 export const EXPORT_RESULT_DISPLAY_NAME: Record<ExportImageNodeResultKind, string> = {

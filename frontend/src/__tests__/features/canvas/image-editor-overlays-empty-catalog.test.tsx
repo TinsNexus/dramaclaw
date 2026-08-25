@@ -23,7 +23,6 @@ vi.mock("@xyflow/react", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
@@ -148,7 +147,7 @@ describe("超分面板", () => {
     };
     render(<UpscaleEditorOverlay node={UPSCALE_NODE} />);
 
-    fireEvent.click(screen.getByTitle("canvas.upscaleEditor.submit"));
+    fireEvent.click(screen.getByTitle("upscaleEditor.submit"));
     await waitFor(() => expect(submitFreezoneUpscale).toHaveBeenCalled());
   });
 });

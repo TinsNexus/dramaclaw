@@ -15,29 +15,6 @@
 import { render, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock react-i18next before importing components that use it
-const mockTranslations: Record<string, string> = {
-  'canvas.audioWaveform.scrubber': 'Thanh trượt sóng âm thanh',
-  'canvas.audioWaveform.rewind10s': 'Tua lại 10s',
-  'canvas.audioWaveform.pause': 'Tạm dừng',
-  'canvas.audioWaveform.play': 'Phát',
-  'canvas.audioWaveform.fastForward10s': 'Tua tiến 10s',
-};
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => mockTranslations[key] ?? key,
-    i18n: {
-      language: 'vi',
-      resolvedLanguage: 'vi',
-    },
-  }),
-  initReactI18next: {
-    type: '3rdParty',
-    init: () => {},
-  },
-}));
-
 import { AudioWaveformPlayer } from '@/features/canvas/ui/AudioWaveformPlayer';
 import {
   isNodeMediaActive,
@@ -124,7 +101,7 @@ describe('AudioWaveformPlayer 播放态外抛', () => {
     expect(audio).not.toBeNull();
 
     // jsdom 不实现 play()，直接驱动组件监听的 pause/ended 事件与播放入口。
-    const playButton = container.querySelector('button[aria-label="Phát"]');
+    const playButton = container.querySelector('button[aria-label="play"]');
     expect(playButton).not.toBeNull();
     // jsdom 的 paused 恒为 true，togglePlay 会走 play() 分支。
     await act(async () => {
@@ -144,7 +121,7 @@ describe('AudioWaveformPlayer 播放态外抛', () => {
       <AudioWaveformPlayer src="blob:audio" onPlayingChange={onPlayingChange} />,
     );
     await act(async () => {
-      (container.querySelector('button[aria-label="Phát"]') as HTMLButtonElement).click();
+      (container.querySelector('button[aria-label="play"]') as HTMLButtonElement).click();
     });
     expect(onPlayingChange).toHaveBeenLastCalledWith(true);
 

@@ -104,6 +104,7 @@ import { useDetachUpstream } from '@/features/canvas/hooks/useDetachUpstream';
 import { readUrl } from '@/lib/url-params';
 import { BillingRuleNotConfiguredError } from '@/lib/api-errors';
 import { useGenerationCreditCost } from '@/lib/queries/generation-credit-cost';
+import { useModelTaskAccess } from '@/lib/model-task-access';
 import {
   CreditCostPill,
   type CreditPromotionDisplay,
@@ -616,28 +617,8 @@ interface OpsPanelProps {
   isGenerating: boolean;
   hasUpstream: boolean;
   billingRuleMissing: boolean;
-  creditCostDisplay: string | null;
-  creditPromotion?: CreditPromotionDisplay | null;
-  errorMessage?: string | null;
-  sourceKind: DirectorImageSourceKind;
-  referenceImages: ReferenceImageRef[];
-  selectedReferenceNodeId: string | null;
-  referenceImage: ReferenceImageRef | null;
-  referenceText: ReferenceTextRef | null;
-  onReferenceImageChange: (nodeId: string) => void;
-  onSourceKindChange: (next: DirectorImageSourceKind) => void;
-  onSubmit: () => void;
-  onFocusUpstream: (nodeId: string) => void;
-  onDetachUpstream: (nodeId: string) => void;
-}
-
-// 生成入口属于已连线的 ThreeDWorldNode：图片节点右侧 + 负责表达画布关系，
-// 本节点负责把上游图片提交成 3DGS source。这里保留引用、错误和历史信息，
-// 避免把 source 类型下拉误当成导演世界 source 选择器。
-function OpsPanel({
-  isGenerating,
-  hasUpstream,
-  billingRuleMissing,
+  modelTaskBlocked,
+  modelTaskMessage,
   creditCostDisplay,
   creditPromotion,
   errorMessage,
@@ -737,14 +718,16 @@ function OpsPanel({
         />
         <button
           type="button"
-          disabled={isGenerating || !hasUpstream || billingRuleMissing}
+          disabled={isGenerating || !hasUpstream || billingRuleMissing || modelTaskBlocked}
           onClick={(event) => {
             event.stopPropagation();
             onSubmit();
           }}
           onPointerDown={(event) => event.stopPropagation()}
           title={
-            billingRuleMissing
+            modelTaskBlocked
+              ? modelTaskMessage ?? t('modelTaskAccess.blocked.generic')
+              : billingRuleMissing
               ? t('common.billingRuleNotConfiguredShort')
               : hasUpstream
                 ? t('nodeToolbar.generateDirectorWorld')
@@ -752,7 +735,7 @@ function OpsPanel({
           }
           aria-label={t('nodeToolbar.generateDirectorWorld')}
           className={`${NODE_GENERATE_BUTTON_BASE_CLASS} ${
-            isGenerating || !hasUpstream || billingRuleMissing
+            isGenerating || !hasUpstream || billingRuleMissing || modelTaskBlocked
               ? NODE_GENERATE_BUTTON_DISABLED_CLASS
               : NODE_GENERATE_BUTTON_ENABLED_CLASS
           }`}
@@ -1019,6 +1002,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
       : inferredImageSourceKind;
 
   const handleSubmit = useCallback(async () => {
+    if (modelTaskAccess.blocked) return;
     const projectId = readUrl().project;
     const sourceNode = sourceNodeForGeneration;
     if (!projectId) {
@@ -1119,6 +1103,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
     data.sources,
     id,
     isGenerating,
+    modelTaskAccess.blocked,
     refreshHistory,
     selectedImageSourceKind,
     sourceNodeForGeneration,

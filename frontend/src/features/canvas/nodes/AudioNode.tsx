@@ -22,7 +22,7 @@ import {
   type AudioVoiceRef,
 } from '@/features/canvas/domain/canvasNodes';
 import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
-import { canvasEventBus } from '@/features/canvas/application/canvasServices';
+import { useExternalFileHandoff } from '@/features/canvas/hooks/useExternalFileHandoff';
 import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   NodeHeader,
@@ -37,6 +37,7 @@ import { CANVAS_NODE_PANEL_SURFACE_CLASS, canvasNodeFrameClass } from '@/feature
 import { useCanvasStore, useIsBoxSelecting } from '@/stores/canvasStore';
 import { AudioOperationsPanel } from '@/features/canvas/nodes/AudioOperationsPanel';
 import { useAudioGeneration } from '@/features/canvas/nodes/useAudioGeneration';
+import { createInFlightRequestCache } from '@/features/canvas/nodes/inFlightRequestCache';
 import { RegenerateButton } from '@/features/canvas/ui/RegenerateButton';
 import {
   hasMainlineContexts,
@@ -72,26 +73,10 @@ function isAudioFile(file: File): boolean {
   return AUDIO_UPLOAD_EXTENSIONS.has(ext);
 }
 
-// 模块级 references 缓存：同一 project 下所有音频节点共享一次拉取。
-// 用 Promise 而不是 result，保证多个节点同时挂载时也只发一次请求
-// （都 await 同一个 in-flight promise），不会出现并发风暴。
-const audioReferencesPromiseCache = new Map<
-  string,
-  Promise<Awaited<ReturnType<typeof fetchFreezoneAudioReferences>>>
->();
-
-function getCachedAudioReferences(project: string) {
-  let p = audioReferencesPromiseCache.get(project);
-  if (!p) {
-    p = fetchFreezoneAudioReferences(project).catch((err) => {
-      // 失败时把 promise 从缓存里清掉，下一次挂载有机会重试。
-      audioReferencesPromiseCache.delete(project);
-      throw err;
-    });
-    audioReferencesPromiseCache.set(project, p);
-  }
-  return p;
-}
+// 只合并同时发生的请求；settled 后立即失效，避免空结果在上传声线后仍被复用。
+const getCachedAudioReferences = createInFlightRequestCache(
+  fetchFreezoneAudioReferences,
+);
 
 export const AudioNode = memo(({ id, data, selected, width, height }: AudioNodeProps) => {
   const { t } = useTranslation();
@@ -169,15 +154,17 @@ export const AudioNode = memo(({ id, data, selected, width, height }: AudioNodeP
     [id, t, updateNodeData],
   );
 
-  // 「上传资源」菜单上传音频时，UploadNode 会先把自己转成音频节点，再通过事件
-  // 总线把 File 投递过来。这里订阅并复用上传流程。
-  useEffect(() => {
-    return canvasEventBus.subscribe('audio-node/external-file', ({ nodeId, file }) => {
-      if (nodeId !== id) return;
+  // 「上传资源」菜单上传音频时，UploadNode 会先把自己转成音频节点，再把 File 投递
+  // 过来。File 本体走 pendingExternalFiles 暂存、挂载时补投 —— 低缩放档下本节点先
+  // 以 LOD shell 挂载，只订阅事件会漏掉投递（见 useExternalFileHandoff）。
+  const consumeExternalFile = useCallback(
+    (file: File) => {
       // 类型校验统一交给 processFile（含非音频拒绝 + toast 提示）。
       void processFile(file);
-    });
-  }, [id, processFile]);
+    },
+    [processFile],
+  );
+  useExternalFileHandoff('audio-node/external-file', id, consumeExternalFile);
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -214,7 +201,13 @@ export const AudioNode = memo(({ id, data, selected, width, height }: AudioNodeP
         const res = await getCachedAudioReferences(project);
         if (cancelled) return;
         const first = (res.available ?? [])[0];
-        if (!first) return;
+        if (!first) {
+          updateNodeData(id, {
+            voiceAvailable: false,
+            voiceLabel: '未配置可用声线',
+          });
+          return;
+        }
         const fresh = useCanvasStore.getState().nodes.find((n) => n.id === id);
         if (!fresh) return;
         const freshData = fresh.data as AudioNodeData;
@@ -254,6 +247,7 @@ export const AudioNode = memo(({ id, data, selected, width, height }: AudioNodeP
         }
         updateNodeData(id, {
           voiceRef: ref,
+          voiceAvailable: true,
           voiceLabel: nextLabel,
           voiceLanguage: nextLanguage,
         });

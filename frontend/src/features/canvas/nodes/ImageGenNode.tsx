@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import {
   Handle,
   Position,
+  useStore,
   useUpdateNodeInternals,
   type NodeProps,
 } from '@xyflow/react';
@@ -19,7 +20,6 @@ import {
   Languages,
   Library,
   Loader2,
-  Palette,
   Upload,
   X,
 } from 'lucide-react';
@@ -27,22 +27,32 @@ import { useTranslation } from 'react-i18next';
 
 import {
   CANVAS_NODE_TYPES,
+  isStyleNode,
+  type CanvasNodeData,
   type ImageGenCameraSelection,
   type ImageGenCount,
   type ImageGenNodeData,
   type ImageQuality,
   type ImageSize,
+  type StyleNodeData,
 } from '@/features/canvas/domain/canvasNodes';
 import { buildImageFeatureBillingParams } from '@/features/canvas/domain/imageBilling';
 import {
+  formatResolutionLabel,
   resolveModelAspectOptions,
   resolveModelQualityOptions,
   resolveModelSizeOptions,
 } from '@/features/canvas/domain/mediaModelOptions';
 import {
+  nodeBodyImageMeasurement,
+  nodeBodyImageSrc,
+  nodeBodyRecordDescribesImage,
+  planNaturalSizeRecordWrite,
   parseAspectRatio,
   pickClosestAspectRatio,
+  readNodeNaturalSize,
   resolveImageDisplayUrl,
+  shouldUseOriginalImageByZoom,
   snapToAllowedAspectRatio,
   withImageCacheBust,
 } from '@/features/canvas/application/imageData';
@@ -74,6 +84,7 @@ import {
   useAlbumPendingTotal,
 } from '@/features/canvas/nodes/shared/albumPendingTotals';
 import { downloadUrlAsFile } from '@/lib/browserDownload';
+import { useModelTaskAccess } from '@/lib/model-task-access';
 import {
   CANVAS_NODE_INPUT_BODY_FRAME_CLASS,
   CANVAS_NODE_INPUT_PLACEHOLDER_CLASS,
@@ -82,6 +93,8 @@ import {
   CANVAS_NODE_PANEL_SURFACE_CLASS,
   canvasNodeFrameClass,
 } from '@/features/canvas/ui/nodeFrameStyles';
+import { useNaturalSizeRecordTrust } from '@/features/canvas/hooks/useNaturalSizeRecordTrust';
+import { useNodeBodyVariantBudget } from '@/features/canvas/hooks/useNodeBodyVariantBudget';
 import { useCanvasStore, useIsBoxSelecting } from '@/stores/canvasStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getFreezoneCanvasMetadata } from '@/features/freezone/canvasMetadataContext';
@@ -143,12 +156,31 @@ import {
 } from '@/features/canvas/application/generationTaskArbitration';
 import { useFreezoneCameraOptions } from '@/features/canvas/hooks/useFreezoneCameraOptions';
 import {
-  StylePickerPopover,
+  StyleGalleryModal,
   describeStyleSelection,
-} from '@/features/canvas/nodes/StylePickerPopover';
+  resolveStyleSelectionState,
+} from '@/features/canvas/ui/StyleGalleryModal';
+import {
+  StyleThumbnail,
+  StyleTriggerChip,
+} from '@/features/canvas/nodes/StyleChip';
 import { useFreezoneStyleTemplates } from '@/features/canvas/hooks/useFreezoneStyleTemplates';
-import { joinUpstreamText } from '@/features/canvas/application/graphContentResolver';
-import { useUpstreamContents } from '@/features/canvas/application/useUpstreamGraph';
+import {
+  STYLE_NODE_HEIGHT,
+  STYLE_NODE_WIDTH,
+} from '@/features/canvas/nodes/StyleNode';
+import {
+  advanceStyleNodeSync,
+  isStyleSyncReady,
+  resolveStyleNodePlacement,
+  readStyleNodeSyncState,
+  writeStyleNodeSyncState,
+} from '@/features/canvas/application/styleNodeSync';
+import {
+  extractUpstreamContent,
+  joinUpstreamText,
+} from '@/features/canvas/application/graphContentResolver';
+import { useUpstreamNodes } from '@/features/canvas/application/useUpstreamGraph';
 import { useNodeGenerationTaskState } from '@/features/canvas/application/useNodeGenerationTaskState';
 import {
   PromptMentionEditor,
@@ -271,6 +303,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const updateNodeSize = useCanvasStore((state) => state.updateNodeSize);
   const deleteEdge = useCanvasStore((state) => state.deleteEdge);
+  const deleteNodeAction = useCanvasStore((state) => state.deleteNode);
   const addNodeAction = useCanvasStore((state) => state.addNode);
   const addEdgeAction = useCanvasStore((state) => state.addEdge);
 
@@ -424,17 +457,15 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       resolveModelAspectOptions(
         selectedModel,
         ASPECT_OPTIONS.map((item) => item.value),
-      ).map((value) => {
-        const option = ASPECT_OPTIONS.find((item) => item.value === value);
-        return {
-          value,
-          label: option?.label ?? value,
-          labelKey: option?.labelKey,
-        };
-      }),
-    [selectedModel, t],
+      ).map((value) => ({
+        value,
+        label: ASPECT_OPTIONS.find((item) => item.value === value)?.label ?? value,
+      })),
+    [selectedModel],
   );
-  const effectiveImageSize = modelSizeOptions.includes(size) ? size : modelSizeOptions[0];
+  const effectiveImageSize =
+    modelSizeOptions.find((option) => option.toLowerCase() === size.toLowerCase())
+    ?? modelSizeOptions[0];
   const effectiveAspectRatio = snapToAllowedAspectRatio(
     aspectRatio,
     modelAspectOptions.map((item) => item.value),
@@ -479,10 +510,28 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   }, [imageBillingRuleMissing, imageCreditCost.data?.data.display, t]);
   const { options: cameraOptions } = useFreezoneCameraOptions();
   const cameraSummary = describeCameraSelection(cameraSelection, cameraOptions);
-  const { templates: styleTemplates } = useFreezoneStyleTemplates();
+  const {
+    templates: styleTemplates,
+    assetBase: styleAssetBase,
+    isLoading: styleTemplatesLoading,
+    error: styleTemplatesError,
+    retry: retryStyleTemplates,
+  } = useFreezoneStyleTemplates();
   const selectedStyle = describeStyleSelection(styleTemplateId, styleTemplates);
+  const styleSelectionState = resolveStyleSelectionState(
+    styleTemplateId,
+    selectedStyle,
+    { isLoading: styleTemplatesLoading, hasError: styleTemplatesError !== null },
+  );
 
-  const upstreamContents = useUpstreamContents(id);
+  // Subscribe to the upstream graph once. Calling useUpstreamContents here and
+  // useUpstreamNodes below created two independent Zustand selectors, so every
+  // canvas-store update walked the full nodes/edges arrays twice per image node.
+  const upstreamNodes = useUpstreamNodes(id);
+  const upstreamContents = useMemo(
+    () => upstreamNodes.map(extractUpstreamContent),
+    [upstreamNodes],
+  );
   // ImageGen 上游只消费「文本 + 图片」，视频/音频内容被丢弃 ——
   // 即便 upload 节点带了视频 URL，也不进 OpsPanel 也不进 reference_urls。
   const upstreamImageContents = useMemo(() => {
@@ -549,10 +598,99 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
     [connectedEdges, id],
   );
   // 节点被连线（存在入边）后：隐藏「试试」CTA，只在节点中间显示一个图标（对齐 libtv）。
+  // 风格节点不算 —— 它是本节点自己的选择在画布上的投影，不是「用户接了个上游」，
+  // 选个风格就把空节点的 CTA 收掉会很莫名。
   const isConnected = useMemo(
-    () => connectedEdges.some((edge) => edge.target === id),
-    [connectedEdges, id],
+    () => upstreamNodes.some((node) => !isStyleNode(node)),
+    [upstreamNodes],
   );
+
+  // 主线只读判定：风格对账（下面）和工具条都要用，所以提到这里统一算一次。
+  const mainlineFlags = useMemo(
+    () => nodeMainlineFlags({ data, id, type: 'imageGenNode', position: { x: 0, y: 0 } } as never),
+    [data, id],
+  );
+  const mainlineCanvasReadonly = mainlineFlags.isPresetManaged && !canAutoCommitOnGenerate;
+
+  // ===== 选中的风格 ⇄ 画布上的风格节点 =====
+  // 真源始终是本节点的 styleTemplateId（提交读的就是它），风格节点只是它在画布上
+  // 的投影。判定规则（含「刚建完还没回流」「存量画布补建」两个时序坑）抽在
+  // styleNodeSync 里，这里只负责把动作落到 store。
+  const upstreamStyleNodeId = useMemo(
+    () => upstreamNodes.find((item) => isStyleNode(item))?.id ?? null,
+    [upstreamNodes],
+  );
+  // 「这个风格节点还连着别人吗」只能看它自己的出边，本节点的 connectedEdges 看不到。
+  // 取成布尔值订阅，别的边怎么动都不会让这里重渲染。
+  const styleNodeIsShared = useCanvasStore((state) =>
+    upstreamStyleNodeId === null
+      ? false
+      : state.edges.filter((edge) => edge.source === upstreamStyleNodeId).length > 1,
+  );
+  const upstreamStyleNode = useMemo(() => {
+    const node = upstreamNodes.find((item) => isStyleNode(item));
+    if (!node) return null;
+    const raw = (node.data as StyleNodeData).styleTemplateId;
+    return {
+      id: node.id,
+      templateId: typeof raw === 'string' && raw.length > 0 ? raw : null,
+      sharedWithOtherTargets: styleNodeIsShared,
+    };
+  }, [styleNodeIsShared, upstreamNodes]);
+  // 对账要等风格清单到手才能开工，理由是补建那一支：清单换代后旧画布里存的
+  // 清单没到、或者选中的是清单里查不到的旧 id，都不许动手（判据见 isStyleSyncReady）。
+  const styleSyncReady = isStyleSyncReady(styleTemplateId, styleTemplates);
+  useEffect(() => {
+    // 只读的主线画布一律不碰：那上面的节点不归用户管，补建/删除都是越权写入。
+    if (!styleSyncReady || mainlineCanvasReadonly) return;
+    const { action, state } = advanceStyleNodeSync(readStyleNodeSyncState(id), {
+      selectedTemplateId: styleTemplateId,
+      styleNode: upstreamStyleNode,
+    });
+    writeStyleNodeSyncState(id, state);
+    switch (action.kind) {
+      case 'create': {
+        const self = useCanvasStore.getState().nodes.find((node) => node.id === id);
+        if (!self) return;
+        const selfHeight =
+          self.measured?.height
+          ?? (typeof self.height === 'number' ? self.height : DEFAULT_HEIGHT);
+        const newNodeId = addNodeAction(
+          CANVAS_NODE_TYPES.style,
+          resolveStyleNodePlacement({
+            imageNodePosition: self.position,
+            imageNodeHeight: selfHeight,
+            styleNodeWidth: STYLE_NODE_WIDTH,
+            styleNodeHeight: STYLE_NODE_HEIGHT,
+          }),
+          { styleTemplateId: action.templateId } as Partial<CanvasNodeData>,
+        );
+        addEdgeAction(newNodeId, id);
+        break;
+      }
+      case 'update':
+        updateNodeData(action.nodeId, { styleTemplateId: action.templateId });
+        break;
+      case 'remove':
+        deleteNodeAction(action.nodeId);
+        break;
+      case 'clear-selection':
+        updateNodeData(id, { styleTemplateId: null });
+        break;
+      default:
+        break;
+    }
+  }, [
+    addEdgeAction,
+    addNodeAction,
+    deleteNodeAction,
+    id,
+    mainlineCanvasReadonly,
+    styleSyncReady,
+    styleTemplateId,
+    updateNodeData,
+    upstreamStyleNode,
+  ]);
 
   // 候选按 orderedReferenceUrls 编号（自身参考图在场时就是图片1），保证 @ 出来的
   // 缩略图与后端解析到的 图片N 是同一张。key 优先用上游 nodeId；自身参考图没有
@@ -651,7 +789,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
       });
       state.autoGroupSpawn(id, newIds, { label: t('node.imageGen.assetReferenceGroup') });
     },
-    [addEdgeAction, addNodeAction, id],
+    [addEdgeAction, addNodeAction, id, t],
   );
 
   // Hover preview state for the upstream image thumbnails in the OpsPanel
@@ -678,6 +816,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   // 收起态浮动面板固定基础尺寸；放大用居中弹窗（见下方 OperationPanelShell）。
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [stylePickerOpen, setStylePickerOpen] = useState(false);
+  // 打开图墙是个明确的用户动作，顺手把上次失败的清单重拉一遍（成功态是空操作）。
+  const openStylePicker = useCallback(() => {
+    retryStyleTemplates();
+    setStylePickerOpen(true);
+  }, [retryStyleTemplates]);
   const panelHeight = OPERATIONS_PANEL_HEIGHT;
   const panelWidth = Math.max(resolvedWidth, OPERATIONS_PANEL_MIN_WIDTH);
 
@@ -688,6 +831,38 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
     return null;
   }, [data.imageUrl, data.previewImageUrl, referenceImageUrl]);
   const visiblePreviewUrl = isGenerating ? null : previewUrl;
+  // selector 返回 boolean，平移中每帧变的 transform[0]/[1] 不会触发重渲染，
+  // 只在缩放跨过 1.45 那一次翻转（与 ImageNode/UploadNode 同一条线）。
+  const preferOriginalImage = useStore((state) => shouldUseOriginalImageByZoom(state.transform[2]));
+  // 已记录的原图像素尺寸；决定主体图能不能喂降采样副本，也是角标的初值。
+  const recordedNaturalSize = useMemo(() => readNodeNaturalSize(data), [data]);
+  // 记录里的尺寸没有和 URL 绑定，而主图是会被换掉的（画册选主图、从历史恢复、
+  // 生成完成回填，三条路都只改 imageUrl/previewImageUrl）。不信任记录的这一轮改
+  // 喂原图，onLoad 就能量到真尺寸并落库，而不是把一组属于别的图的数字写进去。
+  const { distrusted, distrustRecord, trustAgain } = useNaturalSizeRecordTrust(visiblePreviewUrl);
+  // 主体图把整幅原图解码进几百 CSS px 的盒子里；变体只在真实尺寸已知、且没放大
+  // 到细看那一档时启用，详见 nodeBodyImageSrc 的注释。查看器仍拿 visiblePreviewUrl。
+  // 这一格要多少设备像素，决定挑哪一档副本（拉大的节点会一路挑到原图）。
+  const bodyVariantBudget = useNodeBodyVariantBudget({
+    width: resolvedWidth,
+    height: resolvedHeight,
+  });
+  const bodyImage = useMemo(
+    () =>
+      visiblePreviewUrl
+        ? nodeBodyImageSrc(visiblePreviewUrl, recordedNaturalSize, {
+            preferOriginal: preferOriginalImage || distrusted,
+            requiredEdge: bodyVariantBudget,
+          })
+        : null,
+    [
+      bodyVariantBudget,
+      distrusted,
+      preferOriginalImage,
+      recordedNaturalSize,
+      visiblePreviewUrl,
+    ],
+  );
 
   const hasGeneratedResult = Boolean(data.imageUrl);
   // Natural pixel size of the displayed image, mirrored from data when present
@@ -695,13 +870,9 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   // the resolution badge shows even for nodes whose size already matched (those
   // skip the persist branch). Lets us render a top-right resolution chip like the
   // video node.
-  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(() => {
-    const w = (data as { imageNaturalWidth?: unknown }).imageNaturalWidth;
-    const h = (data as { imageNaturalHeight?: unknown }).imageNaturalHeight;
-    return typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0
-      ? { width: w, height: h }
-      : null;
-  });
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(
+    () => readNodeNaturalSize(data),
+  );
   // ── 叠卡画册（count > 1 的一组生成结果）──
   // 收拢时主图后探出 N-1 张卡片边缘；hover 出现右上角数量徽标，点开展开成
   // 宫格画册（同一节点内，天然不可解组）。展开态可对任意一张「设为主图」
@@ -924,11 +1095,13 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
     orderedReferenceUrls.length > selectedModel.referenceImageMax
       ? t('node.imageGen.maxReferencesSupported', { n: selectedModel.referenceImageMax })
       : null;
+  const modelTaskAccess = useModelTaskAccess();
   const submitDisabled =
     isGenerating ||
     !selectedModel ||
     !hasEffectivePrompt ||
     imageBillingRuleMissing ||
+    modelTaskAccess.blocked ||
     selectedModelReferenceError !== null;
 
   const handleSubmit = useCallback(async () => {
@@ -1268,12 +1441,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   //   context_only       — 有 mainline_context 但无 slot_target:cyan 细线 + context chip
   //   ordinary           — 都没有:默认白色 border
   //
-  const mainlineFlags = useMemo(
-    () => nodeMainlineFlags({ data, id, type: 'imageGenNode', position: { x: 0, y: 0 } } as never),
-    [data, id],
-  );
   const visualState = mainlineNodeVisualState(mainlineFlags);
-  const mainlineCanvasReadonly = mainlineFlags.isPresetManaged && !canAutoCommitOnGenerate;
   const cardToneClass = (() => {
     switch (visualState) {
       case 'preset_locked':
@@ -1291,6 +1459,10 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   // 一道，防止展开后用户点节点重新选中时面板叠到宫格上。
   const showImageOpsPanel =
     selected && !isBoxSelecting && !hasActiveOverlay && !mainlineCanvasReadonly && !albumExpanded;
+  // 面板一收（取消选中 / 展开画册），图墙的开关跟着复位，免得下次选中节点弹层自己冒出来。
+  useEffect(() => {
+    if (!showImageOpsPanel) setStylePickerOpen(false);
+  }, [showImageOpsPanel]);
 
   return (
     <div
@@ -1411,26 +1583,49 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         {visiblePreviewUrl ? (
           <>
             <CanvasNodeImage
-              src={visiblePreviewUrl}
+              src={bodyImage?.src ?? visiblePreviewUrl}
               alt={resolvedTitle}
+              // 双击进查看器的必须是原图，不能跟着 src 走降采样副本。
               viewerSourceUrl={visiblePreviewUrl}
               onLoad={(event) => {
-                const naturalW = event.currentTarget.naturalWidth;
-                const naturalH = event.currentTarget.naturalHeight;
-                if (naturalW > 0 && naturalH > 0) {
+                // 记录描述的不是这张图：降采样副本上量不出源图真尺寸。第一次退回
+                // 原图重测（preferOriginal 会让下一轮 downscaled 为 false，不会来
+                // 回抖）；已经退过一次还是对不上，就什么都不写——记录和副本都不是
+                // 真相，保留旧值好过写一个确定错误的尺寸。
+                if (
+                  bodyImage?.downscaled &&
+                  !nodeBodyRecordDescribesImage(
+                    event.currentTarget,
+                    recordedNaturalSize,
+                    bodyImage.maxEdge ?? 0,
+                  )
+                ) {
+                  distrustRecord();
+                  return;
+                }
+                // 为纠正记录才退回来的那一轮，真尺寸这就量到了：解除不信任，下一
+                // 轮回到副本。这张图已经纠正过，钩子记着，不会再退第二次。
+                trustAgain();
+                // 喂的是降采样副本时元素上的 naturalWidth 是变体的尺寸，改用记录里的
+                // 真实尺寸——下面的角标、比例、自动尺寸因此与喂原图时完全一致。
+                const measured = bodyImage
+                  ? nodeBodyImageMeasurement(event.currentTarget, bodyImage, recordedNaturalSize)
+                  : { width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight };
+                if (measured.width > 0 && measured.height > 0) {
                   setNaturalSize((prev) =>
-                    prev && prev.width === naturalW && prev.height === naturalH
+                    prev && prev.width === measured.width && prev.height === measured.height
                       ? prev
-                      : { width: naturalW, height: naturalH },
+                      : { width: measured.width, height: measured.height },
                   );
                 }
                 const forceNaturalSize = shouldForceNaturalImageSize(data as Record<string, unknown>);
-                if (data.isSizeManuallyAdjusted === true && !forceNaturalSize) {
-                  return;
-                }
+                // 用户拖定过尺寸：屏幕上的尺寸归他。但记录归事实——这里原本直接
+                // return，于是换图之后真实尺寸永远写不回去，重新挂载读到的还是
+                // 旧记录，同比例换图时副本校验那层也认不出来。
+                const sizeLockedByUser = data.isSizeManuallyAdjusted === true && !forceNaturalSize;
                 const nextAspectRatio = aspectRatioFromImageDimensions(
-                  event.currentTarget.naturalWidth,
-                  event.currentTarget.naturalHeight,
+                  measured.width,
+                  measured.height,
                 );
                 if (!nextAspectRatio) {
                   return;
@@ -1442,17 +1637,40 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 const displaySizeMismatch =
                   Math.abs(resolvedWidth - nextSize.width) > 1 ||
                   Math.abs(resolvedHeight - nextSize.height) > 1;
-                if (nextAspectRatio !== data.aspectRatio || displaySizeMismatch) {
-                  updateNodeSize(id, nextSize, {
-                    lockManualSize: forceNaturalSize ? false : undefined,
-                    data: {
-                      aspectRatio: nextAspectRatio,
-                      imageNaturalWidth: event.currentTarget.naturalWidth,
-                      imageNaturalHeight: event.currentTarget.naturalHeight,
-                      imageAspectRatioUpdatedAt: Date.now(),
-                    },
-                  });
+                // 记录空着、或者和刚量到的真相对不上，都得写回去——比例和显示尺
+                // 寸这两个条件盖不住它们（同比例换图、老项目里早就贴合的节点）。
+                // 这里没有 ImageNode 那种放大档换 URL 的问题：主体图始终是
+                // visiblePreviewUrl 这一张，所以量到的一定是记录该描述的那张图。
+                const recordWrite = planNaturalSizeRecordWrite({
+                  aspectRatioChanged: nextAspectRatio !== data.aspectRatio,
+                  displaySizeMismatch,
+                  record: recordedNaturalSize,
+                  measured,
+                  measuringRecordSubject: true,
+                  sizeLockedByUser,
+                });
+                if (!recordWrite.persist) {
+                  return;
                 }
+                // 只是补记事实那一类：不碰节点尺寸，也不碰比例。
+                if (!recordWrite.applySize) {
+                  updateNodeData(
+                    id,
+                    { imageNaturalWidth: measured.width, imageNaturalHeight: measured.height },
+                    { recordHistory: false },
+                  );
+                  return;
+                }
+                updateNodeSize(id, nextSize, {
+                  lockManualSize: forceNaturalSize ? false : undefined,
+                  recordHistory: recordWrite.recordHistory,
+                  data: {
+                    aspectRatio: nextAspectRatio,
+                    imageNaturalWidth: measured.width,
+                    imageNaturalHeight: measured.height,
+                    imageAspectRatioUpdatedAt: Date.now(),
+                  },
+                });
               }}
               className="h-full w-full object-contain"
             />
@@ -1805,12 +2023,12 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             className="absolute right-2 top-2 z-20"
           />
           <div className="flex shrink-0 items-center gap-2 pl-3 pr-10 pt-3">
-            <StyleChip
-              selectedId={styleTemplateId}
-              selectedLabel={selectedStyle?.label ?? null}
-              onChange={(nextId) => updateNodeData(id, { styleTemplateId: nextId })}
-              onOpenChange={setStylePickerOpen}
-            />
+            {styleSelectionState !== 'ready' && (
+              <StyleTriggerChip
+                state={styleSelectionState}
+                onOpen={openStylePicker}
+              />
+            )}
             <NodeContextPromptPaletteButton
               nodeId={id}
               onInsert={insertContextPaletteEntry}
@@ -1880,6 +2098,33 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
               </div>
             )}
           </div>
+
+          {/* 选中的风格单独占一行，贴着输入区顶部，和顶排的功能 chip 分开。 */}
+          {selectedStyle && (
+            <div className="flex shrink-0 items-center gap-1.5 px-3 pt-2">
+              <StyleThumbnail
+                template={selectedStyle}
+                assetBase={styleAssetBase}
+                onOpen={openStylePicker}
+                onClear={() => updateNodeData(id, { styleTemplateId: null })}
+              />
+            </div>
+          )}
+
+          {/* 图墙走 portal 挂 body，不受节点缩放/裁剪影响，关闭交给弹层自己的遮罩和 Esc。 */}
+          {stylePickerOpen && (
+            <StyleGalleryModal
+              templates={styleTemplates}
+              assetBase={styleAssetBase}
+              selectedId={styleTemplateId}
+              isLoading={styleTemplatesLoading}
+              onSelect={(nextId) => {
+                updateNodeData(id, { styleTemplateId: nextId });
+                setStylePickerOpen(false);
+              }}
+              onClose={() => setStylePickerOpen(false)}
+            />
+          )}
 
           <PromptMentionEditor
             ref={promptEditorRef}
@@ -2130,7 +2375,6 @@ interface AspectSizeChipProps {
 }
 
 function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality, qualityOptions, showQuality, onChange }: AspectSizeChipProps) {
-  const { t } = useTranslation();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -2174,7 +2418,7 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
           </>
         )}
         <span className="text-text-muted/80">·</span>
-        <span>{size}</span>
+        <span>{formatResolutionLabel(size)}</span>
         <ChevronDown className="h-3 w-3 text-text-muted/90" />
       </button>
       {isOpen && (
@@ -2225,7 +2469,7 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
                       : IMAGE_PARAM_IDLE_BUTTON_CLASS
                   }`}
                 >
-                  {option}
+                  {formatResolutionLabel(option)}
                 </button>
               );
             })}

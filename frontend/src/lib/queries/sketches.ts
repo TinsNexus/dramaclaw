@@ -5,12 +5,14 @@ import { useMemo } from "react";
 
 import type { PanoViewerManifest } from "@/features/viewer-kit/pano/panoManifest";
 import type { DirectorStageManifest } from "@/features/viewer-kit/three-d/directorManifest";
-import { api } from "@/lib/api";
+import { api, uploadApi } from "@/lib/api";
 import { jsonWithBackendError } from "@/lib/api-errors";
 import { p } from "@/lib/api-path";
 import { queryKeys } from "@/lib/query-keys";
+import { invalidateAssetReferences } from "@/lib/queries/asset-references";
 import type { ApiResponse, ErrorResponse, OkResponse, TaskResponse } from "@/types/api";
 import type { Beat } from "@/types/episode";
+import type { RejectedDispatch } from "@/types/render-plan";
 
 // Mirrors backend `PoolImage` (novelvideo/models.py) plus the route-injected
 // `cell_url` / `grid_url` / `stale` fields from `GET /grids`.
@@ -269,7 +271,7 @@ export function useUploadBeatBackgroundAnchor(project: string, episode: number, 
     mutationFn: ({ file }: { file: File }) => {
       const form = new FormData();
       form.append("file", file, file.name);
-      return api
+      return uploadApi
         .post(
           p`api/v1/projects/${project}/episodes/${episode}/beats/${beatNum}/background-anchor/upload`,
           { body: form },
@@ -326,12 +328,19 @@ export function useCropBeatBackgroundAnchor(project: string, episode: number, be
   });
 }
 
-// Mirrors backend response from /sketches/generate-missing-manual:
-// scopes / segments are surfaced for diagnostics only (not currently rendered).
+// Mirrors backend response from /sketches/generate-missing-manual.
+// `scopes` / `segments` are informational (not currently rendered). `rejected`
+// is NOT: it reports the entries a concurrency lane refused, and re-dispatch is
+// driven off it. This endpoint is self-healing — the backend recomputes
+// `missing_manual_shot_segments` on every call — so re-dispatching the refused
+// part is literally the same request again: no body change, no scope, no new
+// parameter. Never widen the request to replay (that double-bills the part
+// that WAS dispatched). See TCP-P65.
 export interface GenerateMissingManualResult {
   dispatched: number;
   scopes: string[];
   segments: number[][];
+  rejected?: RejectedDispatch[];
 }
 
 export function useGenerateMissingManualSketches(
@@ -492,6 +501,9 @@ export function useAssignColors(project: string, episode: number) {
       qc.invalidateQueries({
         queryKey: queryKeys.episodeDetail(project, episode),
       });
+      // Colour binding is what writes detected_identities / detected_props,
+      // i.e. exactly the fields the on-demand asset usage lists are built from.
+      invalidateAssetReferences(qc, project);
     },
   });
 }
@@ -526,6 +538,7 @@ export function useDetectIdentities(project: string, episode: number) {
       if (!res.ok) return;
       qc.invalidateQueries({ queryKey: queryKeys.beats(project, episode) });
       qc.invalidateQueries({ queryKey: queryKeys.script(project, episode) });
+      invalidateAssetReferences(qc, project);
     },
   });
 }
@@ -547,7 +560,7 @@ export function useUploadBeatImage(
     mutationFn: ({ beatNum, file }: { beatNum: number; file: File }) => {
       const body = new FormData();
       body.append("file", file, file.name);
-      return api
+      return uploadApi
         .post(
           p`api/v1/projects/${project}/episodes/${episode}/beats/${beatNum}/${imageType}/upload`,
           { body },
@@ -696,7 +709,7 @@ export function useUploadGrid(project: string, episode: number) {
       body.append("grid_type", gridType);
       body.append("mode_key", modeKey);
       body.append("beat_numbers", beatNumbers.join(","));
-      return api
+      return uploadApi
         .post(
           p`api/v1/projects/${project}/episodes/${episode}/grids/${gridIndex}/upload`,
           { body },

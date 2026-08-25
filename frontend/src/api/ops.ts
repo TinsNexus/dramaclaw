@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
-import { apiCall, apiClient } from "./client";
+import { apiCall, apiCallEnvelope, apiClient } from "./client";
 
 // Per-node generation history -------------------------------------------- //
 
@@ -400,19 +400,19 @@ export async function submitFreezoneVideoI2v(
 
 // /freezone/video/video-edit ---------------------------------------------- //
 //
-// HappyHorse 视频编辑：1 个源视频 + 0-5 张参考图 → 上游 video_url + reference_images。
+// 视频编辑：1 个源视频，并按媒体目录能力附带参考图片 / 独立参考音频。
 
 export interface FreezoneVideoEditPayload extends FreezoneNodeContext {
   /** 源视频静态地址，必填。 */
   videoUrl: string;
   /** 0-5 张参考图静态地址。 */
   imageUrls?: string[];
+  /** 独立参考音频静态地址；数量和时长上限由媒体模型目录决定。 */
+  audioUrls?: string[];
   prompt?: string;
   cameraTemplateId?: string | null;
   marks?: FreezoneVideoMark[];
-  aspectRatio?: FreezoneVideoAspectRatio;
   resolution?: FreezoneVideoResolution;
-  durationSeconds?: number;
   /** 视频编辑音频策略：auto 自动 / origin 保留原声。 */
   audioSetting?: "auto" | "origin";
   generateAudio?: boolean;
@@ -434,6 +434,7 @@ export async function submitFreezoneVideoEdit(
       json: {
         video_url: payload.videoUrl,
         image_urls: payload.imageUrls ?? [],
+        audio_urls: payload.audioUrls ?? [],
         prompt: payload.prompt ?? "",
         camera_template_id: payload.cameraTemplateId ?? null,
         marks: (payload.marks ?? []).map((m) => ({
@@ -447,9 +448,7 @@ export async function submitFreezoneVideoEdit(
           box_height: m.boxHeight ?? null,
           note: m.note ?? "",
         })),
-        aspect_ratio: payload.aspectRatio ?? "16:9",
         resolution: payload.resolution ?? "720p",
-        duration_seconds: Math.max(payload.durationSeconds ?? 5, 1),
         audio_setting: payload.audioSetting ?? "auto",
         generate_audio: payload.generateAudio ?? false,
         ...(payload.model ? { model: payload.model, model_id: payload.model } : {}),
@@ -781,18 +780,81 @@ export async function submitFreezoneReversePrompt(
 export interface FreezoneStyleTemplate {
   id: string;
   label: string;
-  /** Free-text English style description forwarded as part of the prompt. */
+  /** 题材分类:古装 / 都市 / 年代 / 生活 / 科幻 / 类型 / 写意,图墙顶部按它分组。 */
+  category: string;
+  /** 封面图相对路径,需经 resolveStyleAssetUrl 解析。 */
+  cover: string;
+  /** 女 / 少 / 男 / 老 四张示例图的相对路径。 */
+  samples: string[];
+  /** 中文风格提示词全文,原样拼进生成 prompt。 */
   style_prompt: string;
-  author?: string;
-  category?: string;
+}
+
+export interface FreezoneStyleTemplateList {
+  assetBase: string;
+  /** 后端风格清单的版本号,图片和提示词对不上时用来定位是哪一份清单在生效。 */
+  version: string;
+  templates: FreezoneStyleTemplate[];
+}
+
+/**
+ * 把后端吐回来的东西掰成风格模板数组。
+ *
+ * 这个端点的形状在两个仓库之间反复横跳过：早期 `data` 是裸列表，后来被换成
+ * `{asset_base, version, templates}` 的对象（于是没跟进的前端 `templates.find(...)`
+ * 当场抛 `is not a function`，整页白屏），现在又改回裸列表、元信息挂到信封同级。
+ * 所以这里不信任何一种形状，四种常见包装都认，认不出就退空列表 —— 图墙空着是能
+ * 看懂的降级，白屏不是。同一族的 {@link coerceCameraTemplateList} 就是这么做的。
+ */
+function coerceStyleTemplateList(payload: unknown): FreezoneStyleTemplate[] {
+  let candidate: unknown = payload;
+  if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+    const wrapper = candidate as Record<string, unknown>;
+    if (Array.isArray(wrapper.templates)) candidate = wrapper.templates;
+    else if (Array.isArray(wrapper.data)) candidate = wrapper.data;
+    else if (Array.isArray(wrapper.items)) candidate = wrapper.items;
+    else if (Array.isArray(wrapper.style_templates)) candidate = wrapper.style_templates;
+  }
+  if (!Array.isArray(candidate)) return [];
+  const result: FreezoneStyleTemplate[] = [];
+  for (const item of candidate) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    // 没 id 就没法回写到节点上，这条直接丢掉；其余字段缺了还能降级显示。
+    const id = pickString(entry, "id", "template_id", "templateId", "key");
+    if (!id) continue;
+    result.push({
+      id,
+      label: pickString(entry, "label", "display_name", "displayName", "title", "name") ?? id,
+      category: pickString(entry, "category", "group", "kind") ?? "",
+      cover: pickString(entry, "cover", "cover_url", "coverUrl", "thumbnail") ?? "",
+      samples: pickStringArray(entry, "samples", "sample_urls", "sampleUrls"),
+      style_prompt:
+        pickString(entry, "style_prompt", "stylePrompt", "prompt", "prompt_fragment") ?? "",
+    });
+  }
+  return result;
 }
 
 export async function listFreezoneStyleTemplates(
   project: string,
-): Promise<FreezoneStyleTemplate[]> {
-  return await apiCall<FreezoneStyleTemplate[]>(
+): Promise<FreezoneStyleTemplateList> {
+  // 走 apiCallEnvelope 而不是 apiCall：清单元信息挂在 `data` 同级（`data` 得留给
+  // 裸列表，见后端路由注释）。元信息在 data 里的旧形状也照样能认出来。
+  const envelope = await apiCallEnvelope<unknown>(
     `projects/${encodeURIComponent(project)}/freezone/image/style-templates`,
   );
+  const nested =
+    envelope.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
+      ? (envelope.data as Record<string, unknown>)
+      : {};
+  const meta = (key: string) =>
+    pickString(envelope, key) ?? pickString(nested, key) ?? "";
+  return {
+    assetBase: meta("asset_base"),
+    version: meta("version"),
+    templates: coerceStyleTemplateList(envelope.data),
+  };
 }
 
 // /freezone/image/camera-options ----------------------------------------- //
@@ -1045,6 +1107,8 @@ export interface FreezoneVideoModelInfo {
   /** Supported output resolution values for this model, when advertised by backend. */
   resolutionOptions?: FreezoneVideoResolution[];
   humanReview?: boolean;
+  /** Whether this model can produce native synchronized audio. Missing means legacy-supported. */
+  supportsGenerateAudio?: boolean;
   /** Smallest supported duration in seconds, when advertised by backend. */
   minDuration?: number | null;
   /** Largest supported duration in seconds, when advertised by backend. */
@@ -1130,6 +1194,11 @@ function videoModelEntryFromObject(
     label,
     ...(resolutionOptions.length > 0 ? { resolutionOptions } : {}),
     humanReview: pickBoolean(entry, "humanReview", "human_review"),
+    supportsGenerateAudio: pickBoolean(
+      entry,
+      "supportsGenerateAudio",
+      "supports_generate_audio",
+    ),
     minDuration: pickNumber(entry, "minDuration", "min_duration"),
     maxDuration: pickNumber(entry, "maxDuration", "max_duration"),
     ...(sceneOptimizeOptions.length > 0 ? { sceneOptimizeOptions } : {}),
@@ -1766,8 +1835,7 @@ export interface FreezoneScene360Payload {
  * **单图 360 (simple pipeline)** — 老路径,只把一张图当 reference 走通用
  * 图编辑生成 panorama。不做 master/reverse overlap 分析、空间合约、缝合,
  * 适合 freezone 自由画布上 \"拿任一张图试试 360\" 的快速生成。
- * Asset-scoped scene 360 generation uses
- * {@link submitFreezoneScene360FromMaster} (复杂工作流),不是这条。
+ * Asset-scoped scene 360 generation uses the scenes asset API (复杂工作流),不是这条。
  */
 export async function submitFreezoneScene360(
   project: string,
@@ -1848,18 +1916,14 @@ export async function submitFreezoneScene360FromMaster(
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.imageSize ? { image_size: payload.imageSize } : {}),
         ...(payload.quality ? { quality: payload.quality } : {}),
-        ...(payload.timeoutSeconds ? { timeout_seconds: payload.timeoutSeconds } : {}),
       },
     },
   );
-  if (!result.ok || result.error) {
-    throw new Error(result.error ?? "scene 360 from master failed");
-  }
   return {
+    task_type: result.task_type,
     task_key: result.task_key,
-    job_id: result.task_id ?? result.scope ?? sceneId,
-    task_type: "stage_asset",
-  } as FreezoneJobRef;
+    job_id: result.task_id ?? result.scope ?? "",
+  };
 }
 
 // /freezone/template-edit ------------------------------------------------- //
@@ -2391,9 +2455,10 @@ export interface FreezoneUploadResult {
 
 export interface FreezoneUploadOptions {
   /**
-   * Override the default ky timeout (30s). Pass `false` to disable —
-   * required for multi-MB video uploads on slow links, otherwise ky aborts
-   * the in-flight request and DevTools shows the row as `canceled`.
+   * Override the upload timeout. Defaults to `false` (no timeout) — a clock on
+   * an upload races the user's uplink rather than the server, and aborting
+   * mid-body shows up as HTTP 499 at the edge with the file never delivered
+   * (see uploadApi in lib/api.ts). Pass a number only to bound a specific call.
    */
   timeoutMs?: number | false;
 }
@@ -2412,7 +2477,7 @@ export async function uploadFreezoneImage(
     {
       method: "POST",
       body: fd,
-      timeout: options?.timeoutMs ?? undefined,
+      timeout: options?.timeoutMs ?? false,
     },
   ).json<{ ok: boolean; data?: FreezoneUploadResult; error?: string }>();
   if (!resp.ok || !resp.data) {
@@ -2427,10 +2492,10 @@ export async function uploadFreezoneVideo(
   file: File | Blob,
   filename?: string,
 ): Promise<FreezoneUploadResult> {
-  // Disable the 30s default timeout: video files routinely run into the tens
-  // of MB and the upload streams the body, so a short timeout cancels the
-  // request before the server ever sees the end of the body.
-  return await uploadFreezoneImage(project, file, filename, { timeoutMs: false });
+  // Timeouts are off by default for uploads (see FreezoneUploadOptions):
+  // video files routinely run into the tens of MB and the body is streamed, so
+  // any clock cancels the request before the server sees the end of it.
+  return await uploadFreezoneImage(project, file, filename);
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -2577,11 +2642,35 @@ export type FreezoneAssetLibrarySource =
   | "scene"
   | "prop";
 
+/** 用途类目。老条目没有该字段，读取侧按 source/media 兜底推导。 */
+export type FreezoneAssetLibraryCategory =
+  | "other"
+  | "character"
+  | "scene"
+  | "prop"
+  | "style"
+  | "audio";
+
+/**
+ * 用户自建的资产库文件夹。系统文件夹（主线 / 待分类资产 / 各类目同名目录）不落盘，
+ * 由前端按保留 key 生成，只有这里的自建文件夹会从后端读回来。
+ */
+export interface FreezoneAssetLibraryFolder {
+  id: string;
+  name: string;
+  /** 封面图 URL，取自文件夹内某个素材；没设过时为空,前端画默认文件夹图标。 */
+  cover?: string | null;
+  created_at?: string;
+}
+
 export interface FreezoneVideoCharacterLibraryItem {
   id?: string;
   name: string;
   media?: FreezoneAssetLibraryMedia;
   source?: FreezoneAssetLibrarySource;
+  category?: FreezoneAssetLibraryCategory;
+  /** 保存位置：系统文件夹 key 或自建文件夹 id。老条目没有，读取侧按类目兜底。 */
+  folder?: string;
   image_urls?: string[];
   video_url?: string | null;
   audio_url?: string | null;
@@ -2597,6 +2686,8 @@ export interface FreezoneAddVideoCharacterLibraryItemPayload {
   imageUrls?: string[];
   videoUrl?: string;
   audioUrl?: string;
+  category?: FreezoneAssetLibraryCategory;
+  folder?: string;
 }
 
 export async function fetchFreezoneVideoCharacterLibrary(
@@ -2620,9 +2711,52 @@ export async function submitFreezoneAddVideoCharacterLibraryItem(
   }
   if (payload.videoUrl) body.video_url = payload.videoUrl;
   if (payload.audioUrl) body.audio_url = payload.audioUrl;
+  if (payload.category) body.category = payload.category;
+  if (payload.folder) body.folder = payload.folder;
   return await apiCall<unknown>(
     `projects/${encodeURIComponent(project)}/freezone/video/character-library`,
     { method: "POST", json: body },
+  );
+}
+
+export async function fetchFreezoneAssetLibraryFolders(
+  project: string,
+): Promise<FreezoneAssetLibraryFolder[]> {
+  return await apiCall<FreezoneAssetLibraryFolder[]>(
+    `projects/${encodeURIComponent(project)}/freezone/video/asset-library/folders`,
+  );
+}
+
+export async function createFreezoneAssetLibraryFolder(
+  project: string,
+  name: string,
+): Promise<FreezoneAssetLibraryFolder> {
+  return await apiCall<FreezoneAssetLibraryFolder>(
+    `projects/${encodeURIComponent(project)}/freezone/video/asset-library/folders`,
+    { method: "POST", json: { name } },
+  );
+}
+
+/** 改名 / 换封面。只传要改的字段,另一个原样保留。 */
+export async function updateFreezoneAssetLibraryFolder(
+  project: string,
+  folderId: string,
+  patch: { name?: string; cover?: string },
+): Promise<FreezoneAssetLibraryFolder> {
+  return await apiCall<FreezoneAssetLibraryFolder>(
+    `projects/${encodeURIComponent(project)}/freezone/video/asset-library/folders/${encodeURIComponent(folderId)}`,
+    { method: "PATCH", json: patch },
+  );
+}
+
+/** 整柜清空:删掉文件夹连同里面的素材。返回被删掉的素材条数。 */
+export async function deleteFreezoneAssetLibraryFolder(
+  project: string,
+  folderId: string,
+): Promise<{ deleted_items: number }> {
+  return await apiCall<{ deleted_items: number }>(
+    `projects/${encodeURIComponent(project)}/freezone/video/asset-library/folders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE" },
   );
 }
 
@@ -2636,6 +2770,23 @@ export async function syncFreezoneAssetLibraryFromMainline(
   return await apiCall<FreezoneVideoCharacterLibraryItem[]>(
     `projects/${encodeURIComponent(project)}/freezone/video/asset-library/sync-from-mainline`,
     { method: "POST" },
+  );
+}
+
+/**
+ * 给资产库条目改名。只动展示名，素材地址不变——画布上已经引用它的节点不受影响。
+ *
+ * 主线同步来的条目改了名会在下次「从主线同步」时被覆盖回去，所以调用侧只对本地
+ * 上传的条目开放这个入口。
+ */
+export async function renameFreezoneVideoCharacterLibraryItem(
+  project: string,
+  itemId: string,
+  name: string,
+): Promise<FreezoneVideoCharacterLibraryItem> {
+  return await apiCall<FreezoneVideoCharacterLibraryItem>(
+    `projects/${encodeURIComponent(project)}/freezone/video/character-library/${encodeURIComponent(itemId)}`,
+    { method: "PATCH", json: { name } },
   );
 }
 

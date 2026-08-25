@@ -34,6 +34,7 @@ import { generationTaskDescriptor } from '@/features/canvas/application/resumeGe
 import { useUpstreamImages } from '@/features/canvas/application/useUpstreamGraph';
 import { resolveErrorContent, showErrorDialog } from '@/features/canvas/application/errorDialog';
 import { backendErrorToastMessage } from '@/lib/api-errors';
+import { useModelTaskAccess } from '@/lib/model-task-access';
 import {
   detectAspectRatio,
   parseAspectRatio,
@@ -560,6 +561,7 @@ function generateGridImageDataUrl(
 
 export const StoryboardGenNode = memo(({ id, data, selected, width, height }: StoryboardGenNodeProps) => {
   const { t, i18n } = useTranslation();
+  const modelTaskAccess = useModelTaskAccess();
   const { zoom } = useViewport();
   const updateNodeInternals = useUpdateNodeInternals();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
@@ -1053,6 +1055,11 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     if (!nodeData) {
       return;
     }
+    // 组织成员没有发起模型任务的资格时不放行：后端会拒，这里先说清楚原因。
+    if (modelTaskAccess.blocked) {
+      if (modelTaskAccess.message) setError(modelTaskAccess.message);
+      return;
+    }
 
     const safeRows = Math.max(1, nodeData.gridRows);
     const safeCols = Math.max(1, nodeData.gridCols);
@@ -1273,6 +1280,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     }
   }, [
     nodeData,
+    modelTaskAccess,
     imageModelsEmpty,
     incomingImages,
     requestResolution.requestModel,
@@ -1781,6 +1789,8 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
               enableStoryboardGenGridPreviewShortcut && event.ctrlKey && event.altKey && event.shiftKey;
             void handleGenerate(previewGridOnly);
           }}
+          disabled={modelTaskAccess.blocked}
+          title={modelTaskAccess.message ?? undefined}
           variant="primary"
           size="sm"
           className={`!min-w-0 shrink-0 ${NODE_CONTROL_PRIMARY_BUTTON_CLASS} ${STORYBOARD_GEN_GENERATE_BUTTON_CLASS}`}
