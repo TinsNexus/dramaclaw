@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { AudioLines, Box, Film, Replace } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -78,8 +79,8 @@ export function NodeReplaceDragPreview() {
           >
             <Replace className="h-3 w-3 shrink-0" />
             {overTarget
-              ? t('canvas.nodeReplaceDragPreview.overTarget')
-              : t('canvas.nodeReplaceDragPreview.default')}
+              ? t('canvas.assetReplace.dropToReplace')
+              : t('canvas.assetReplace.dragHint')}
           </div>
         </div>
       </div>

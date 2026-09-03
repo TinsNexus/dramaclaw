@@ -83,17 +83,17 @@ export function ExtractFramesDialog({
 
   const handleSubmit = async () => {
     if (!file) {
-      setError(t("pipelineImport.extractFrames.errorNoFile"));
+      setError(t("pipelineImport.errors.noFile"));
       return;
     }
     setError(null);
     try {
-      setProgress({ stage: "uploading", message: t("pipelineImport.extractFrames.progressUploading"), progress: 0.1 });
+      setProgress({ stage: "uploading", message: t("pipelineImport.extractFrames.progress.uploading"), progress: 0.1 });
       const upload = await uploadFreezoneImage(project, file, file.name);
 
       setProgress({
         stage: "extracting",
-        message: t("pipelineImport.extractFrames.progressExtracting"),
+        message: t("pipelineImport.extractFrames.progress.extracting"),
         progress: 0.3,
       });
       const extractRef = await submitFreezoneExtract(project, {
@@ -104,14 +104,14 @@ export function ExtractFramesDialog({
       const extractTask = await awaitTaskCompletion(extractRef.task_key, project, { taskType: extractRef.task_type });
       const frameUrls = extractFrameUrls(extractTask);
       if (frameUrls.length === 0) {
-        throw new Error(t("pipelineImport.extractFrames.errorEmptyFrames"));
+        throw new Error(t("pipelineImport.extractFrames.errors.emptyResult"));
       }
 
       let analyses: ShotAnalysis[] = [];
       if (analyzeShots) {
         setProgress({
           stage: "analyzing",
-          message: t("pipelineImport.extractFrames.progressAnalyzing", { count: frameUrls.length }),
+          message: t("pipelineImport.extractFrames.progress.analyzing", { count: frameUrls.length }),
           progress: 0.7,
         });
         try {
@@ -137,15 +137,17 @@ export function ExtractFramesDialog({
         : t("pipelineImport.extractFrames.progressDone", { count: frames.length });
       setProgress({
         stage: "done",
-        message: completionMsg,
+        message: analyses.length > 0
+          ? t("pipelineImport.extractFrames.progress.doneAnalyzed", { count: frames.length })
+          : t("pipelineImport.extractFrames.progress.done", { count: frames.length }),
         progress: 1,
       });
-      onDone(t("pipelineImport.extractFrames.toastSuccess", { count: frames.length }));
+      onDone(t("pipelineImport.extractFrames.doneToast", { count: frames.length }));
       setTimeout(onClose, 600);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      setProgress({ stage: "error", message: t("pipelineImport.extractFrames.progressFailed"), progress: 0 });
+      setProgress({ stage: "error", message: t("pipelineImport.progress.failed"), progress: 0 });
     }
   };
 
@@ -173,7 +175,7 @@ export function ExtractFramesDialog({
           <div className="min-w-0 flex-1">
             <h2 className="text-[15px] font-semibold leading-tight text-text-dark">{t("pipelineImport.extractFrames.title")}</h2>
             <p className="mt-1 text-xs leading-relaxed text-text-muted">
-              {t("pipelineImport.extractFrames.description")}
+              {t("pipelineImport.extractFrames.subtitle")}
             </p>
           </div>
           <button
@@ -181,14 +183,14 @@ export function ExtractFramesDialog({
             onClick={requestClose}
             disabled={submitting}
             className="text-text-muted hover:text-text-dark transition disabled:opacity-30"
-            aria-label={t("pipelineImport.extractFrames.closeButton")}
+            aria-label={t("common.close")}
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
         <div className="px-5 py-4 space-y-5">
-          <Section title={t("pipelineImport.extractFrames.sectionVideoFile")}>
+          <Section title={t("pipelineImport.extractFrames.sections.videoFile")}>
             <FilePicker
               file={file}
               disabled={submitting}
@@ -197,9 +199,9 @@ export function ExtractFramesDialog({
             />
           </Section>
 
-          <Section title={t("pipelineImport.extractFrames.sectionFrameParams")}>
+          <Section title={t("pipelineImport.extractFrames.sections.params")}>
             <div className="grid grid-cols-2 gap-3">
-              <Field label={t("pipelineImport.extractFrames.labelMaxFrames")} hint={t("pipelineImport.extractFrames.hintMaxFrames")}>
+              <Field label={t("pipelineImport.extractFrames.fields.maxFrames")} hint="3 - 50">
                 <UiInput
                   type="number"
                   min={3}
@@ -209,7 +211,7 @@ export function ExtractFramesDialog({
                   disabled={submitting}
                 />
               </Field>
-              <Field label={t("pipelineImport.extractFrames.labelThreshold")} hint={t("pipelineImport.extractFrames.hintThreshold")}>
+              <Field label={t("pipelineImport.extractFrames.fields.sceneThreshold")} hint="0 - 1">
                 <UiInput
                   type="number"
                   min={0.1}
@@ -222,11 +224,11 @@ export function ExtractFramesDialog({
               </Field>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-text-muted/80">
-              {t("pipelineImport.extractFrames.helpThreshold")}
+              {t("pipelineImport.extractFrames.thresholdHint")}
             </p>
           </Section>
 
-          <Section title={t("pipelineImport.extractFrames.sectionPostProcessing")}>
+          <Section title={t("pipelineImport.extractFrames.sections.postProcess")}>
             <label
               className={`flex w-full items-start gap-3 rounded-lg border border-[color:var(--ui-border-soft)] bg-[var(--ui-surface-field)] px-3 py-2.5 text-left transition-colors hover:border-[color:var(--ui-border-strong)] ${
                 submitting ? "cursor-not-allowed opacity-60" : "cursor-pointer"
@@ -245,9 +247,9 @@ export function ExtractFramesDialog({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-text-dark">{t("pipelineImport.extractFrames.labelAnalyzeShots")}</div>
+                <div className="text-sm text-text-dark">{t("pipelineImport.extractFrames.analyzeShots.label")}</div>
                 <div className="mt-0.5 text-[11px] text-text-muted">
-                  {t("pipelineImport.extractFrames.descAnalyzeShots")}
+                  {t("pipelineImport.extractFrames.analyzeShots.hint")}
                 </div>
               </div>
             </label>
@@ -266,7 +268,7 @@ export function ExtractFramesDialog({
 
         <footer className="flex items-center justify-end gap-2 border-t border-[color:var(--ui-border-soft)] px-5 py-3.5">
           <UiButton variant="ghost" size="sm" onClick={requestClose} disabled={submitting}>
-            {t("pipelineImport.extractFrames.cancelButton")}
+            {t("common.cancel")}
           </UiButton>
           <UiButton
             variant="primary"
@@ -277,10 +279,10 @@ export function ExtractFramesDialog({
             {submitting ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                {t("pipelineImport.extractFrames.processingButton")}
+                {t("pipelineImport.extractFrames.submitting")}
               </>
             ) : (
-              t("pipelineImport.extractFrames.startButton")
+              t("pipelineImport.extractFrames.submit")
             )}
           </UiButton>
         </footer>
@@ -351,8 +353,8 @@ function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
           </>
         ) : (
           <>
-            <div className="text-sm text-text-dark">{t("pipelineImport.extractFrames.selectVideoFile")}</div>
-            <div className="mt-0.5 text-[11px] text-text-muted">{t("pipelineImport.extractFrames.supportedFormats")}</div>
+            <div className="text-sm text-text-dark">{t("pipelineImport.picker.choose")}</div>
+            <div className="mt-0.5 text-[11px] text-text-muted">{t("pipelineImport.picker.formats")}</div>
           </>
         )}
       </div>
@@ -362,7 +364,7 @@ function FilePicker({ file, disabled, inputRef, onChange }: FilePickerProps) {
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        {file ? t("pipelineImport.extractFrames.replaceButton") : t("pipelineImport.extractFrames.browseButton")}
+        {file ? t("pipelineImport.picker.replace") : t("pipelineImport.picker.browse")}
       </UiButton>
       <input
         ref={inputRef}
@@ -388,7 +390,7 @@ function ProgressBar({ progress }: { progress: ProgressState }) {
           {progress.message}
         </span>
         <span className="text-[11px] tabular-nums text-text-muted">
-          {isDone ? t("pipelineImport.extractFrames.progressComplete") : `${pct}%`}
+          {isDone ? t("pipelineImport.progress.completed") : `${pct}%`}
         </span>
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">

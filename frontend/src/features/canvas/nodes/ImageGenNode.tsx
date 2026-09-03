@@ -61,7 +61,7 @@ import {
   resolveMinEdgeFittedSize,
   shouldForceNaturalImageSize,
 } from '@/features/canvas/application/imageNodeSizing';
-import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   isSystemManagedNodeData,
   mainlineNodeVisualState,
@@ -134,6 +134,10 @@ import { useFreezoneImageModels } from '@/features/canvas/hooks/useFreezoneImage
 import { useNodeGenerationHistory } from '@/features/canvas/hooks/useNodeGenerationHistory';
 import { MediaModelParameterChip } from '@/features/canvas/ui/MediaModelParameterChip';
 import { ReferenceTextChip } from '@/features/canvas/nodes/shared/ReferenceTextChip';
+import { ReferenceMentionButton } from '@/features/canvas/nodes/shared/ReferenceMentionButton';
+import { focusReferenceNode } from '@/features/canvas/application/viewportReturnStore';
+import { collectReferenceMaterials } from '@/features/canvas/application/referencePick';
+import { attachReferenceEdge } from '@/features/canvas/application/attachReference';
 import {
   AssetLibraryModal,
   type AssetLibrarySelection,
@@ -214,6 +218,7 @@ import {
   NodeSideActionRail,
 } from '@/features/canvas/ui/NodeSideActionRail';
 import { NodeContextPromptPaletteButton } from '@/features/canvas/nodes/ContextPromptPaletteButton';
+import { ReferencePickChip } from '@/features/canvas/nodes/shared/ReferencePickChip';
 import {
   contextPromptPaletteInsertionText,
   type ContextPromptPaletteEntry,
@@ -235,7 +240,9 @@ const MIN_HEIGHT = 260;
 const MAX_WIDTH = 1100;
 const MAX_HEIGHT = 1000;
 
-const OPERATIONS_PANEL_HEIGHT = 232;
+// 面板高度。参考素材独占一行（缩略图 48px + 间距）之后，232px 只给提示词剩下两行
+// 多一点，写长一点就要在窄缝里滚——加高到给提示词留出四五行的程度。
+const OPERATIONS_PANEL_HEIGHT = 288;
 const OPERATIONS_PANEL_GAP = 12;
 const OPERATIONS_PANEL_MIN_WIDTH = 720;
 // 「放大」后的操作区尺寸：给提示词编辑区更舒适的高度与宽度。
@@ -243,8 +250,10 @@ const OPERATIONS_PANEL_EXPANDED_HEIGHT = 560;
 const OPERATIONS_PANEL_EXPANDED_MIN_WIDTH = 960;
 const IMAGE_GENERATE_FEATURE_KEY = 'freezone.image_generate';
 
-const ASPECT_OPTIONS: ReadonlyArray<{ value: string; label: string; labelKey?: string }> = [
-  { value: 'auto', label: '自适应', labelKey: 'node.imageGen.aspectAuto' },
+// 只有 auto 需要翻译，其余标签就是比例本身。模块级常量取不到 t，所以存 key。
+const ASPECT_LABEL_KEYS: Record<string, string> = { auto: 'node.imageGen.aspect.auto' };
+const ASPECT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'auto', label: 'auto' },
   { value: '1:1', label: '1:1' },
   { value: '9:16', label: '9:16' },
   { value: '16:9', label: '16:9' },
@@ -261,10 +270,10 @@ const SIZE_OPTIONS: ReadonlyArray<ImageSize> = ['1K', '2K', '4K'];
 const COUNT_OPTIONS: ReadonlyArray<ImageGenCount> = [1, 2, 4];
 const SELECTED_BACKGROUND_CROP_ASPECT_OPTIONS = ['2:3', '16:9'] as const;
 
-const QUALITY_OPTIONS: ReadonlyArray<{ value: ImageQuality; label: string; labelKey: string }> = [
-  { value: 'low', label: '低画质', labelKey: 'node.imageGen.qualityLow' },
-  { value: 'medium', label: '标准画质', labelKey: 'node.imageGen.qualityMedium' },
-  { value: 'high', label: '高画质', labelKey: 'node.imageGen.qualityHigh' },
+const QUALITY_OPTIONS: ReadonlyArray<{ value: ImageQuality; labelKey: string }> = [
+  { value: 'low', labelKey: 'node.imageGen.quality.low' },
+  { value: 'medium', labelKey: 'node.imageGen.quality.medium' },
+  { value: 'high', labelKey: 'node.imageGen.quality.high' },
 ];
 const DEFAULT_IMAGE_QUALITY: ImageQuality = 'medium';
 const IMAGE_PARAM_POPOVER_CLASS =
@@ -459,9 +468,9 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         ASPECT_OPTIONS.map((item) => item.value),
       ).map((value) => ({
         value,
-        label: ASPECT_OPTIONS.find((item) => item.value === value)?.label ?? value,
+        label: ASPECT_LABEL_KEYS[value] ? t(ASPECT_LABEL_KEYS[value]) : value,
       })),
-    [selectedModel],
+    [selectedModel, t],
   );
   const effectiveImageSize =
     modelSizeOptions.find((option) => option.toLowerCase() === size.toLowerCase())
@@ -701,11 +710,56 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         key:
           upstreamImageContents.find((content) => content.imageUrl === url)
             ?.nodeId ?? `self:${url}`,
-        name: `图片${index + 1}`,
+        // `@图片N` 是提示词里的引用记号，随 prompt 原样发给后端，不是界面文案。
+        name: `图片${index + 1}`, // i18n-exempt
         imageUrl: resolveImageDisplayUrl(url),
         index: index + 1,
       })),
     [orderedReferenceUrls, upstreamImageContents],
+  );
+
+  // 引用缩略图右下角的 @ 按钮：按这张图当前的编号插进提示词，用户不必自己数第几张。
+  // key 就是 mentionCandidates 里的 key（上游 nodeId），所以直接查表即可。
+  const handleMentionReference = useCallback(
+    (nodeId: string) => {
+      const candidate = mentionCandidates.find((item) => item.key === nodeId);
+      if (!candidate) return;
+      promptEditorRef.current?.insertMentionAtCursor(candidate);
+    },
+    [mentionCandidates],
+  );
+  // 双击引用 → 视口跳到那个上游节点，并在底部留下「返回节点」。
+  const handleJumpToReference = useCallback(
+    (nodeId: string) => {
+      focusReferenceNode(nodeId, id);
+    },
+    [id],
+  );
+
+  // 替换选单的「素材引用」段：画布上还没连过来、可以当参考图的素材（图片节点只
+  // 收图片，collectReferenceMaterials 已按同一套规则筛过）。已经连着的按**边**排除，
+  // 不按已有参考图排除——连着但还没出图的上游节点同样不该再被当成「还没引用」。
+  //
+  // 打开选单时才算：这份清单要扫全画布，做成常驻订阅等于让每个图片节点都跟着
+  // 整个 nodes 数组重渲染，拖一个节点就是一次全画布 O(N²)。
+  const getMentionMaterials = useCallback(() => {
+    const store = useCanvasStore.getState();
+    const attached = new Set(
+      store.edges.filter((edge) => edge.target === id).map((edge) => edge.source),
+    );
+    return collectReferenceMaterials(
+      store.nodes,
+      id,
+      CANVAS_NODE_TYPES.imageGen,
+      attached,
+      t,
+    );
+  }, [id, t]);
+  // 选中一条画布素材：连成上游即可，参考图行与 @ 编号都由上游推导链路跟上。
+  // 被拒（素材上限等）时 attachReferenceEdge 已经把原因弹出来了，这里只回结果。
+  const handleAttachMaterial = useCallback(
+    (sourceNodeId: string) => attachReferenceEdge(sourceNodeId, id),
+    [id],
   );
 
   // 让 prompt 里的 @图片N 始终跟随参考图引用编号：删除 / 重排 / 新增引用连线、
@@ -722,7 +776,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   );
   useReferenceMentionSync(
     prompt,
-    [{ prefix: "图片", ids: orderedReferenceUrls }],
+    [{ prefix: "图片", ids: orderedReferenceUrls }], // i18n-exempt —— 同 mentionCandidates，属提示词协议
     applyPromptRemap,
   );
 
@@ -808,7 +862,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   }, [refHover]);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.imageGen, data, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.imageGen, data, t),
     [data, t],
   );
   const resolvedWidth = Math.max(MIN_WIDTH, Math.round(width ?? DEFAULT_WIDTH));
@@ -1093,7 +1147,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
   const selectedModelReferenceError =
     selectedModel?.referenceImageMax != null &&
     orderedReferenceUrls.length > selectedModel.referenceImageMax
-      ? t('node.imageGen.maxReferencesSupported', { n: selectedModel.referenceImageMax })
+      ? t('node.videoModel.reason.maxImages', { count: selectedModel.referenceImageMax })
       : null;
   const modelTaskAccess = useModelTaskAccess();
   const submitDisabled =
@@ -1399,7 +1453,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
     async (blob: Blob, meta: ThreeDDirectorCaptureMeta) => {
       const projectId = readUrl().project;
       if (!projectId || effectiveEpisode === null || effectiveBeat === null) {
-        throw new Error(t('node.imageGen.missingProjectOrBeatContext'));
+        throw new Error(t('node.imageGen.missingContext'));
       }
 
       let imageUrl = meta.controlFrameUrl
@@ -1483,7 +1537,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 key={`album-deck-${index}`}
                 role="button"
                 tabIndex={-1}
-                title={t('node.imageGen.expandAlbum')}
+                title={t('node.imageGen.album.expand')}
                 onClick={(event) => {
                   event.stopPropagation();
                   handleToggleAlbumExpanded();
@@ -1560,7 +1614,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
               handlePickFile();
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            title={t('node.imageGen.uploadImage')}
+            title={t('node.imageGen.upload')}
             className={NODE_SIDE_ACTION_BUTTON_CLASS}
           >
             {isUploading ? (
@@ -1568,7 +1622,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             ) : (
               <Upload className={NODE_SIDE_ACTION_ICON_CLASS} />
             )}
-            <span>{isUploading ? t('node.imageGen.uploading') : t('node.imageGen.uploadImage')}</span>
+            <span>{t(isUploading ? 'node.imageGen.uploading' : 'node.imageGen.upload')}</span>
           </button>
         </NodeSideActionRail>
       )}
@@ -1696,7 +1750,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                   handleToggleAlbumExpanded();
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
-                title={t('node.imageGen.expandResults', { n: albumTotalSlots })}
+                title={t('node.imageGen.album.expandCount', { count: albumTotalSlots })}
                 className="nodrag group/albumpill absolute right-2 top-2 z-10 hidden items-center gap-1 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-medium tabular-nums text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/85 group-hover:inline-flex"
               >
                 {albumPendingCount > 0
@@ -1727,7 +1781,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-2">
               <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white/90 backdrop-blur">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                {t('node.imageGen.generatingNew')}
+                {t('node.imageGen.history.generatingNew')}
               </span>
               <button
                 type="button"
@@ -1738,7 +1792,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 }}
               >
                 <X className="h-3 w-3" />
-                {t('node.imageGen.back')}
+                {t('node.imageGen.history.back')}
               </button>
             </div>
           </div>
@@ -1763,7 +1817,9 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             ) : (
               <>
                 <div className="flex min-h-0 flex-col justify-center gap-2 py-4">
-                  <div className="text-xs text-[var(--canvas-node-input-helper)]">{t('node.imageGen.tryThis')}</div>
+                  <div className="text-xs text-[var(--canvas-node-input-helper)]">
+                    {t('node.imageGen.emptyState.tryLabel')}
+                  </div>
                   <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
@@ -1772,11 +1828,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                       handleSpawnUpstreamImage();
                     }}
                     onPointerDown={(event) => event.stopPropagation()}
-                    title={t('node.imageGen.createUpstreamImage')}
+                    title={t('node.imageGen.emptyState.imageToImageTitle')}
                     className="nodrag -mx-2 inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-text-dark transition-colors hover:bg-white/[0.08]"
                   >
                     <Upload className="h-4 w-4 text-text-muted/90" />
-                    <span>{t('node.imageGen.imageToImage')}</span>
+                    <span>{t('node.imageGen.emptyState.imageToImage')}</span>
                   </button>
                   </div>
                 </div>
@@ -1866,7 +1922,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         >
           <div className="mb-2 flex items-center gap-1.5 px-1 text-[12px] font-medium text-white/60">
             <ImageIcon className="h-3.5 w-3.5 text-white/45" />
-            {t('node.imageGen.albumHeader', { n: albumTotalSlots })}
+            {t('node.imageGen.album.heading', { count: albumTotalSlots })}
           </div>
           <div className="grid grid-cols-2 gap-3">
           {albumUrls.map((url, index) => {
@@ -1877,7 +1933,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 key={`album-cell-${index}`}
                 role="button"
                 tabIndex={-1}
-                title={t('node.imageGen.setAsMainImage')}
+                title={t('node.imageGen.album.setAsMain')}
                 onClick={(event) => {
                   event.stopPropagation();
                   // 拖动画册（移动节点）后松手补发的 click 不算选主图。
@@ -1909,11 +1965,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                     event.stopPropagation();
                     handleApplyAlbumImageToCanvas(url);
                   }}
-                  title={t('node.imageGen.applyToCanvasTitle')}
+                  title={t('node.imageGen.album.applyToCanvas')}
                   className="nodrag absolute left-2 top-2 z-10 hidden h-7 items-center gap-1 rounded-md bg-black/70 px-2.5 text-[12px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/90 group-hover/albumcell:inline-flex"
                 >
                   <Upload className="h-3.5 w-3.5" />
-                  {t('node.imageGen.applyToCanvas')}
+                  {t('node.imageGen.album.applyToCanvasLabel')}
                 </button>
                 <button
                   type="button"
@@ -1921,14 +1977,14 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                     event.stopPropagation();
                     void handleDownloadAlbumImage(url, index);
                   }}
-                  title={t('node.imageGen.downloadImage')}
+                  title={t('node.imageGen.album.download')}
                   className="nodrag absolute right-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-colors hover:bg-black/90 group-hover/albumcell:inline-flex"
                 >
                   <Download className="h-3.5 w-3.5" />
                 </button>
                 {isMain && (
                   <span className="absolute bottom-2 left-2 z-10 rounded-md bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
-                    {t('node.imageGen.mainImage')}
+                    {t('node.imageGen.album.mainImage')}
                   </span>
                 )}
               </div>
@@ -1943,7 +1999,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             >
               <div className="flex flex-col items-center gap-2 text-text-muted/70">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <span className="text-[12px]">{t('node.imageGen.generatingEllipsis')}</span>
+                <span className="text-[12px]">{t('node.imageGen.album.generating')}</span>
               </div>
             </div>
           ))}
@@ -1969,9 +2025,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 setBgCropperOpen(true);
               }}
               className="inline-flex h-6 items-center gap-1 rounded-md border border-amber-300/55 bg-[rgba(120,77,19,0.78)] px-2 text-[10px] font-medium text-amber-100 shadow-[0_0_0_1px_rgba(0,0,0,0.45)] hover:bg-[rgba(140,90,22,0.88)] disabled:cursor-not-allowed disabled:opacity-50"
-              title={t('node.imageGen.backgroundSourceTitle', { role: sourceRole === 'scene_master' ? 'scene_master' : 'scene_reverse_master' })}
+              title={t('node.imageGen.cropBackgroundTitle', {
+                source: sourceRole === 'scene_master' ? 'scene_master' : 'scene_reverse_master',
+              })}
             >
-              📐 {t('node.imageGen.cropBackground')}
+              {t('node.imageGen.cropBackground')}
             </button>
           )}
           {canOpenDirectorStage && (
@@ -2023,6 +2081,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             className="absolute right-2 top-2 z-20"
           />
           <div className="flex shrink-0 items-center gap-2 pl-3 pr-10 pt-3">
+            <ReferencePickChip
+              nodeId={id}
+              nodeType={CANVAS_NODE_TYPES.imageGen}
+              onPickExternal={handlePickFile}
+            />
             {styleSelectionState !== 'ready' && (
               <StyleTriggerChip
                 state={styleSelectionState}
@@ -2045,59 +2108,87 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
               <Library className={`${NODE_TEXT_CONTROL_ICON_CLASS} group-hover/asset:text-text-dark`} />
               <span>{t('node.imageGen.assetLibrary')}</span>
             </button>
-            {upstreamTextContents.map((content) => (
-              <ReferenceTextChip
-                key={content.nodeId}
-                nodeId={content.nodeId}
-                text={content.text ?? ''}
-                sourceLabel={content.displayName ?? content.nodeType}
-                onDetach={handleDetachUpstream}
-              />
-            ))}
-            {upstreamImageContents.length > 0 && (
-              <div className="ml-3 flex shrink-0 items-center gap-1.5">
-                {upstreamImageContents.map((content) => {
-                  const url = resolveImageDisplayUrl(content.imageUrl as string);
-                  return (
-                    <div
-                      key={`upstream-image-${content.nodeId}`}
-                      className={NODE_REFERENCE_MEDIA_CHIP_CLASS}
-                      title={t('node.imageGen.upstreamSource', { source: content.displayName ?? content.nodeType })}
-                      onMouseEnter={(event) => {
-                        setRefHover({
-                          imageUrl: url,
-                          rect: event.currentTarget.getBoundingClientRect(),
-                        });
-                      }}
-                      onMouseLeave={() => setRefHover(null)}
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                      />
-                      {/* 前端按产品要求不再显示「图片N」数字角标——引用统一呈现为
-                          「图片」，序号只存在于提交给后端的 prompt（@图片N）里。 */}
-                      <button
-                        type="button"
-                        title={t('node.imageGen.detachReference')}
-                        className={NODE_REFERENCE_MEDIA_DETACH_CLASS}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
+          </div>
+
+          {/* 引用素材单独占一行：顶排功能 chip 已经排满，参考图再挤进去会顶掉输入区。 */}
+          {(upstreamTextContents.length > 0 || upstreamImageContents.length > 0) && (
+            <div className="nowheel flex shrink-0 items-center gap-2 overflow-x-auto px-3 pt-2">
+              {upstreamTextContents.map((content) => (
+                <ReferenceTextChip
+                  key={content.nodeId}
+                  nodeId={content.nodeId}
+                  text={content.text ?? ''}
+                  sourceLabel={content.displayName ?? content.nodeType}
+                  onDetach={handleDetachUpstream}
+                  onJump={handleJumpToReference}
+                />
+              ))}
+              {upstreamImageContents.length > 0 && (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {upstreamImageContents.map((content) => {
+                    const url = resolveImageDisplayUrl(content.imageUrl as string);
+                    // 不在候选里（自身参考图占位、URL 对不上）就不显示 @ 按钮：
+                    // 与其给一个编号错的 mention，不如让用户自己打。
+                    const mentionName =
+                      mentionCandidates.find((item) => item.key === content.nodeId)?.name ??
+                      null;
+                    return (
+                      <div
+                        key={`upstream-image-${content.nodeId}`}
+                        className={NODE_REFERENCE_MEDIA_CHIP_CLASS}
+                        title={t('node.imageGen.fromUpstream', {
+                          name: content.displayName ?? content.nodeType,
+                        })}
+                        onMouseEnter={(event) => {
+                          setRefHover({
+                            imageUrl: url,
+                            rect: event.currentTarget.getBoundingClientRect(),
+                          });
+                        }}
+                        onMouseLeave={() => setRefHover(null)}
+                        onDoubleClick={(event) => {
                           event.stopPropagation();
                           setRefHover(null);
-                          handleDetachUpstream(content.nodeId);
+                          handleJumpToReference(content.nodeId);
                         }}
                       >
-                        <X className="h-3 w-3" strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                        <img
+                          src={url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                        {/* 前端按产品要求不再显示「图片N」数字角标——引用统一呈现为
+                            「图片」，序号只存在于提交给后端的 prompt（@图片N）里。 */}
+                        {mentionName ? (
+                          <ReferenceMentionButton
+                            mentionName={mentionName}
+                            onInsert={() => {
+                              setRefHover(null);
+                              handleMentionReference(content.nodeId);
+                            }}
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          title={t('node.imageGen.dropReference')}
+                          className={NODE_REFERENCE_MEDIA_DETACH_CLASS}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRefHover(null);
+                            handleDetachUpstream(content.nodeId);
+                          }}
+                        >
+                          <X className="h-3 w-3" strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 选中的风格单独占一行，贴着输入区顶部，和顶排的功能 chip 分开。 */}
           {selectedStyle && (
@@ -2128,6 +2219,8 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
 
           <PromptMentionEditor
             ref={promptEditorRef}
+            getMaterials={getMentionMaterials}
+            onAttachMaterial={handleAttachMaterial}
             value={prompt}
             onChange={(next) => {
               hasUserEditedPromptRef.current = hasImageGenPromptOverride(next);
@@ -2147,9 +2240,11 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
             }}
             candidates={mentionCandidates}
             placeholder={
-              upstreamTextJoined.length > 0
-                ? t('node.imageGen.placeholderWithUpstream')
-                : t('node.imageGen.placeholderDefault')
+              t(
+                upstreamTextJoined.length > 0
+                  ? 'node.imageGen.promptPlaceholderUpstream'
+                  : 'node.imageGen.promptPlaceholder',
+              )
             }
             className={`nodrag nowheel min-h-0 w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent px-3 py-2 text-sm leading-6 text-text-dark outline-none ${CANVAS_NODE_INPUT_PLACEHOLDER_CLASS}`}
           />
@@ -2163,7 +2258,9 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
                 getOptionDisabledReason={(model) =>
                   model.referenceImageMax != null &&
                   orderedReferenceUrls.length > model.referenceImageMax
-                    ? t('node.imageGen.maxReferencesSupported', { n: model.referenceImageMax })
+                    ? t('node.videoModel.reason.maxImages', {
+                        count: model.referenceImageMax,
+                      })
                     : null
                 }
               />
@@ -2225,7 +2322,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
               <button
                 type="button"
                 disabled={submitDisabled}
-                title={selectedModelReferenceError ?? t('node.imageGen.generate')}
+                title={selectedModelReferenceError ?? modelTaskAccess.message ?? t('node.imageGen.generate')}
                 onClick={(event) => {
                   event.stopPropagation();
                   void handleSubmit();
@@ -2330,6 +2427,7 @@ export const ImageGenNode = memo(({ id, data, selected, width, height }: ImageGe
         />
       )}
       <AssetLibraryModal
+        mode="pick"
         open={isAssetLibraryOpen}
         project={readUrl().project ?? null}
         allowedMedia={['image']}
@@ -2375,6 +2473,7 @@ interface AspectSizeChipProps {
 }
 
 function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality, qualityOptions, showQuality, onChange }: AspectSizeChipProps) {
+  const { t } = useTranslation();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -2395,9 +2494,9 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
   }, [isOpen]);
 
   const nearestAspect = resolveNearestAspectOption(aspectRatio, aspectOptions);
-  const aspectLabel = nearestAspect.labelKey ? t(nearestAspect.labelKey) : nearestAspect.label;
-  const qualityOption = QUALITY_OPTIONS.find((option) => option.value === quality);
-  const qualityLabel = qualityOption ? t(qualityOption.labelKey) : quality;
+  const aspectLabel = nearestAspect.label;
+  const qualityLabelKey = QUALITY_OPTIONS.find((option) => option.value === quality)?.labelKey;
+  const qualityLabel = qualityLabelKey ? t(qualityLabelKey) : quality;
 
   return (
     <div className="relative">
@@ -2430,11 +2529,11 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
         >
           {showQuality && (
             <>
-              <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.quality')}</div>
+              <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.param.quality')}</div>
               <div className={IMAGE_PARAM_ROW_CLASS}>
                 {qualityOptions.map((value) => {
-                  const qOption = QUALITY_OPTIONS.find((option) => option.value === value);
-                  const label = qOption ? t(qOption.labelKey) : value;
+                  const optionKey = QUALITY_OPTIONS.find((option) => option.value === value)?.labelKey;
+                  const label = optionKey ? t(optionKey) : value;
                   const isActive = quality === value;
                   return (
                     <button
@@ -2454,7 +2553,7 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
               </div>
             </>
           )}
-          <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.resolution')}</div>
+          <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.param.resolution')}</div>
           <div className={IMAGE_PARAM_ROW_CLASS}>
             {sizeOptions.map((option) => {
               const isActive = size === option;
@@ -2475,7 +2574,7 @@ function AspectSizeChip({ aspectRatio, size, sizeOptions, aspectOptions, quality
             })}
           </div>
 
-          <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.aspectRatio')}</div>
+          <div className={IMAGE_PARAM_LABEL_CLASS}>{t('node.imageGen.param.aspect')}</div>
           <div className="grid grid-cols-4 gap-2">
             {aspectOptions.map((option) => {
               const isActive = nearestAspect.value === option.value;
@@ -2631,8 +2730,7 @@ function CameraChip({ selection, summary, onChange }: CameraChipProps) {
   }, [isOpen, syncPopoverPosition]);
 
   const isActive = Boolean(selection) && summary != null;
-  const cameraLabel = t('node.imageGen.camera');
-  const label = isActive && summary ? summary : cameraLabel;
+  const label = isActive && summary ? summary : t('node.imageGen.camera');
 
   return (
     <div className="relative">
@@ -2643,7 +2741,7 @@ function CameraChip({ selection, summary, onChange }: CameraChipProps) {
           event.stopPropagation();
           setIsOpen((prev) => !prev);
         }}
-        title={isActive ? summary ?? undefined : cameraLabel}
+        title={isActive ? summary ?? undefined : t('node.imageGen.camera')}
         className={`${NODE_TEXT_CONTROL_TRIGGER_CLASS} max-w-[220px]`}
       >
         <Camera className={`${NODE_TEXT_CONTROL_ICON_CLASS} shrink-0`} />
@@ -2712,7 +2810,7 @@ function CountSelect({ value, onChange }: CountSelectProps) {
         }}
         className={NODE_TEXT_CONTROL_TRIGGER_CLASS}
       >
-        <span>{t('node.imageGen.countUnit', { n: value })}</span>
+        <span>{t('node.imageGen.countValue', { count: value })}</span>
         <ChevronDown className="h-3 w-3 text-text-muted/90" />
       </button>
       {isOpen && (
@@ -2736,7 +2834,7 @@ function CountSelect({ value, onChange }: CountSelectProps) {
                     : 'text-text-muted/95 hover:bg-white/[0.11] hover:text-text-dark'
                 }`}
               >
-                {t('node.imageGen.countUnit', { n: option })}
+                {t('node.imageGen.countValue', { count: option })}
               </button>
             );
           })}

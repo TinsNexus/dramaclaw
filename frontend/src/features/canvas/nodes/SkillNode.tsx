@@ -66,7 +66,6 @@ import {
 import type {
   SkillDefinition,
   SkillInputRole,
-  SkillProvider,
 } from '@/features/freezone/context/skillRoles';
 import {
   translateSkillDescription,
@@ -77,6 +76,7 @@ import {
   translateSkillParameterLabel,
   translateSkillParameterOption,
   translateSkillRequirement,
+  translateSkillProviderLabel,
 } from '@/features/freezone/context/skillI18n';
 import type { MainlineContext } from '@/features/freezone/context/mainlineContext';
 import { readUrl } from '@/lib/url-params';
@@ -101,15 +101,6 @@ const RESULT_POLL_DELAY_MS = 700;
 const RESULT_POLL_ATTEMPTS = 30;
 const TASK_RECORD_GRACE_MS = 5000;
 const SELECTED_BACKGROUND_CROP_ASPECT_OPTIONS = ['2:3', '16:9'] as const;
-function getProviderLabels(t: (key: string) => string): Record<SkillProvider, string> {
-  return {
-    freezone_mainline: t('node.skillNode.providerMainline'),
-    agent: t('node.skillNode.providerAgent'),
-    tool: t('node.skillNode.providerTool'),
-    workflow: t('node.skillNode.providerWorkflow'),
-  };
-}
-
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
@@ -831,7 +822,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     const episode = numericField(target.episode);
     const beat = numericField(target.beat);
     if (episode === null || beat === null) {
-      setSourcePickerError(t('node.skillNode.missingBeatContext'));
+      setSourcePickerError(t('viewer.threeD.skillMissingBeatContext'));
       return null;
     }
     const outputNodeId = stageSelectedBackgroundOutputForSkill(
@@ -844,7 +835,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
       },
     );
     if (!outputNodeId) {
-      setSourcePickerError(t('node.skillNode.noBackgroundOutputNode'));
+      setSourcePickerError(t('viewer.threeD.skillNoSelectedBackgroundOutput'));
       return null;
     }
     if (mainlineManaged && !extraData?.committed_at) {
@@ -860,12 +851,12 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const uploadAndStageSelectedBackground = async (blob: Blob, filename: string, label?: string) => {
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      throw new Error(t('viewer.threeD.directorCombinedMissingContext'));
+      throw new Error(t('viewer.threeD.skillMissingProjectOrBeat'));
     }
     const uploaded = await uploadFreezoneImage(projectId, blob, filename, { timeoutMs: false });
     const nodeId = stageSelectedBackground(beatTarget, uploaded.url, label);
     if (!nodeId) {
-      throw new Error(t('node.skillNode.backgroundOutputNodeUnavailable'));
+      throw new Error(t('viewer.threeD.skillSelectedBackgroundOutputUnavailable'));
     }
   };
 
@@ -878,7 +869,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     }
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      setSourcePickerError(t('viewer.threeD.directorCombinedMissingContext'));
+      setSourcePickerError(t('viewer.threeD.skillMissingProjectOrBeat'));
       return null;
     }
     setSourcePickerBusy(true);
@@ -1220,10 +1211,10 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
     if (!url) {
       setSourcePickerError(
         kind === 'master'
-          ? t('node.skillNode.noMasterImage')
+          ? t('viewer.threeD.skillNoMasterImage')
           : kind === 'reverse'
-            ? t('node.skillNode.noReverseImage')
-            : t('node.skillNode.noBeatDirectorBackground'),
+            ? t('viewer.threeD.skillNoReverseImage')
+            : t('viewer.threeD.skillNoDirectorBackground'),
       );
       return;
     }
@@ -1233,7 +1224,7 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const openContextDirectorWorld = async (destination: DirectorWorldDestination) => {
     const projectId = readUrl().project;
     if (!projectId || !beatTarget) {
-      setSourcePickerError(t('viewer.threeD.directorCombinedMissingContext'));
+      setSourcePickerError(t('viewer.threeD.skillMissingProjectOrBeat'));
       return;
     }
     setSourcePickerBusy(true);
@@ -1442,7 +1433,9 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
       <NodeHeader
         className={NODE_HEADER_FLOATING_POSITION_CLASS}
         icon={<Boxes className="h-4 w-4" />}
-        titleText={localizedSkillName ?? data.displayName ?? '技能'}
+        titleText={
+          localizedSkillName ?? data.displayName ?? t('viewer.threeD.skillFallbackTitle')
+        }
         editable={false}
       />
 
@@ -1451,14 +1444,17 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-white">
-                {localizedSkillName ?? (isLoading ? t('node.skillNode.loadingSkill') : t('node.skillNode.unknownSkill'))}
+                {localizedSkillName ??
+                  (isLoading
+                    ? t('viewer.threeD.skillLoading')
+                    : t('viewer.threeD.skillUnknown'))}
               </div>
               <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
                 {localizedSkillDescription ?? loadError ?? data.skill_id}
               </div>
             </div>
             <div className="shrink-0 rounded-full border border-cyan-200/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-medium text-cyan-100">
-              {skill ? providerLabels[skill.provider] : 'skill'}
+              {skill ? translateSkillProviderLabel(skill.provider, t) : 'skill'}
             </div>
           </div>
         </div>

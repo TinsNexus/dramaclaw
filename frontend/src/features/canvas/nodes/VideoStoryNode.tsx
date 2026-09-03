@@ -10,6 +10,7 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import { AlertTriangle, Expand, FileVideo2, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import {
   CANVAS_NODE_TYPES,
@@ -17,7 +18,7 @@ import {
   type VideoStoryRow,
 } from '@/features/canvas/domain/canvasNodes';
 import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
-import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   NodeHeader,
   NODE_HEADER_FLOATING_POSITION_CLASS,
@@ -50,25 +51,26 @@ interface ColumnDef {
   wide?: boolean;
 }
 
-const COLUMNS: ColumnDef[] = [
-  { key: 'shotNumber', labelKey: 'node.videoStory.columns.shotNumber', widthClass: 'min-w-[60px]' },
-  { key: 'startTime', labelKey: 'node.videoStory.columns.startTime', widthClass: 'min-w-[90px]' },
-  { key: 'endTime', labelKey: 'node.videoStory.columns.endTime', widthClass: 'min-w-[90px]' },
-  { key: 'duration', labelKey: 'node.videoStory.columns.duration', widthClass: 'min-w-[70px]' },
-  { key: 'visualDescription', labelKey: 'node.videoStory.columns.visualDescription', widthClass: 'min-w-[220px]', wide: true },
-  { key: 'narrative', labelKey: 'node.videoStory.columns.narrative', widthClass: 'min-w-[220px]', wide: true },
-  { key: 'shotSize', labelKey: 'node.videoStory.columns.shotSize', widthClass: 'min-w-[80px]' },
-  { key: 'cameraAngle', labelKey: 'node.videoStory.columns.cameraAngle', widthClass: 'min-w-[100px]' },
-  { key: 'cameraMovement', labelKey: 'node.videoStory.columns.cameraMovement', widthClass: 'min-w-[120px]' },
-  { key: 'focalAndDof', labelKey: 'node.videoStory.columns.focalAndDof', widthClass: 'min-w-[120px]' },
-  { key: 'lighting', labelKey: 'node.videoStory.columns.lighting', widthClass: 'min-w-[120px]' },
-  { key: 'backgroundMusic', labelKey: 'node.videoStory.columns.backgroundMusic', widthClass: 'min-w-[140px]' },
-  { key: 'voiceAndSfx', labelKey: 'node.videoStory.columns.voiceAndSfx', widthClass: 'min-w-[140px]' },
-  { key: 'imagePrompt', labelKey: 'node.videoStory.columns.imagePrompt', widthClass: 'min-w-[260px]', wide: true },
-  { key: 'videoMotionPrompt', labelKey: 'node.videoStory.columns.videoMotionPrompt', widthClass: 'min-w-[240px]', wide: true },
-  { key: 'keyframeUrl', labelKey: 'node.videoStory.columns.keyframeUrl', widthClass: 'min-w-[120px]' },
-];
+const V = 'node.videoStory';
 
+const COLUMNS: ColumnDef[] = [
+  { key: 'shotNumber', labelKey: `${V}.columns.shotNumber`, widthClass: 'min-w-[60px]' },
+  { key: 'startTime', labelKey: `${V}.columns.startTime`, widthClass: 'min-w-[90px]' },
+  { key: 'endTime', labelKey: `${V}.columns.endTime`, widthClass: 'min-w-[90px]' },
+  { key: 'duration', labelKey: `${V}.columns.duration`, widthClass: 'min-w-[70px]' },
+  { key: 'visualDescription', labelKey: `${V}.columns.visualDescription`, widthClass: 'min-w-[220px]', wide: true },
+  { key: 'narrative', labelKey: `${V}.columns.narrative`, widthClass: 'min-w-[220px]', wide: true },
+  { key: 'shotSize', labelKey: `${V}.columns.shotSize`, widthClass: 'min-w-[80px]' },
+  { key: 'cameraAngle', labelKey: `${V}.columns.cameraAngle`, widthClass: 'min-w-[100px]' },
+  { key: 'cameraMovement', labelKey: `${V}.columns.cameraMovement`, widthClass: 'min-w-[120px]' },
+  { key: 'focalAndDof', labelKey: `${V}.columns.focalAndDof`, widthClass: 'min-w-[120px]' },
+  { key: 'lighting', labelKey: `${V}.columns.lighting`, widthClass: 'min-w-[120px]' },
+  { key: 'backgroundMusic', labelKey: `${V}.columns.backgroundMusic`, widthClass: 'min-w-[140px]' },
+  { key: 'voiceAndSfx', labelKey: `${V}.columns.voiceAndSfx`, widthClass: 'min-w-[140px]' },
+  { key: 'imagePrompt', labelKey: `${V}.columns.imagePrompt`, widthClass: 'min-w-[260px]', wide: true },
+  { key: 'videoMotionPrompt', labelKey: `${V}.columns.videoMotionPrompt`, widthClass: 'min-w-[240px]', wide: true },
+  { key: 'keyframeUrl', labelKey: `${V}.columns.keyframeUrl`, widthClass: 'min-w-[120px]' },
+];
 interface StoryCellProps {
   row: VideoStoryRow;
   col: ColumnDef;
@@ -119,7 +121,9 @@ interface StoryTableProps {
   t: (key: string) => string;
 }
 
-function StoryTable({ rows, compact, onCellCommit, t }: StoryTableProps) {
+function StoryTable({ rows, compact, onCellCommit }: StoryTableProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="ui-scrollbar h-full w-full overflow-auto rounded border border-[rgba(255,255,255,0.08)]">
       <table className="min-w-full border-collapse text-left text-[12px] text-text-dark">
@@ -165,20 +169,22 @@ function StoryTable({ rows, compact, onCellCommit, t }: StoryTableProps) {
   );
 }
 
-function EmptyStoryState({ rawResult, t }: { rawResult?: Record<string, unknown> | null; t: (key: string) => string }) {
+function EmptyStoryState({ rawResult }: { rawResult?: Record<string, unknown> | null }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex h-full w-full items-center justify-center p-6">
       <div className="flex max-w-[460px] flex-col items-center gap-3 text-center">
-        <div className="text-sm font-medium text-text-dark">{t('node.videoStory.emptyState.title')}</div>
+        <div className="text-sm font-medium text-text-dark">{t(`${V}.emptyTitle`)}</div>
         <div className="text-[12px] leading-5 text-text-muted/80">
-          {t('node.videoStory.emptyState.description')}
+          {t(`${V}.emptyDetail`)}
         </div>
         <details className="w-full rounded-md border border-white/[0.08] bg-bg-dark/45 text-left">
           <summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-medium text-text-dark/82 transition-colors hover:text-text-dark">
-            {t('node.videoStory.emptyState.viewRawButton')}
+            {t(`${V}.viewRaw`)}
           </summary>
           <pre className="ui-scrollbar max-h-[120px] overflow-auto border-t border-white/[0.06] p-3 text-[11px] leading-5 text-text-muted/86">
-{rawResult ? JSON.stringify(rawResult, null, 2) : t('node.videoStory.emptyState.empty')}
+{rawResult ? JSON.stringify(rawResult, null, 2) : t(`${V}.rawEmpty`)}
           </pre>
         </details>
       </div>
@@ -186,12 +192,14 @@ function EmptyStoryState({ rawResult, t }: { rawResult?: Record<string, unknown>
   );
 }
 
-function ErrorStoryState({ message, t }: { message: string; t: (key: string) => string }) {
+function ErrorStoryState({ message }: { message: string }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex h-full w-full items-center justify-center p-6">
       <div className="flex max-w-[420px] flex-col items-center gap-3 text-center">
         <AlertTriangle className="h-7 w-7 text-red-300/90" />
-        <div className="text-sm font-medium text-red-200">{t('node.videoStory.errorState.title')}</div>
+        <div className="text-sm font-medium text-red-200">{t(`${V}.parseFailed`)}</div>
         <div className="max-h-[88px] overflow-auto break-words text-[12px] leading-5 text-red-200/82 [overflow-wrap:anywhere]">
           {message}
         </div>
@@ -208,7 +216,7 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.videoStory, data, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.videoStory, data, t),
     [data, t],
   );
   const resolvedWidth = Math.max(MIN_WIDTH, Math.round(width ?? DEFAULT_WIDTH));
@@ -286,13 +294,13 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
         <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-3 py-2">
           <div className="flex items-center gap-2 text-[12px] text-text-muted">
             {isAnalyzing ? (
-              <span>{t('node.videoStory.status.analyzing')}</span>
+              <span>{t(`${V}.parsing`)}</span>
             ) : hasError ? (
-              <span className="text-red-300">{t('node.videoStory.status.analysisFailed')}</span>
+              <span className="text-red-300">{t(`${V}.parseFailed`)}</span>
             ) : hasRows ? (
-              <span>{t('node.videoStory.status.rowCount', { count: rows.length })}</span>
+              <span>{t(`${V}.rowCount`, { count: rows.length })}</span>
             ) : (
-              <span>{t('node.videoStory.status.noRows')}</span>
+              <span>{t(`${V}.emptyTitle`)}</span>
             )}
           </div>
           <button
@@ -305,14 +313,14 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
             disabled={!hasRows}
           >
             <Expand className="h-3 w-3" />
-            {t('node.videoStory.actions.fullscreen')}
+            {t(`${V}.fullscreen`)}
           </button>
         </div>
         <div className="flex-1 overflow-hidden p-2">
           {isAnalyzing ? (
             <div className="h-full w-full" />
           ) : hasError ? (
-            <ErrorStoryState message={data.analysisError ?? t('node.videoStory.errorState.unknownError')} t={t} />
+            <ErrorStoryState message={data.analysisError ?? t(`${V}.unknownError`)} />
           ) : hasRows ? (
             <StoryTable rows={rows} compact onCellCommit={handleCellCommit} t={t} />
           ) : (
@@ -339,7 +347,7 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
             <div className="flex items-center gap-3">
               <FileVideo2 className="h-5 w-5" />
               <span className="text-base font-medium">{resolvedTitle}</span>
-              <span className="text-sm text-text-muted">{t('node.videoStory.fullscreen.totalRows', { count: rows.length })}</span>
+              <span className="text-sm text-text-muted">{t(`${V}.rowCountTotal`, { count: rows.length })}</span>
             </div>
             <button
               type="button"
@@ -347,7 +355,7 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
               onClick={() => setIsFullscreen(false)}
             >
               <X className="h-4 w-4" />
-              {t('node.videoStory.actions.close')}
+              {t(`${V}.close`)}
             </button>
           </div>
           <div className="flex-1 overflow-hidden rounded-lg border border-[rgba(255,255,255,0.12)] bg-surface-dark/95">

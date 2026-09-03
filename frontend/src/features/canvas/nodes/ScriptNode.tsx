@@ -41,7 +41,7 @@ import {
   type ScriptNodeData,
 } from '@/features/canvas/domain/canvasNodes';
 import { isRenderableImageSrc, resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
-import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   NodeHeader,
   NODE_HEADER_FLOATING_POSITION_CLASS,
@@ -137,27 +137,23 @@ const SPAWN_GAP_Y = 24;
 interface ScriptActionDef {
   key: ScriptGenAction;
   labelKey: string;
-  groupLabelKey: string;
   Icon: typeof AlignJustify;
 }
 
 const SCRIPT_ACTIONS: ScriptActionDef[] = [
   {
     key: 'fromScript',
-    labelKey: 'node.scriptNode.actions.fromScript',
-    groupLabelKey: 'node.scriptNode.groups.fromScriptGroup',
+    labelKey: 'node.scriptNode.action.fromScript',
     Icon: AlignJustify,
   },
   {
     key: 'fromVideoRef',
-    labelKey: 'node.scriptNode.actions.fromVideoRef',
-    groupLabelKey: 'node.scriptNode.groups.fromVideoRefGroup',
+    labelKey: 'node.scriptNode.action.fromVideoRef',
     Icon: Video,
   },
   {
     key: 'fromCharacter',
-    labelKey: 'node.scriptNode.actions.fromCharacter',
-    groupLabelKey: 'node.scriptNode.groups.fromCharacterGroup',
+    labelKey: 'node.scriptNode.action.fromCharacter',
     Icon: User,
   },
 ];
@@ -169,6 +165,7 @@ type ScriptCellRender = 'text' | 'image';
 
 interface ScriptColumnDef {
   key: string;
+  /** 表头是界面文案，模块级常量取不到 t，所以存 key、渲染时再翻。 */
   labelKey: string;
   /** 像素宽度（既作为 min-width 也作为 width，避免列在长文本下抖动）。 */
   widthPx: number;
@@ -176,25 +173,25 @@ interface ScriptColumnDef {
 }
 
 const SCRIPT_COLUMNS: ScriptColumnDef[] = [
-  { key: 'shot_no', labelKey: 'node.scriptNode.columns.shotNo', widthPx: 60 },
-  { key: 'duration', labelKey: 'node.scriptNode.columns.duration', widthPx: 80 },
-  { key: 'visual_description', labelKey: 'node.scriptNode.columns.visualDescription', widthPx: 200 },
-  { key: 'character_1', labelKey: 'node.scriptNode.columns.character1', widthPx: 120 },
-  { key: 'character_description_1', labelKey: 'node.scriptNode.columns.characterDescription1', widthPx: 180 },
-  { key: 'character_image_1', labelKey: 'node.scriptNode.columns.characterImage1', widthPx: 80, render: 'image' },
-  { key: 'character_2', labelKey: 'node.scriptNode.columns.character2', widthPx: 120 },
-  { key: 'character_description_2', labelKey: 'node.scriptNode.columns.characterDescription2', widthPx: 180 },
-  { key: 'character_image_2', labelKey: 'node.scriptNode.columns.characterImage2', widthPx: 80, render: 'image' },
-  { key: 'reference', labelKey: 'node.scriptNode.columns.reference', widthPx: 80, render: 'image' },
-  { key: 'shot', labelKey: 'node.scriptNode.columns.shot', widthPx: 120 },
-  { key: 'character_action', labelKey: 'node.scriptNode.columns.characterAction', widthPx: 120 },
-  { key: 'emotion', labelKey: 'node.scriptNode.columns.emotion', widthPx: 120 },
-  { key: 'scene_tags', labelKey: 'node.scriptNode.columns.sceneTags', widthPx: 120 },
-  { key: 'lighting_mood', labelKey: 'node.scriptNode.columns.lightingMood', widthPx: 120 },
-  { key: 'sound', labelKey: 'node.scriptNode.columns.sound', widthPx: 120 },
-  { key: 'dialogue', labelKey: 'node.scriptNode.columns.dialogue', widthPx: 120 },
-  { key: 'shot_prompt', labelKey: 'node.scriptNode.columns.shotPrompt', widthPx: 200 },
-  { key: 'video_motion_prompt', labelKey: 'node.scriptNode.columns.videoMotionPrompt', widthPx: 200 },
+  { key: 'shot_no', labelKey: 'node.scriptNode.column.shot_no', widthPx: 60 },
+  { key: 'duration', labelKey: 'node.scriptNode.column.duration', widthPx: 80 },
+  { key: 'visual_description', labelKey: 'node.scriptNode.column.visual_description', widthPx: 200 },
+  { key: 'character_1', labelKey: 'node.scriptNode.column.character_1', widthPx: 120 },
+  { key: 'character_description_1', labelKey: 'node.scriptNode.column.character_description_1', widthPx: 180 },
+  { key: 'character_image_1', labelKey: 'node.scriptNode.column.character_image_1', widthPx: 80, render: 'image' },
+  { key: 'character_2', labelKey: 'node.scriptNode.column.character_2', widthPx: 120 },
+  { key: 'character_description_2', labelKey: 'node.scriptNode.column.character_description_2', widthPx: 180 },
+  { key: 'character_image_2', labelKey: 'node.scriptNode.column.character_image_2', widthPx: 80, render: 'image' },
+  { key: 'reference', labelKey: 'node.scriptNode.column.reference', widthPx: 80, render: 'image' },
+  { key: 'shot', labelKey: 'node.scriptNode.column.shot', widthPx: 120 },
+  { key: 'character_action', labelKey: 'node.scriptNode.column.character_action', widthPx: 120 },
+  { key: 'emotion', labelKey: 'node.scriptNode.column.emotion', widthPx: 120 },
+  { key: 'scene_tags', labelKey: 'node.scriptNode.column.scene_tags', widthPx: 120 },
+  { key: 'lighting_mood', labelKey: 'node.scriptNode.column.lighting_mood', widthPx: 120 },
+  { key: 'sound', labelKey: 'node.scriptNode.column.sound', widthPx: 120 },
+  { key: 'dialogue', labelKey: 'node.scriptNode.column.dialogue', widthPx: 120 },
+  { key: 'shot_prompt', labelKey: 'node.scriptNode.column.shot_prompt', widthPx: 200 },
+  { key: 'video_motion_prompt', labelKey: 'node.scriptNode.column.video_motion_prompt', widthPx: 200 },
 ];
 
 const SCRIPT_TABLE_MIN_WIDTH = SCRIPT_COLUMNS.reduce(
@@ -305,7 +302,7 @@ function useScriptStorySubmit(
     const project = readUrl().project;
     if (!project) {
       console.error('[script-node] submit: no project in URL');
-      updateNodeData(nodeId, { generationError: 'node.scriptNode.errors.missingProject' });
+      updateNodeData(nodeId, { generationError: t('node.scriptNode.error.missingProject') });
       return;
     }
 
@@ -334,7 +331,7 @@ function useScriptStorySubmit(
     // steering prompt，不再被冒充成剧本正文。
     if (!hasMedia && sourceText.length === 0) {
       updateNodeData(nodeId, {
-        generationError: 'node.scriptNode.errors.promptOrMedia',
+        generationError: t('node.scriptNode.error.missingInput'),
       });
       return;
     }
@@ -392,7 +389,7 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.script, data, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.script, data, t),
     [data, t],
   );
 
@@ -583,24 +580,33 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
         // 上游 text 节点只用作内容输入：referenceOnly 关掉 mode 列表 / 模型 / 提交。
         const newId = spawn(CANVAS_NODE_TYPES.textAnnotation, SPAWN_TEXT_WIDTH, SPAWN_TEXT_HEIGHT, 0, {
           referenceOnly: true,
-          displayName: t('node.scriptNode.displayName.script'),
+          displayName: t('node.scriptNode.spawn.screenplay'),
         });
-        state.autoGroupSpawn(id, [newId], { label: t(action.groupLabelKey) });
+        state.autoGroupSpawn(id, [newId], {
+          label: t('node.scriptNode.actionGroup', { action: t(action.labelKey) }),
+        });
       } else if (action.key === 'fromVideoRef') {
         // 上游 video 节点只用作素材引用：referenceOnly 关掉底部生成操作面板，
         // 顶部 toolbar（剪辑/高清/解析/智能去字幕/...）保持可用。
         const newId = spawn(CANVAS_NODE_TYPES.video, SPAWN_VIDEO_WIDTH, SPAWN_VIDEO_HEIGHT, 0, {
           referenceOnly: true,
         });
-        state.autoGroupSpawn(id, [newId], { label: t(action.groupLabelKey) });
+        state.autoGroupSpawn(id, [newId], {
+          label: t('node.scriptNode.actionGroup', { action: t(action.labelKey) }),
+        });
       } else if (action.key === 'fromCharacter') {
         const newIds = spawnStacked(
           CANVAS_NODE_TYPES.upload,
           SPAWN_UPLOAD_WIDTH,
           SPAWN_UPLOAD_HEIGHT,
-          [{ displayName: t('node.scriptNode.characterDefaultNames.1') }, { displayName: t('node.scriptNode.characterDefaultNames.2') }],
+          [
+            { displayName: t('node.scriptNode.spawn.character', { index: 1 }) },
+            { displayName: t('node.scriptNode.spawn.character', { index: 2 }) },
+          ],
         );
-        state.autoGroupSpawn(id, newIds, { label: t(action.groupLabelKey) });
+        state.autoGroupSpawn(id, newIds, {
+          label: t('node.scriptNode.actionGroup', { action: t(action.labelKey) }),
+        });
       }
 
       updateNodeData(id, { lastAction: action.key });
@@ -668,7 +674,7 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
                 >
                   {data.generationError.startsWith('node.scriptNode') ? t(data.generationError) : data.generationError}
                 </span>
-                <RegenerateButton label={t('node.scriptNode.ui.retry')} onClick={() => void submit()} />
+                <RegenerateButton label={t('node.scriptNode.retry')} onClick={() => void submit()} />
               </div>
             )}
             <div className="flex-1 overflow-hidden p-2">
@@ -683,7 +689,9 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
             >
               {!hasUpstream && (
                 <>
-                  <div className="text-xs text-[var(--canvas-node-input-helper)]">{t('node.scriptNode.ui.tryThis')}</div>
+                  <div className="text-xs text-[var(--canvas-node-input-helper)]">
+                    {t('node.scriptNode.tryLabel')}
+                  </div>
                   <div className="flex flex-col gap-0.5">
                     {SCRIPT_ACTIONS.map((action) => {
                       const Icon = action.Icon;
@@ -712,7 +720,7 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
                     {data.generationError.startsWith('node.scriptNode') ? t(data.generationError) : data.generationError}
                   </span>
                   <RegenerateButton
-                    label={t('node.scriptNode.ui.retry')}
+                    label={t('node.scriptNode.retry')}
                     onClick={() => void submit()}
                     busy={isGenerating}
                   />
@@ -749,7 +757,9 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
                 {headerSubtitle && (
                   <span className="text-sm text-text-muted">{headerSubtitle}</span>
                 )}
-                <span className="text-sm text-text-muted">{t('node.scriptNode.ui.shotsCount', { count: rows.length })}</span>
+                <span className="text-sm text-text-muted">
+                  {t('node.scriptNode.shotCount', { count: rows.length })}
+                </span>
               </div>
               <button
                 type="button"
@@ -757,7 +767,7 @@ export const ScriptNode = memo(({ id, data, selected, width, height }: ScriptNod
                 onClick={() => setIsFullscreen(false)}
               >
                 <X className="h-4 w-4" />
-                {t('node.scriptNode.ui.close')}
+                {t('node.scriptNode.close')}
               </button>
             </div>
             <div className="flex-1 overflow-hidden rounded-lg border border-[rgba(255,255,255,0.12)] bg-surface-dark/95">
@@ -787,7 +797,7 @@ function ScriptResultHeader({ title, onFullscreen }: ScriptResultHeaderProps) {
     <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
         <span className="truncate text-[13px] font-medium text-text-dark">
-          {title || t('node.scriptNode.ui.defaultTitle')}
+          {title || t('node.scriptNode.defaultTitle')}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -797,7 +807,7 @@ function ScriptResultHeader({ title, onFullscreen }: ScriptResultHeaderProps) {
           className="inline-flex h-6 items-center gap-1 rounded border border-[rgba(255,255,255,0.18)] bg-bg-dark/60 px-2 text-[11px] text-text-dark hover:border-[rgba(255,255,255,0.32)]"
           onClick={(event) => event.stopPropagation()}
         >
-          {t('node.scriptNode.ui.scriptView')}
+          {t('node.scriptNode.scriptView')}
           <ChevronDown className="h-3 w-3" />
         </button>
         <button
@@ -809,7 +819,7 @@ function ScriptResultHeader({ title, onFullscreen }: ScriptResultHeaderProps) {
           }}
         >
           <Expand className="h-3 w-3" />
-          {t('node.scriptNode.ui.fullscreen')}
+          {t('node.scriptNode.fullscreen')}
         </button>
       </div>
     </div>
@@ -939,6 +949,7 @@ interface ScriptImageCellProps {
  * 生成结果里角色图和参考图经常需要人工补一张（issue #207：以前这里是纯只读的）。
  */
 function ScriptImageCell({ url, onCommit }: ScriptImageCellProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -953,4 +964,539 @@ function ScriptImageCell({ url, onCommit }: ScriptImageCellProps) {
       if (!file || !onCommit) return;
       const project = readUrl().project;
       if (!project) {
-        setUploadError(t('node.scriptNode.errors.missingProject'));
+        setUploadError(t('node.scriptNode.error.missingProject'));
+        return;
+      }
+      setUploading(true);
+      setUploadError(null);
+      try {
+        const result = await uploadFreezoneImage(project, file, file.name);
+        onCommit(result.url);
+      } catch (error) {
+        console.error('[script-node] cell image upload failed', error);
+        setUploadError(error instanceof Error ? error.message : t('node.scriptNode.uploadFailed'));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [onCommit],
+  );
+
+  const openPicker = useCallback(() => {
+    if (uploading) return;
+    inputRef.current?.click();
+  }, [uploading]);
+
+  const fileInput = editable ? (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={handleFileChange}
+    />
+  ) : null;
+
+  if (!url) {
+    if (!editable) {
+      return (
+        <div className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-[rgba(255,255,255,0.14)] text-text-muted/50">
+          <ImageIcon className="h-4 w-4" />
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={openPicker}
+          disabled={uploading}
+          title={t('node.scriptNode.uploadImage')}
+          className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-[rgba(255,255,255,0.14)] text-text-muted/50 transition-colors hover:border-[rgb(var(--accent-rgb)/0.6)] hover:text-text-dark/80 disabled:cursor-wait"
+        >
+          {uploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImageIcon className="h-4 w-4" />
+          )}
+        </button>
+        {uploadError ? (
+          <span className="text-[10px] leading-tight text-red-400">{uploadError}</span>
+        ) : null}
+        {fileInput}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="group relative h-14 w-14">
+        <img
+          src={resolveImageDisplayUrl(url)}
+          alt=""
+          className="h-14 w-14 cursor-zoom-in rounded border border-[rgba(255,255,255,0.08)] object-cover"
+          draggable={false}
+          onClick={() => setPreviewOpen(true)}
+        />
+        {editable ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 rounded bg-black/60 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={openPicker}
+              disabled={uploading}
+              title={t('node.scriptNode.replaceImage')}
+              className="rounded p-1 text-white/85 transition-colors hover:bg-white/15 hover:text-white disabled:cursor-wait"
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onCommit?.('')}
+              title={t('node.scriptNode.removeImage')}
+              className="rounded p-1 text-white/85 transition-colors hover:bg-white/15 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {uploadError ? (
+        <span className="text-[10px] leading-tight text-red-400">{uploadError}</span>
+      ) : null}
+      {fileInput}
+      {previewOpen
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-8"
+              onClick={() => setPreviewOpen(false)}
+            >
+              <img
+                src={resolveImageDisplayUrl(url)}
+                alt=""
+                className="max-h-full max-w-full rounded object-contain"
+                draggable={false}
+                onClick={(event) => event.stopPropagation()}
+              />
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                title={t('node.scriptNode.closePreview')}
+                className="absolute right-6 top-6 rounded p-2 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+interface ScriptOperationsPanelProps {
+  nodeId: string;
+  data: ScriptNodeData;
+  references: ScriptReference[];
+  /** 与节点本体「重试」共用的提交实例 + 历史（见 ScriptNode 里的 hook 调用）。 */
+  onSubmit: () => Promise<void>;
+  isGenerating: boolean;
+  historyRecords: FreezoneGenerationHistoryRecord[];
+  historyLoading: boolean;
+  refreshHistory: () => Promise<void>;
+}
+
+function ScriptOperationsPanel({
+  nodeId,
+  data,
+  references,
+  onSubmit,
+  isGenerating,
+  historyRecords,
+  historyLoading,
+  refreshHistory,
+}: ScriptOperationsPanelProps) {
+  const updateNodeData = useCanvasStore((state) => state.updateNodeData);
+  const { t } = useTranslation();
+  const [isTranslating, setIsTranslating] = useState(false);
+  // 收起态是节点下方的浮动面板；点右上角「放大」后改为居中弹窗展示同一份内容。
+  const [panelExpanded, setPanelExpanded] = useState(false);
+  const prompt = typeof data.prompt === 'string' ? data.prompt : '';
+  const storyInput = resolveStoryScriptTextInput(references, prompt);
+  const storyBillableChars = countBillableTextChars(
+    `${storyInput.sourceText}\n${storyInput.steeringPrompt ?? ''}`,
+  );
+  const translateBillableChars = countBillableTextChars(prompt);
+  const scriptCost = useGenerationCreditCost(
+    'feature',
+    STORY_SCRIPT_FEATURE_KEY,
+    { surface: 'canvas', quantity: storyBillableChars },
+  );
+  const translateCost = useGenerationCreditCost(
+    'feature',
+    translateBillableChars > 0 ? TEXT_TRANSLATE_FEATURE_KEY : null,
+    { surface: 'canvas', quantity: translateBillableChars },
+  );
+
+  const handleRestoreHistory = useCallback(
+    (record: FreezoneGenerationHistoryRecord) => {
+      // Only story-script records carry a usable `{ title, rows }` payload.
+      if (!isScriptResult(record.result)) return;
+      updateNodeData(nodeId, {
+        scriptResult: record.result,
+        scriptTitle: record.result.title ?? null,
+        isGenerating: false,
+        generationStartedAt: null,
+      });
+    },
+    [nodeId, updateNodeData],
+  );
+
+  const handleTranslate = useCallback(async () => {
+    if (isGenerating || isTranslating) return;
+    if (prompt.trim().length === 0) return;
+    const project = readUrl().project;
+    if (!project) {
+      console.error('[script-node] translate: no project in URL');
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const ref = await submitFreezoneTextTranslate(project, {
+        text: prompt,
+        nodeType: 'text',
+        canvasId: readUrl().canvas ?? 'default',
+        nodeId,
+      });
+      await awaitTaskCompletion(ref.task_key, project, { taskType: ref.task_type });
+      const result = await fetchFreezoneTextTranslateResult(project, ref.job_id);
+      updateNodeData(nodeId, { prompt: result.translated_text });
+    } catch (error) {
+      console.error('[script-node] translate failed', error);
+      toast.error(backendErrorToastMessage(error, t));
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [isGenerating, isTranslating, nodeId, prompt, updateNodeData, t]);
+
+  // 文本 / 视频 / 角色图任一有内容即可提交（与 useScriptStorySubmit 的分流一致）。
+  const hasContent =
+    prompt.trim().length > 0 ||
+    references.some(
+      (ref) =>
+        (ref.kind === 'text' && (ref.text ?? '').trim().length > 0) ||
+        (ref.kind === 'video' && Boolean(ref.videoUrl)) ||
+        (ref.kind === 'image' && Boolean(ref.thumbUrl)),
+    );
+  const modelTaskAccess = useModelTaskAccess();
+  const submitDisabled = isGenerating || !hasContent || modelTaskAccess.blocked;
+
+  return (
+    <OperationPanelShell
+      expanded={panelExpanded}
+      onCollapse={() => setPanelExpanded(false)}
+      inlineClassName={`nodrag absolute z-10 flex flex-col rounded-[var(--node-radius)] border ${CANVAS_NODE_INPUT_SURFACE_CLASS} ${CANVAS_NODE_INPUT_FRAME_CLASS}`}
+      inlineStyle={{
+        top: `calc(100% + ${PANEL_GAP_PX}px)`,
+        left: -PANEL_OVERHANG_PX,
+        right: -PANEL_OVERHANG_PX,
+      }}
+      modalStyle={{
+        width: `min(${OPS_PANEL_EXPANDED_WIDTH}px, 92vw)`,
+        height: `min(${OPS_PANEL_EXPANDED_HEIGHT}px, 86vh)`,
+      }}
+    >
+      <PanelExpandButton
+        expanded={panelExpanded}
+        onToggle={() => setPanelExpanded((v) => !v)}
+        className="absolute right-2 top-2 z-20"
+      />
+      {references.length > 0 && (
+        <div className="px-3 pr-10 pt-3">
+          <ScriptReferencesRow references={references} />
+        </div>
+      )}
+
+      <div className={`px-3 pt-3 ${panelExpanded ? 'flex-1 overflow-hidden' : ''}`}>
+        <textarea
+          value={prompt}
+          onChange={(event) => updateNodeData(nodeId, { prompt: event.target.value })}
+          placeholder={t('node.scriptNode.promptPlaceholder')}
+          rows={3}
+          className={`nodrag nowheel ui-scrollbar w-full resize-none bg-transparent text-[14px] leading-[1.6] text-text-dark outline-none ${CANVAS_NODE_INPUT_PLACEHOLDER_CLASS} ${panelExpanded ? 'h-full' : 'min-h-[72px]'}`}
+          disabled={isGenerating}
+        />
+      </div>
+
+      {data.generationError && !isGenerating && (
+        <div className="px-3 pb-1 text-[11px] text-red-400 break-words [overflow-wrap:anywhere]">{data.generationError}</div>
+      )}
+
+      <div className="flex shrink-0 items-center justify-end gap-2 px-3 pb-3 pt-1">
+        <div className="flex shrink-0 items-center gap-2">
+          <IconButton
+            title={t('node.scriptNode.translate')}
+            onClick={handleTranslate}
+            disabled={isGenerating || isTranslating || prompt.trim().length === 0}
+            active={isTranslating}
+          >
+            {isTranslating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Languages className="h-4 w-4" />
+            )}
+          </IconButton>
+          <CreditCostPill
+            display={
+              translateCost.data?.data.cost === 0
+                ? null
+                : translateCost.data?.data.display
+            }
+            promotion={translateCost.data?.data.promotion}
+            disabled={isGenerating || isTranslating || prompt.trim().length === 0}
+            className={NODE_CREDIT_PILL_FLAT_CLASS}
+          />
+          <CreditCostPill
+            display={
+              scriptCost.data?.data.display ??
+              (scriptCost.error instanceof BillingRuleNotConfiguredError
+                ? t('common.billingRuleNotConfiguredShort')
+                : null)
+            }
+            promotion={scriptCost.data?.data.promotion}
+            disabled={submitDisabled}
+            className={NODE_CREDIT_PILL_FLAT_CLASS}
+          />
+          <button
+            type="button"
+            disabled={submitDisabled}
+            title={modelTaskAccess.message ?? t('node.scriptNode.generate')}
+            onClick={() => void onSubmit()}
+            className={`${NODE_GENERATE_BUTTON_BASE_CLASS} ${
+              submitDisabled
+                ? NODE_GENERATE_BUTTON_DISABLED_CLASS
+                : NODE_GENERATE_BUTTON_ENABLED_CLASS
+            }`}
+          >
+            {isGenerating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {hasCompletedHistoryRecords(historyRecords) && (
+        <div className="border-t border-white/[0.04] px-3 py-2">
+          <NodeGenerationHistory
+            records={historyRecords}
+            isLoading={historyLoading}
+            onRestore={handleRestoreHistory}
+            onRefresh={() => void refreshHistory()}
+            isActive={(record) => {
+              if (!isScriptResult(record.result) || !isScriptResult(data.scriptResult)) {
+                return false;
+              }
+              return JSON.stringify(record.result) === JSON.stringify(data.scriptResult);
+            }}
+          />
+        </div>
+      )}
+    </OperationPanelShell>
+  );
+}
+
+function countBillableTextChars(text: string): number {
+  return text.replace(/[\s\u3000]+/gu, '').length;
+}
+
+function resolveStoryScriptTextInput(
+  references: ScriptReference[],
+  prompt: string,
+): { sourceText: string; steeringPrompt?: string; hasMedia: boolean } {
+  const upstreamText = references
+    .filter((ref) => ref.kind === 'text')
+    .map((ref) => (ref.text ?? '').trim())
+    .filter((text) => text.length > 0)
+    .join('\n\n');
+  const trimmedPrompt = prompt.trim();
+  const hasMedia = references.some(
+    (ref) =>
+      (ref.kind === 'video' && Boolean(ref.videoUrl)) ||
+      (ref.kind === 'image' && Boolean(ref.thumbUrl)),
+  );
+  return {
+    sourceText: upstreamText.length > 0 ? upstreamText : hasMedia ? '' : trimmedPrompt,
+    steeringPrompt:
+      upstreamText.length > 0 || hasMedia ? trimmedPrompt || undefined : undefined,
+    hasMedia,
+  };
+}
+
+interface ScriptReferencesRowProps {
+  references: ScriptReference[];
+}
+
+function ScriptReferencesRow({ references }: ScriptReferencesRowProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {references.map((ref, index) => (
+        <ScriptReferenceChip key={ref.nodeId} reference={ref} index={index} />
+      ))}
+    </div>
+  );
+}
+
+interface ScriptReferenceChipProps {
+  reference: ScriptReference;
+  index: number;
+}
+
+function ScriptReferenceChip({ reference, index }: ScriptReferenceChipProps) {
+  const { t } = useTranslation();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [previewPos, setPreviewPos] = useState<{ left: number; top: number } | null>(null);
+  const PREVIEW_W = 240;
+  const PREVIEW_OFFSET = 10;
+
+  // 仅 image / video 有可视预览；text / audio chip 不弹大图。
+  const hasPreview =
+    (reference.kind === 'image' && Boolean(reference.thumbUrl)) ||
+    (reference.kind === 'video' && Boolean(reference.videoUrl || reference.thumbUrl));
+
+  const showPreview = useCallback(() => {
+    if (!hasPreview) return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(
+      8,
+      Math.min(window.innerWidth - PREVIEW_W - 8, rect.left + rect.width / 2 - PREVIEW_W / 2),
+    );
+    const top = rect.top - PREVIEW_OFFSET;
+    setPreviewPos({ left, top });
+  }, [hasPreview]);
+
+  const hidePreview = useCallback(() => {
+    setPreviewPos(null);
+  }, []);
+
+  const titleText = reference.displayName?.trim()
+    ? reference.displayName.trim()
+    : t('node.scriptNode.referenceFallback', { index: index + 1 });
+
+  // chip 视觉：image 用缩略图，video 用首帧（fallback 视频元素），text 用 T 字标，audio 用 A。
+  const chipBody = (() => {
+    if (reference.kind === 'image' && reference.thumbUrl) {
+      return (
+        <img
+          src={resolveImageDisplayUrl(reference.thumbUrl)}
+          alt={titleText}
+          className="h-full w-full object-cover"
+        />
+      );
+    }
+    if (reference.kind === 'video') {
+      if (reference.thumbUrl) {
+        return (
+          <img
+            src={resolveImageDisplayUrl(reference.thumbUrl)}
+            alt={titleText}
+            className="h-full w-full object-cover"
+          />
+        );
+      }
+      if (reference.videoUrl) {
+        return (
+          <video
+            src={resolveImageDisplayUrl(reference.videoUrl)}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+        );
+      }
+      return <Video className="h-4 w-4 text-text-muted" />;
+    }
+    if (reference.kind === 'text') {
+      return <span className="text-[11px] font-semibold text-text-muted">T</span>;
+    }
+    return <span className="text-[11px] text-text-muted">A</span>;
+  })();
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onMouseEnter={showPreview}
+        onMouseLeave={hidePreview}
+        className="nodrag relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[7px] border border-white/10 bg-white/[0.04] transition-colors hover:border-white/30"
+        title={titleText}
+      >
+        {chipBody}
+        <span className="absolute right-1 top-1 flex h-3 min-w-3 items-center justify-center rounded-full bg-black/30 px-0.5 text-[9px] font-medium leading-none text-white/90 backdrop-blur-sm">
+          {index + 1}
+        </span>
+      </button>
+      {previewPos &&
+        hasPreview &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[400] -translate-y-full"
+            style={{ left: previewPos.left, top: previewPos.top, width: PREVIEW_W }}
+          >
+            <div className="overflow-hidden rounded-xl border border-white/15 bg-surface-dark/95 shadow-2xl backdrop-blur-sm">
+              {reference.kind === 'video' && reference.videoUrl ? (
+                <video
+                  src={resolveImageDisplayUrl(reference.videoUrl)}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="block h-auto w-full object-contain"
+                />
+              ) : reference.thumbUrl ? (
+                <img
+                  src={resolveImageDisplayUrl(reference.thumbUrl)}
+                  alt={titleText}
+                  className="block h-auto w-full object-contain"
+                  draggable={false}
+                />
+              ) : null}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+interface IconButtonProps {
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+}
+
+function IconButton({ title, onClick, disabled, active, children }: IconButtonProps) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${NODE_INLINE_ICON_BUTTON_CLASS} ${
+        active ? NODE_INLINE_ICON_BUTTON_ACTIVE_CLASS : ''
+      }`}
+    >
+      {children}
+    </button>
+  );
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./fifth-screen-video.module.css";
@@ -63,8 +64,11 @@ export function FifthScreenVideo({
       />
       <div className={styles.scrim} aria-hidden="true" />
       <div className={styles.copy}>
-        <h2>{t("landing.fifth.title")}</h2>
-        <p className={styles.body}>{t("landing.fifth.body")}</p>
+        <h2>{t("loginCinematic.fifth.heading")}</h2>
+        <p className={styles.body}>
+          {t("loginCinematic.fifth.lead1")}
+          {t("loginCinematic.fifth.lead2")}
+        </p>
       </div>
     </section>
   );

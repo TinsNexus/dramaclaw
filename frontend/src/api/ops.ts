@@ -93,6 +93,21 @@ export async function fetchCanvasGenerationHistory(
   return data?.records ?? [];
 }
 
+/** Remove one entry from the history browser; the underlying media is retained. */
+export async function deleteNodeGenerationHistoryRecord(
+  project: string,
+  canvasId: string,
+  nodeId: string,
+  recordId: string,
+): Promise<{ deleted: boolean }> {
+  return await apiCall<{ deleted: boolean }>(
+    `projects/${encodeURIComponent(project)}/freezone/canvases/${encodeURIComponent(
+      canvasId,
+    )}/nodes/${encodeURIComponent(nodeId)}/generation-history?record_id=${encodeURIComponent(recordId)}`,
+    { method: "DELETE" },
+  );
+}
+
 // /freezone/gen ----------------------------------------------------------- //
 
 export type FreezoneProvider =
@@ -462,7 +477,7 @@ export async function submitFreezoneVideoEdit(
 
 // /freezone/video/omni-gen ------------------------------------------------ //
 
-export type FreezoneVideoReferenceType = "image" | "video" | "audio";
+export type FreezoneVideoReferenceType = "image" | "video" | "audio" | "file" | "link";
 
 export interface FreezoneVideoReferenceItem {
   type: FreezoneVideoReferenceType;
@@ -475,7 +490,7 @@ export interface FreezoneVideoOmniGenPayload extends FreezoneNodeContext {
   prompt: string;
   theme?: string;
   cameraTemplateId?: string | null;
-  /** mixed image/video/audio references. backend caps: image≤9, video≤3, audio≤3, total≤12. */
+  /** Mixed media references; file/link support and limits come from the model catalog. */
   references?: FreezoneVideoReferenceItem[];
   marks?: FreezoneVideoMark[];
   aspectRatio?: FreezoneVideoAspectRatio;
@@ -1122,6 +1137,9 @@ export interface FreezoneVideoModelInfo {
   referenceImageMax?: number | null;
   referenceVideoMax?: number | null;
   referenceAudioMax?: number | null;
+  referenceFileMax?: number | null;
+  referenceLinkMax?: number | null;
+  referenceFileTypes?: string[];
   referenceAudioMinSeconds?: number | null;
   referenceAudioMaxSeconds?: number | null;
   referenceAudioTotalMinSeconds?: number | null;
@@ -1208,6 +1226,9 @@ function videoModelEntryFromObject(
     referenceImageMax: pickNumber(entry, "referenceImageMax", "reference_image_max"),
     referenceVideoMax: pickNumber(entry, "referenceVideoMax", "reference_video_max"),
     referenceAudioMax: pickNumber(entry, "referenceAudioMax", "reference_audio_max"),
+    referenceFileMax: pickNumber(entry, "referenceFileMax", "reference_file_max"),
+    referenceLinkMax: pickNumber(entry, "referenceLinkMax", "reference_link_max"),
+    referenceFileTypes: pickStringArray(entry, "referenceFileTypes", "reference_file_types"),
     referenceAudioMinSeconds: pickNumber(
       entry,
       "referenceAudioMinSeconds",
@@ -2478,6 +2499,26 @@ export async function uploadFreezoneImage(
       method: "POST",
       body: fd,
       timeout: options?.timeoutMs ?? false,
+    },
+  ).json<{ ok: boolean; data?: FreezoneUploadResult; error?: string }>();
+  if (!resp.ok || !resp.data) {
+    throw new Error(resp.error ?? "upload failed");
+  }
+  return resp.data;
+}
+
+export async function uploadFreezoneReferenceFile(
+  project: string,
+  file: File,
+): Promise<FreezoneUploadResult> {
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  const resp = await apiClient(
+    `projects/${encodeURIComponent(project)}/freezone/reference-file-upload`,
+    {
+      method: "POST",
+      body: fd,
+      timeout: false,
     },
   ).json<{ ok: boolean; data?: FreezoneUploadResult; error?: string }>();
   if (!resp.ok || !resp.data) {

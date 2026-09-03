@@ -23,6 +23,7 @@ import type { SkillDefinition, SkillProvider } from '@/features/freezone/context
 import {
   translateSkillDescription,
   translateSkillName,
+  translateSkillProviderLabel,
 } from '@/features/freezone/context/skillI18n';
 import {
   CanvasAddNodeGrid,
@@ -39,13 +40,6 @@ interface NodeSelectionMenuProps {
   onSelectSkill?: (skill: SkillDefinition) => void;
   onClose: () => void;
 }
-
-const skillProviderLabelKeys: Record<SkillProvider, string> = {
-  freezone_mainline: 'node.skillNode.providerMainline',
-  agent: 'node.skillNode.providerAgent',
-  tool: 'node.skillNode.providerTool',
-  workflow: 'node.skillNode.providerWorkflow',
-};
 
 const skillProviderOrder: SkillProvider[] = ['freezone_mainline', 'agent', 'tool', 'workflow'];
 
@@ -105,7 +99,7 @@ export function NodeSelectionMenu({
       },
       {
         key: 'image',
-        label: '图片',
+        label: t('node.menu.image'),
         Icon: Image,
         // 创建顺序：imageGen（默认生成节点） → imageEdit（编辑节点） →
         // upload（纯上传节点，目标端创建参考图时用）。
@@ -123,7 +117,7 @@ export function NodeSelectionMenu({
       },
       {
         key: 'video',
-        label: '视频',
+        label: t('node.menu.video'),
         Icon: Video,
         type: allowedTypeSet.has(CANVAS_NODE_TYPES.video)
           ? CANVAS_NODE_TYPES.video
@@ -132,7 +126,7 @@ export function NodeSelectionMenu({
       },
       {
         key: 'audio',
-        label: '音频',
+        label: t('node.menu.audio'),
         Icon: Music,
         type: allowedTypeSet.has(CANVAS_NODE_TYPES.audio)
           ? CANVAS_NODE_TYPES.audio
@@ -159,7 +153,7 @@ export function NodeSelectionMenu({
       },
       {
         key: 'threeDWorld',
-        label: t('canvas.nodeSelectionMenu.threeDWorld'),
+        label: t('node.displayName.threeDWorldNode'),
         Icon: Orbit,
         type: allowedTypeSet.has(CANVAS_NODE_TYPES.threeDWorld)
           ? CANVAS_NODE_TYPES.threeDWorld
@@ -352,7 +346,7 @@ export function NodeSelectionMenu({
         <div className="ui-scrollbar max-h-[min(560px,70vh)] overflow-y-auto px-5 py-5 [scrollbar-gutter:stable]">
         {referenceGenerateItems ? (
           <>
-            <CanvasMenuSectionHeader label={t('canvas.nodeSelectionMenu.referenceGenerateHeader')} className="pb-4" />
+            <CanvasMenuSectionHeader label={t('canvas.nodeMenu.referenceGenerate')} className="pb-4" />
             <div className="grid grid-cols-4 justify-items-center gap-x-2 gap-y-5">
               {referenceGenerateItems.map((item, index) => {
                 const Icon = item.Icon;
@@ -423,10 +417,10 @@ export function NodeSelectionMenu({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[14px] leading-5 text-white/82">
-                          {t(skillProviderLabelKeys[group.provider])}
+                          {translateSkillProviderLabel(group.provider, t)}
                         </div>
                         <div className="text-[11px] leading-4 text-white/35">
-                          {t('canvas.nodeSelectionMenu.skillCount', { count: group.items.length })}
+                          {t('canvas.nodeMenu.skillCount', { count: group.items.length })}
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-white/35" />
@@ -451,7 +445,7 @@ export function NodeSelectionMenu({
           onPointerLeave={scheduleSkillPanelClose}
         >
           <div className="px-5 pb-3 pt-5 text-[15px] font-semibold leading-none text-white/62">
-            {t(skillProviderLabelKeys[activeSkillGroup.provider])}
+            {translateSkillProviderLabel(activeSkillGroup.provider, t)}
           </div>
           <div className="ui-scrollbar max-h-[420px] overflow-y-auto px-3 pb-4 [scrollbar-gutter:stable]">
             {activeSkillGroup.items.map((skill, index) => (

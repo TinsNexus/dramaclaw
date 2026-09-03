@@ -23,6 +23,9 @@ import {
   Video,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+
+import i18n from "@/i18n";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssetLibraryModal } from "@/features/canvas/ui/AssetLibraryModal";
@@ -201,6 +204,9 @@ interface AssetLibraryPanelProps {
   reloadToken?: number;
 }
 
+const FLOATING_PANEL_CONTROL_SURFACE_CLASS =
+  "flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/[0.10] bg-[rgb(var(--surface-rgb)/0.78)] shadow-[0_10px_28px_rgba(0,0,0,0.30)] backdrop-blur-[20px] transition-[background-color,border-color,box-shadow] duration-200 group-hover/btn:border-white/[0.16] group-hover/btn:bg-[rgb(var(--surface-rgb)/0.86)]";
+
 /* ─────────────────── 资产缩略图卡片 ─────────────────── */
 
 function MiniThumb({
@@ -307,13 +313,15 @@ function MiniThumb({
 
 /* ─────────────────── Beat 行（可折叠） ─────────────────── */
 
-const ROLE_LABELS: Record<string, string> = {
-  current_sketch: "freezone.assetLibrary.roleLabel.sketch",
-  current_frame: "freezone.assetLibrary.roleLabel.frame",
-  current_video: "freezone.assetLibrary.roleLabel.video",
-  current_audio: "freezone.assetLibrary.roleLabel.audio",
-  selected_background: "freezone.assetLibrary.roleLabel.background",
-  director_combined: "freezone.assetLibrary.roleLabel.directorComposite",
+const A = "freezone.assetPanel";
+
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  current_sketch: `${A}.roles.current_sketch`,
+  current_frame: `${A}.roles.current_frame`,
+  current_video: `${A}.roles.current_video`,
+  current_audio: `${A}.roles.current_audio`,
+  selected_background: `${A}.roles.selected_background`,
+  director_combined: `${A}.roles.director_combined`,
 };
 
 const ROLE_ORDER = [
@@ -347,11 +355,11 @@ function BeatSectionHeader({
 function beatAssetItems(assets: LibraryAsset[]): { role: string; labelKey: string; asset: LibraryAsset }[] {
   const map = new Map<string, LibraryAsset>();
   for (const a of assets) {
-    if (ROLE_LABELS[a.role]) map.set(a.role, a);
+    if (ROLE_LABEL_KEYS[a.role]) map.set(a.role, a);
   }
   return ROLE_ORDER
     .filter((role) => map.has(role))
-    .map((role) => ({ role, labelKey: ROLE_LABELS[role], asset: map.get(role)! }));
+    .map((role) => ({ role, labelKey: ROLE_LABEL_KEYS[role], asset: map.get(role)! }));
 }
 
 function BeatRow({
@@ -444,7 +452,7 @@ function EpisodeSection({
         className="w-full text-left transition-colors hover:[&_span:first-child]:text-white/75"
       >
         <BeatSectionHeader
-          primary={t("freezone.assetLibrary.episodeLabel", { episode })}
+          primary={t(`${A}.episodeTitle`, { episode })}
           secondary={`${beats.length} Beat`}
           action={(
             <ChevronDown
@@ -487,7 +495,7 @@ function DefaultCanvasBeatPanel({
   if (assets.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-xs text-white/25">
-        {t("freezone.assetLibrary.emptyState.noBeatContext")}
+        {t(`${A}.empty.beatContext`)}
       </div>
     );
   }
@@ -529,15 +537,15 @@ export function AssetLibraryPanel({
   const canvasKind = resolveCanvasKind(metadata);
   const beatTabLabelKey =
     canvasKind === "default" || canvasKind === "blank"
-      ? "freezone.assetLibrary.tabLabel.allBeats"
+      ? t(`${A}.tabs.beatAll`)
       : canvasKind === "episode"
-        ? "freezone.assetLibrary.tabLabel.episodeBeats"
-        : "freezone.assetLibrary.tabLabel.currentBeat";
-  const tabs: Array<{ id: AssetTab; labelKey: string }> = [
-    { id: "beat", labelKey: beatTabLabelKey },
-    { id: "characters", labelKey: "freezone.assetLibrary.tabLabel.characters" },
-    { id: "scenes", labelKey: "freezone.assetLibrary.tabLabel.scenes" },
-    { id: "props", labelKey: "freezone.assetLibrary.tabLabel.props" },
+        ? t(`${A}.tabs.beatEpisode`)
+        : t(`${A}.tabs.beatCurrent`);
+  const tabs: Array<{ id: AssetTab; label: string }> = [
+    { id: "beat", label: beatTabLabel },
+    { id: "characters", label: t(`${A}.tabs.characters`) },
+    { id: "scenes", label: t(`${A}.tabs.scenes`) },
+    { id: "props", label: t(`${A}.tabs.props`) },
   ];
 
   const [panelTab, setPanelTab] = useState<PanelTab>("canvases");
@@ -551,9 +559,11 @@ export function AssetLibraryPanel({
     if (!mainlineAvailable) setPanelTab("canvases");
   }, [mainlineAvailable]);
   const panelTabItems: Array<{ id: PanelTab; label: string }> = [
-    { id: "canvases", label: "项目画布" },
-    ...(mainlineAvailable ? [{ id: "library" as const, label: "主线资产" }] : []),
-    { id: "assets", label: "资产库" },
+    { id: "canvases", label: t("freezone.assetPanel.tab.canvases") },
+    ...(mainlineAvailable
+      ? [{ id: "library" as const, label: t("freezone.assetPanel.tab.library") }]
+      : []),
+    { id: "assets", label: t("freezone.assetPanel.tab.assets") },
   ];
   const [tab, setTab] = useState<AssetTab>("beat");
   const [query, setQuery] = useState("");
@@ -632,8 +642,10 @@ export function AssetLibraryPanel({
   const error = projectAssetsError ?? beatContextError;
 
   const assets = useMemo(
-    () => buildLibraryAssets({ project, metadata, projectAssets, beatContext, canvasKind, t }),
-    [project, metadata, projectAssets, beatContext, canvasKind, t],
+    () => buildLibraryAssets({ project, metadata, projectAssets, beatContext, canvasKind }),
+    // 素材 label 是在这里拼好的（见 normalizeMainlineAssetLabel / 导演世界打包），
+    // 所以切语言后要重算，否则列表还挂着上一门语言的标题。
+    [project, metadata, projectAssets, beatContext, canvasKind, i18n.language],
   );
   const assetPreviewCacheToken = `${internalReloadToken}:${reloadToken ?? 0}`;
   const assetImageCacheToken = assetPreviewCacheToken;
@@ -670,10 +682,15 @@ export function AssetLibraryPanel({
       const target = assetToPushTarget(asset.source);
       if (!target) {
         const src = asset.source as Record<string, unknown>;
-        console.warn("[freezone] 无法推断替换目标", asset.label, asset.source);
+        // 开发者日志，不进界面
+        console.warn("[freezone] 无法推断替换目标", asset.label, asset.source); // i18n-exempt
         onReplaced?.(
           null,
-          `无法识别「${asset.label}」的提交目标（kind=${String(src.kind)} / role=${String(src.role)}）`,
+          t(`${A}.replaceTargetUnknown`, {
+            label: asset.label,
+            kind: String(src.kind),
+            role: String(src.role),
+          }),
         );
         clearPendingReplace();
         return;
@@ -688,11 +705,11 @@ export function AssetLibraryPanel({
         })
           .then((result) => {
             setInternalReloadToken((t) => t + 1);
-            onReplaced?.({ target, result }, t("freezone.assetLibrary.toast.submittedTo", { label: asset.label }));
+            onReplaced?.({ target, result }, t(`${A}.replaceCommitted`, { label: asset.label }));
           })
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
-            onReplaced?.(null, t("freezone.assetLibrary.toast.replaceFailed", { label: asset.label, error: msg }));
+            onReplaced?.(null, t(`${A}.replaceFailed`, { label: asset.label, error: msg }));
           })
           .finally(() => {
             setReplaceBusyId(null);
@@ -706,11 +723,11 @@ export function AssetLibraryPanel({
         .then((result) => {
           // 重新拉取素材列表,让左侧缩略图同步成最新资产。
           setInternalReloadToken((t) => t + 1);
-          onReplaced?.({ target, result }, t("freezone.assetLibrary.toast.canvasNodeReplaced", { label: asset.label }));
+          onReplaced?.({ target, result }, t(`${A}.replaceDone`, { label: asset.label }));
         })
         .catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);
-          onReplaced?.(null, t("freezone.assetLibrary.toast.replaceFailed", { label: asset.label, error: msg }));
+          onReplaced?.(null, t(`${A}.replaceFailed`, { label: asset.label, error: msg }));
         })
         .finally(() => {
           setReplaceBusyId(null);
@@ -738,50 +755,63 @@ export function AssetLibraryPanel({
   return (
     <AssetReplaceContext.Provider value={replaceContextValue}>
       <aside
-        className="pointer-events-none absolute inset-y-0 left-0 z-30 overflow-visible"
+        className="pointer-events-none absolute inset-y-3 left-3 z-30 overflow-visible"
       >
-        {/* 折叠/展开胶囊 — 停在卡片右侧的画布上 */}
+        {/* 面板外控制栏：折叠与资产管理保持同尺寸、同材质，并随面板一起移动。 */}
         <div
-          className="group/handle pointer-events-auto absolute top-3 z-30 flex h-10 w-10 items-center justify-center transition-[left] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-          style={{ left: collapsed ? 16 : 312 }}
+          className="pointer-events-auto absolute top-3 z-30 flex flex-col gap-2 transition-[left] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ left: collapsed ? 0 : 312 }}
         >
-          <button
-            type="button"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={collapsed ? t("freezone.assetLibrary.ariaLabel.expandDrawer") : t("freezone.assetLibrary.ariaLabel.collapseDrawer")}
-            aria-expanded={!collapsed}
-            className={`group/btn relative flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
-              collapsed
-                ? "text-white/82 hover:text-white"
-                : "text-white/68 hover:text-white/92"
-            }`}
-          >
-            <span
-              className={`flex h-9 w-9 items-center justify-center rounded-[10px] border shadow-[0_10px_28px_rgba(0,0,0,0.30)] backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-200 ${
+          <div className="group/handle relative flex h-10 w-10 items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setCollapsed(!collapsed)}
+              aria-label={collapsed ? t(`${A}.expandDrawer`) : t(`${A}.collapseDrawer`)}
+              aria-expanded={!collapsed}
+              className={`group/btn relative flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
                 collapsed
-                  ? "border-white/18 bg-white/[0.09] group-hover/btn:border-white/26 group-hover/btn:bg-white/[0.13]"
-                  : "border-white/10 bg-white/[0.05] group-hover/btn:border-white/15 group-hover/btn:bg-white/[0.08]"
+                  ? "text-white/82 hover:text-white"
+                  : "text-white/68 hover:text-white/92"
               }`}
             >
-              {collapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
+              <span className={FLOATING_PANEL_CONTROL_SURFACE_CLASS}>
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+              </span>
+            </button>
+            <span
+              className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#101116]/95 px-2 py-1 text-[11px] font-medium text-white/75 opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity duration-150 group-hover/handle:opacity-100"
+            >
+              {collapsed ? t(`${A}.expand`) : t(`${A}.collapse`)}
             </span>
-          </button>
-          <span
-            className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#101116]/95 px-2 py-1 text-[11px] font-medium text-white/75 opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity duration-150 group-hover/handle:opacity-100"
-          >
-            {collapsed ? t("freezone.assetLibrary.toggle.expand") : t("freezone.assetLibrary.toggle.collapse")}
-          </span>
+          </div>
+
+          <div className="group/assets relative flex h-10 w-10 items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setAssetManagerOpen(true)}
+              aria-label={t(`${A}.assetManager`)}
+              title={t(`${A}.assetManager`)}
+              className="group/btn relative flex h-10 w-10 items-center justify-center rounded-full text-white/68 transition-colors hover:text-white/92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            >
+              <span className={FLOATING_PANEL_CONTROL_SURFACE_CLASS}>
+                <BookOpen className="h-4 w-4" />
+              </span>
+            </button>
+            <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#101116]/95 px-2 py-1 text-[11px] font-medium text-white/75 opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity duration-150 group-hover/assets:opacity-100">
+              {t(`${A}.assetManager`)}
+            </span>
+          </div>
         </div>
 
-        {/* 贴左边直出的抽屉：满高、不留外边距，收起时整块滑到屏幕外 */}
+        {/* 画布内悬浮的玻璃面板：四周留出画布间距，收起时连同左侧间距完整滑出。 */}
         <div
-          className={`flex h-full flex-col min-h-0 overflow-hidden rounded-r-2xl border-r border-[rgb(var(--border-rgb))] bg-[rgb(var(--surface-rgb))] transition-transform duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
+          className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--ui-radius-lg)] border border-white/[0.10] bg-[rgb(var(--surface-rgb)/0.78)] shadow-[0_18px_52px_rgba(0,0,0,0.34)] backdrop-blur-[20px] transition-transform duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
             collapsed
-              ? "pointer-events-none -translate-x-full"
+              ? "pointer-events-none -translate-x-[calc(100%+12px)]"
               : "pointer-events-auto translate-x-0"
           }`}
           style={{ width: 300 }}
@@ -791,38 +821,21 @@ export function AssetLibraryPanel({
           <Tabs
             value={panelTab}
             onValueChange={(value) => setPanelTab(value as PanelTab)}
-            className="shrink-0 gap-0 px-3 pt-3"
+            className="shrink-0 gap-0 px-2 pb-1 pt-2"
           >
-            {/* 整行共用一条基线，选中 tab 的下划线正好压在上面 */}
-            <div className="flex items-center gap-1 border-b border-white/[0.07]">
-              <TabsList variant="line" className="gap-0 p-0">
+            <div className="flex items-center gap-1">
+              <TabsList variant="line" className="gap-4 p-0">
                 {panelTabItems.map((item) => (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    // after:bottom-0 让下划线落在整行的基线上，而不是浮在下面 5px。
-                    // 文字一律纯白（组件默认给未选中 tab 压了透明度），选中与否只靠
-                    // 下划线区分——300px 的侧栏里三个 tab 挨着，灰字读起来太吃力。
-                    // 下划线用 accent 而不是白：全白标签 + 白下划线，选中态几乎不成立；
-                    // 顺便这也是整块侧栏里唯一的品牌色落点。
-                    className="h-full flex-none rounded-none px-2.5 text-xs text-white after:bg-[rgb(var(--accent-rgb))] hover:text-white data-active:text-white dark:text-white dark:hover:text-white dark:data-active:text-white group-data-horizontal/tabs:after:bottom-0"
+                    // 文本起点与下方画布选择器对齐；下划线只覆盖文字宽度，颜色走语义主色。
+                    className="h-full flex-none rounded-none px-0.5 text-xs text-white/45 after:inset-x-0.5 after:!h-px after:bg-primary hover:text-white/75 data-active:text-white dark:text-white/45 dark:hover:text-white/75 dark:data-active:text-white group-data-horizontal/tabs:after:bottom-0"
                   >
                     {item.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <button
-                type="button"
-                onClick={() => setAssetManagerOpen(true)}
-                aria-label="资产管理"
-                title="资产管理"
-                className="group/assets relative ml-auto mb-1.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.10] text-white/60 transition-colors hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white/90"
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                <span className="pointer-events-none absolute right-0 top-8 z-20 whitespace-nowrap rounded-[6px] border border-white/10 bg-[#101116]/95 px-2 py-1 text-[11px] font-medium text-white/75 opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity duration-150 group-hover/assets:opacity-100">
-                  资产管理
-                </span>
-              </button>
             </div>
           </Tabs>
 
@@ -830,13 +843,13 @@ export function AssetLibraryPanel({
             <>
               {/* ── 分类标签 + 搜索（固定头部） ── */}
               <div className="sticky top-0 z-10">
-                <div className="ui-scrollbar-hidden flex items-center gap-1 overflow-x-auto px-3 pt-2.5 pb-2">
+                <div className="ui-scrollbar-hidden flex items-center gap-4 overflow-x-auto px-2 pt-2.5 pb-2">
                   {tabCounts.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => setTab(item.id)}
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] transition-colors ${
+                      className={`shrink-0 px-0.5 py-0.5 text-[11px] transition-colors ${
                         tab === item.id
                           ? "text-white"
                           : "text-white/35 hover:text-white/60"
@@ -854,7 +867,7 @@ export function AssetLibraryPanel({
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder={t("freezone.assetLibrary.search.placeholder")}
+                      placeholder={t(`${A}.searchPlaceholder`)}
                       className="w-full h-7 rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 text-[11px] text-white/80 placeholder:text-white/40 focus:outline-none focus:border-white/[0.12] transition-colors"
                     />
                   </div>
@@ -864,7 +877,7 @@ export function AssetLibraryPanel({
               {/* ─ 列表内容 ── */}
               {error ? (
                 <div className="mx-3 mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
-                  {t("freezone.assetLibrary.error.assetLoadFailed", { error })}
+                  {t(`${A}.loadFailed`, { error })}
                 </div>
               ) : tab === "beat" ? (
                 <BeatContextPanel
@@ -876,7 +889,7 @@ export function AssetLibraryPanel({
                 />
               ) : filtered.length === 0 ? (
                 <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-xs text-white/25">
-                  {t("freezone.assetLibrary.emptyState.noAssets")}
+                  {t(`${A}.empty.category`)}
                 </div>
               ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1.5">
@@ -910,11 +923,13 @@ export function AssetLibraryPanel({
         </div>
       </aside>
 
-      {/* 纯管理态：不传 onConfirm，弹窗里选中只是浏览，「确定」等同关闭。关掉后把
-          资产库的两个查询作废，新建的文件夹/上传的素材立刻反映到侧栏。 */}
+      {/* 纯管理态：卡片进入详情并承接单项操作，不复用节点选材的勾选/确认语义。
+          关掉后让侧栏重拉，新建文件夹、上传或删除会立即反映出来。 */}
       <AssetLibraryModal
+        mode="manage"
         open={assetManagerOpen}
         project={project}
+        onSendItemToCanvas={(entry) => void sendLibraryItemToCanvas(entry)}
         onSendFolderToCanvas={(folder) => void sendAssetFolderToCanvas(folder)}
         onClose={() => {
           setAssetManagerOpen(false);
@@ -954,7 +969,7 @@ function BeatContextPanel({
   if (canvasKind !== "beat") {
     return (
       <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-xs text-white/25">
-        {t("freezone.assetLibrary.emptyState.noCanvasContext")}
+        {t(`${A}.empty.noBeatContext`)}
       </div>
     );
   }
@@ -992,13 +1007,13 @@ function PresetBeatPanel({
   return (
     <div className="min-h-0 overflow-y-auto px-3 pt-1 pb-3 space-y-3">
       <BeatSectionHeader
-        primary={episode !== null ? t("freezone.assetLibrary.episodeLabel", { episode }) : t("freezone.assetLibrary.episodeLabelUnknown")}
-        secondary={beatNum !== null ? `Beat ${beatNum}` : "Beat ?"}
+        primary={episode !== null ? t(`${A}.episodeTitle`, { episode }) : t(`${A}.episodeUnknown`)}
+        secondary={beatNum !== null ? `Beat ${beatNum}` : t(`${A}.beatUnknown`)}
       />
 
       {assets.length === 0 ? (
         <div className="flex items-center justify-center py-12 text-xs text-white/25">
-          {t("freezone.assetLibrary.emptyState.noBeatAssets")}
+          {t(`${A}.empty.beatAssets`)}
         </div>
       ) : (
         groups.map((group) => (
@@ -1157,15 +1172,15 @@ function AssetCard({
         type="button"
         className="tap-button h-6 px-2 text-[11px] opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:border-white/20 hover:text-white/90 disabled:opacity-40 text-white/50 border border-white/10 rounded"
         onClick={(e) => { e.stopPropagation(); onAdd(); }}
-        title={t("freezone.assetLibrary.button.addToCanvas")}
+        title={t(`${A}.addToCanvas`)}
         disabled={disabled}
       >
-        {t("freezone.assetLibrary.button.add")}
+        {t(`${A}.add`)}
       </button>
       {isConfirming && (
         <div className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 rounded-lg bg-[#0c0c0e]/95 px-2.5 backdrop-blur-sm">
           <div className="line-clamp-2 text-[11px] leading-snug text-white/80">
-            {t("freezone.assetLibrary.confirmation.replaceAsset", { label: asset.label })}
+            {t(`${A}.replaceConfirm`, { label: asset.label })}
           </div>
           <div className="flex gap-1.5">
             <button
@@ -1174,7 +1189,7 @@ function AssetCard({
               onClick={() => replaceCtx?.onConfirm(asset)}
               disabled={isReplacing}
             >
-              {isReplacing ? t("freezone.assetLibrary.button.replacing") : t("freezone.assetLibrary.button.confirm")}
+              {isReplacing ? t(`${A}.replacing`) : t(`${A}.replace`)}
             </button>
             <button
               type="button"
@@ -1182,7 +1197,7 @@ function AssetCard({
               onClick={() => replaceCtx?.onCancel()}
               disabled={isReplacing}
             >
-              {t("freezone.assetLibrary.button.cancel")}
+              {t(`${A}.cancel`)}
             </button>
           </div>
         </div>
@@ -1423,13 +1438,15 @@ function createSceneDirectorWorldAsset(
     source_count: sources.length,
   };
 
+  const worldLabel = i18n.t(`${A}.directorWorld.label`, { scene: sceneLabel });
+
   return {
     id: `scene-director-world:${sceneId}`,
     tab: "scenes",
     kind: "director",
     role: SCENE_DIRECTOR_WORLD_ROLE,
-    label: t("freezone.assetLibrary.directorWorldLabel.title", { sceneLabel }),
-    sublabel: t("freezone.assetLibrary.directorWorldLabel.subtitle", { count: sources.length }),
+    label: worldLabel,
+    sublabel: i18n.t(`${A}.directorWorld.sublabel`, { count: sources.length }),
     url: directorWorldSourceUrl(activeSource) ?? representative.url,
     aspectRatio: "1:1",
     mediaType: "file",
@@ -1439,7 +1456,7 @@ function createSceneDirectorWorldAsset(
       ...representative.source,
       kind: "director",
       role: SCENE_DIRECTOR_WORLD_ROLE,
-      label: t("freezone.assetLibrary.directorWorldLabel.title", { sceneLabel }),
+      label: worldLabel,
       meta,
       media_type: "file",
       rel_path: undefined,
@@ -1542,12 +1559,13 @@ function directorWorldSourceUrl(source: DirectorWorldSource | undefined): string
 }
 
 function sourceKindLabel(source: Pick<DirectorWorldSource, "source_kind" | "source_type">): string {
-  if (source.source_type === "pano360") return i18n.t("freezone.assetLibrary.sourceKindLabel.pano360");
-  if (source.source_kind === "master") return i18n.t("freezone.assetLibrary.sourceKindLabel.frontWorld");
-  if (source.source_kind === "reverse") return i18n.t("freezone.assetLibrary.sourceKindLabel.backWorld");
-  if (source.source_kind === "pano") return i18n.t("freezone.assetLibrary.sourceKindLabel.pano360World");
-  if (source.source_kind === "custom") return i18n.t("freezone.assetLibrary.sourceKindLabel.customWorld");
-  return i18n.t("freezone.assetLibrary.sourceKindLabel.directorWorld");
+  const K = `${A}.directorWorld.sourceKind`;
+  if (source.source_type === "pano360") return i18n.t(`${K}.pano360`);
+  if (source.source_kind === "master") return i18n.t(`${K}.master`);
+  if (source.source_kind === "reverse") return i18n.t(`${K}.reverse`);
+  if (source.source_kind === "pano") return i18n.t(`${K}.pano`);
+  if (source.source_kind === "custom") return i18n.t(`${K}.custom`);
+  return i18n.t(`${K}.fallback`);
 }
 
 function isUsableAsset(asset: FreezoneProjectAsset): boolean {
@@ -1611,68 +1629,29 @@ function isSceneAssetRole(role: string | undefined): boolean {
   );
 }
 
+const SCENE_BADGE_CLASSNAMES: Record<string, string> = {
+  scene_master: "border-sky-300/25 bg-sky-300/10 text-sky-100/90",
+  scene_reverse_master: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100/90",
+  scene_director_pano_360: "border-amber-300/30 bg-amber-300/10 text-amber-100/90",
+  [SCENE_DIRECTOR_WORLD_ROLE]: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
+  scene_3gs_master_ply: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
+  scene_3gs_reverse_ply: "border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-100/90",
+  scene_3gs_pano_ply: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
+  scene_3gs_custom_scene: "border-rose-300/30 bg-rose-300/10 text-rose-100/90",
+};
+
 function sceneAssetTypeBadge(
   asset: LibraryAsset,
   t: ReturnType<typeof useTranslation>["t"],
 ): { label: string; title: string; className: string } | null {
   if (asset.tab !== "scenes") return null;
-  if (asset.role === "scene_master") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.frontView.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.frontView.title"),
-      className: "border-sky-300/25 bg-sky-300/10 text-sky-100/90",
-    };
-  }
-  if (asset.role === "scene_reverse_master") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.backView.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.backView.title"),
-      className: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100/90",
-    };
-  }
-  if (asset.role === "scene_director_pano_360") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.pano360.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.pano360.title"),
-      className: "border-amber-300/30 bg-amber-300/10 text-amber-100/90",
-    };
-  }
-  if (asset.role === SCENE_DIRECTOR_WORLD_ROLE) {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.directorWorld.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.directorWorld.title"),
-      className: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
-    };
-  }
-  if (asset.role === "scene_3gs_master_ply") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.frontWorldPly.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.frontWorldPly.title"),
-      className: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
-    };
-  }
-  if (asset.role === "scene_3gs_reverse_ply") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.backWorldPly.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.backWorldPly.title"),
-      className: "border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-100/90",
-    };
-  }
-  if (asset.role === "scene_3gs_pano_ply") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.pano360Ply.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.pano360Ply.title"),
-      className: "border-violet-300/30 bg-violet-300/10 text-violet-100/90",
-    };
-  }
-  if (asset.role === "scene_3gs_custom_scene") {
-    return {
-      label: t("freezone.assetLibrary.sceneTypeBadge.customWorld.label"),
-      title: t("freezone.assetLibrary.sceneTypeBadge.customWorld.title"),
-      className: "border-rose-300/30 bg-rose-300/10 text-rose-100/90",
-    };
-  }
-  return null;
+  const className = SCENE_BADGE_CLASSNAMES[asset.role ?? ""];
+  if (!className) return null;
+  return {
+    label: i18n.t(`${A}.sceneBadge.${asset.role}.label`),
+    title: i18n.t(`${A}.sceneBadge.${asset.role}.title`),
+    className,
+  };
 }
 
 function isMainlinePresetReference(ref: PresetReference): boolean {
@@ -1801,8 +1780,14 @@ function fromPresetReference(ref: PresetReference): LibraryAsset {
   };
 }
 
+/**
+ * 后端下发的资产 label 里还留着「成图/首帧」这一代旧措辞，这里统一改口成「分镜」。
+ * 被搜的是后端字符串本身，不是界面文案，所以这几处保持中文；等后端也改成稳定 code
+ * 之后整个函数就可以撤掉。
+ */
 function normalizeMainlineAssetLabel(label: string, role: string | undefined): string {
-  if (role === "current_frame") return i18n.t("freezone.assetLibrary.assetLabel.currentFrame");
+  if (role === "current_frame") return i18n.t(`${A}.currentFrame`);
+  // i18n-exempt-start
   return replaceText(
     replaceText(
       replaceText(
@@ -1820,6 +1805,7 @@ function normalizeMainlineAssetLabel(label: string, role: string | undefined): s
     "成图候选",
     "分镜候选",
   );
+  // i18n-exempt-end
 }
 
 function replaceText(value: string, search: string, replacement: string): string {
@@ -1919,21 +1905,13 @@ function groupBeatAssets(assets: LibraryAsset[]): Array<{
   assets: LibraryAsset[];
 }> {
   const order = ["outputs", "director", "characters", "scenes", "props", "other"];
-  const labelKeys: Record<string, string> = {
-    outputs: "freezone.assetLibrary.groupLabel.outputs",
-    director: "freezone.assetLibrary.groupLabel.director",
-    characters: "freezone.assetLibrary.groupLabel.characters",
-    scenes: "freezone.assetLibrary.groupLabel.scenes",
-    props: "freezone.assetLibrary.groupLabel.props",
-    other: "freezone.assetLibrary.groupLabel.other",
-  };
   const buckets = new Map<string, LibraryAsset[]>();
   for (const asset of assets) {
     const group = beatGroupForAsset(asset);
     buckets.set(group, [...(buckets.get(group) ?? []), asset]);
   }
   return order
-    .map((id) => ({ id, labelKey: labelKeys[id], assets: buckets.get(id) ?? [] }))
+    .map((id) => ({ id, labelKey: `${A}.groups.${id}`, assets: buckets.get(id) ?? [] }))
     .filter((group) => group.assets.length > 0);
 }
 
@@ -2282,7 +2260,7 @@ async function sendAssetFolderToCanvas(folder: AssetFolder): Promise<void> {
   const groupId =
     ids.length >= 2 ? store.groupNodes(ids, { label: folder.label }) : null;
   store.requestFocusNode(groupId ?? ids[0]);
-  toast.success(`已发送到画布：${folder.label}`);
+  toast.success(i18n.t(`${A}.sentToCanvas`, { name: folder.label }));
 }
 
 /**
@@ -2300,7 +2278,7 @@ async function sendLibraryItemToCanvas(entry: LibraryItem): Promise<void> {
   const store = useCanvasStore.getState();
   const newId = spawnAssetNode(store, sized, viewportCenteredPosition(store, 0, width, height));
   store.requestFocusNode(newId);
-  toast.success(`已发送到画布：${entry.name || "素材"}`);
+  toast.success(i18n.t(`${A}.sentToCanvas`, { name: entry.name || i18n.t(`${A}.unnamedAsset`) }));
 }
 
 function addAssetToCanvas(asset: LibraryAsset, index: number): void {

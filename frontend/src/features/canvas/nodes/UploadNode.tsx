@@ -20,6 +20,7 @@ import {
 } from '@xyflow/react';
 import { Camera, Image as ImageIcon, Loader2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { toast } from 'sonner';
 
 import {
@@ -35,7 +36,7 @@ import {
 } from '@/features/canvas/application/imageNodeSizing';
 import {
   isNodeUsingDefaultDisplayName,
-  resolveNodeDisplayName,
+  localizeNodeDisplayName,
 } from '@/features/canvas/domain/nodeDisplay';
 import { canvasEventBus } from '@/features/canvas/application/canvasServices';
 import { stashExternalFile } from '@/features/canvas/application/pendingExternalFiles';
@@ -134,9 +135,10 @@ function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): P
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error(t('node.upload.cannotReadDirectorWorldScreenshot')));
+      else reject(new Error(i18n.t('node.threeDWorld.directorCaptureReadFailed')));
     };
-    reader.onerror = () => reject(reader.error ?? new Error(t('node.upload.cannotReadDirectorWorldScreenshot')));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error(i18n.t('node.threeDWorld.directorCaptureReadFailed')));
     reader.readAsDataURL(blob);
   });
 }
@@ -145,7 +147,7 @@ function imageSize(dataUrl: string, t: (key: string) => string = (key) => key): 
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
-    image.onerror = () => reject(new Error(t('node.upload.cannotParseDirectorWorldScreenshotSize')));
+    image.onerror = () => reject(new Error(i18n.t('node.threeDWorld.directorCaptureSizeFailed')));
     image.src = dataUrl;
   });
 }
@@ -189,7 +191,7 @@ function snapshotMarkerFromDirectorLayerItem(item: unknown, t: (key: string) => 
       };
   const position = placement.space === 'world' ? placement.position : [0, 0, 0] as [number, number, number];
   return {
-    label: typeof data.label === 'string' ? data.label : t('node.upload.defaultDirectorElement'),
+    label: typeof data.label === 'string' ? data.label : i18n.t('node.threeDWorld.directorElement'),
     color: typeof data.color === 'string' ? data.color : '#38bdf8',
     placement,
     position,
@@ -311,8 +313,8 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
     if (imageOnly && isNodeUsingDefaultDisplayName(CANVAS_NODE_TYPES.upload, data)) {
       return t('node.upload.uploadImage');
     }
-    return resolveNodeDisplayName(CANVAS_NODE_TYPES.upload, data, t);
-  }, [data, imageOnly, useUploadFilenameAsNodeTitle, t]);
+    return localizeNodeDisplayName(CANVAS_NODE_TYPES.upload, data, t);
+  }, [data, imageOnly, t, useUploadFilenameAsNodeTitle]);
   const hasMainlineContext = hasMainlineContexts(
     (data as { mainline_context?: unknown }).mainline_context,
   );
@@ -661,14 +663,14 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
     async (_blob: Blob, meta: ThreeDDirectorCaptureMeta) => {
       const projectId = readUrl().project;
       if (!meta.captureBundle) {
-        throw new Error(t('node.upload.compositeImageMissingData'));
+        throw new Error(t('node.threeDWorld.combinedBundleMissing'));
       }
       if (!projectId) {
-        throw new Error(t('node.upload.missingProjectForSavingCanvasDirectorComposite'));
+        throw new Error(t('node.threeDWorld.combinedNoProject'));
       }
       const bundle = await uploadDirectorCaptureBundle(projectId, id, meta.captureBundle);
       const imageUrl = bundle.urls?.combined ?? '';
-      if (!imageUrl) throw new Error(t('node.upload.canvasDirectorCompositeMissingImageUrl'));
+      if (!imageUrl) throw new Error(t('node.threeDWorld.combinedUrlMissing'));
       updateNodeData(id, {
         imageUrl,
         previewImageUrl: withImageCacheBust(imageUrl, Date.now()),
@@ -681,7 +683,7 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
         uploadError: null,
       });
     },
-    [id, sourceBeat, sourceEpisode, updateNodeData, t],
+    [id, sourceBeat, sourceEpisode, t, updateNodeData],
   );
 
   const handleDirectorOutputCanvasNode = useCallback(
@@ -714,7 +716,7 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
                 uploadedUrl: bundle.urls?.combined ?? '',
                 width: combinedSize.width,
                 height: combinedSize.height,
-                label: t('node.upload.directorComposite'),
+                label: t('node.threeDWorld.combinedLabel'),
                 metadata: {
                   ...baseMetadata,
                   render_mode: 'combined',
@@ -725,17 +727,17 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
                 uploadedUrl: bundle.urls?.env_only ?? '',
                 width: envOnlySize.width,
                 height: envOnlySize.height,
-                label: t('node.upload.environmentOnly'),
+                label: t('node.threeDWorld.envOnlyLabel'),
                 metadata: {
                   ...baseMetadata,
                   render_mode: 'env_only',
                 },
               },
             ],
-            { cols: 2, groupName: t('node.upload.directorWorldOutput') },
+            { cols: 2, groupName: t('node.threeDWorld.captureGroupName') },
           );
           updateNodeData(id, {
-            uploadError: groupId ? null : t('node.upload.directorWorldScreenshotOutputFailed'),
+            uploadError: groupId ? null : t('node.threeDWorld.captureOutputFailed'),
           });
           if (groupId) {
             toast.success(t('viewer.threeD.outputToCanvasNodeSuccess'));
@@ -754,7 +756,7 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
             uploadedUrl,
             width: size.width,
             height: size.height,
-            label: t('node.upload.directorWorldExport'),
+            label: t('node.threeDWorld.directorExportLabel'),
             metadata: {
               viewer: 'director_world',
               render_mode: meta.kind,
@@ -764,7 +766,7 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
           },
         ]);
         updateNodeData(id, {
-          uploadError: groupId ? null : t('node.upload.directorWorldScreenshotOutputFailed'),
+          uploadError: groupId ? null : t('node.threeDWorld.captureOutputFailed'),
         });
         if (groupId) {
           toast.success(t('viewer.threeD.outputToCanvasNodeSuccess'));
@@ -928,7 +930,13 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
             ) : (
               <Upload className={NODE_SIDE_ACTION_ICON_CLASS} />
             )}
-            <span>{data.isUploading ? t('node.upload.uploading') : imageOnly ? t('node.upload.uploadImage') : t('node.upload.uploadAsset')}</span>
+            <span>
+              {data.isUploading
+                ? t('node.upload.uploading')
+                : imageOnly
+                  ? t('node.upload.uploadImage')
+                  : t('node.upload.uploadAsset')}
+            </span>
           </button>
         </NodeSideActionRail>
       )}

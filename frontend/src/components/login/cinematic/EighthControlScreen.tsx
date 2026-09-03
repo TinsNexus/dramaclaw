@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./eighth-control-screen.module.css";
 
-// Mã quyết định vừa là nhãn hiển thị vừa là khoá tra trong `landing.eighth.decisions`.
 const decisions = ["KEEP", "REWRITE", "EXTEND", "REJECT"];
 
 const clamp = (value: number, min = 0, max = 1) =>
@@ -39,8 +38,8 @@ export function EighthControlScreen({
     <section className={styles.layer} style={style}>
       <div className={styles.header}>
         <p>CONTROL 08</p>
-        <h2>{t("landing.eighth.title")}</h2>
-        <span>{t("landing.eighth.subtitle")}</span>
+        <h2>{t("loginCinematic.eighth.heading")}</h2>
+        <span>{t("loginCinematic.eighth.lead")}</span>
       </div>
 
       <div className={styles.rail} aria-hidden="true">
@@ -57,26 +56,26 @@ export function EighthControlScreen({
         <div className={styles.consoleBody}>
           <div className={styles.statement}>
             <small>CURRENT OUTPUT</small>
-            <strong>{t("landing.eighth.output.title")}</strong>
-            <p>{t("landing.eighth.output.body")}</p>
+            <strong>{t("loginCinematic.eighth.statementTitle")}</strong>
+            <p>{t("loginCinematic.eighth.statementBody")}</p>
           </div>
 
           <div className={styles.decisionGrid}>
-            {decisions.map((decision, index) => {
+            {decisions.map((decisionId, index) => {
               const itemProgress = clamp((sequenceProgress - index * 0.16) / 0.32);
               const isActive = index <= activeIndex;
 
               return (
                 <article
                   className={`${styles.decision} ${isActive ? styles.decisionActive : ""}`}
-                  key={decision}
+                  key={decisionId}
                   style={{ "--item-progress": itemProgress } as CSSProperties}
                 >
                   <div>
-                    <span>{decision}</span>
-                    <h3>{t(`landing.eighth.decisions.${decision}.title`)}</h3>
+                    <span>{decisionId}</span>
+                    <h3>{t(`loginCinematic.eighth.decisions.${decisionId}.title`)}</h3>
                   </div>
-                  <p>{t(`landing.eighth.decisions.${decision}.body`)}</p>
+                  <p>{t(`loginCinematic.eighth.decisions.${decisionId}.body`)}</p>
                 </article>
               );
             })}

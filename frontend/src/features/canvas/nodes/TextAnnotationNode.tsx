@@ -29,7 +29,7 @@ import {
 } from '@/features/canvas/domain/canvasNodes';
 import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
 import { isSystemManagedNodeData } from '@/features/canvas/domain/mainlineNodeFlags';
-import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
 import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import { NodeGenerationOverlay } from '@/features/canvas/ui/NodeGenerationOverlay';
@@ -99,16 +99,22 @@ const COMPACT_OPS_PANEL_MIN_WIDTH = 480;
 
 const COMPACT_MODES = new Set<TextNodeMode>(['textToVideo', 'imageToPrompt']);
 
+// 预填进文本节点、原样发给模型的反推指令。跟着界面语言走会换掉出词的语言，锁中文。
+// i18n-exempt-start
 const IMAGE_TO_PROMPT_DEFAULT_CONTENT =
   '根据图片生成结构化中文提示词，包括主体描述、环境、光影、镜头语言、风格关键词。';
+// i18n-exempt-end
 
 function countBillableTextChars(text: string): number {
   return text.replace(/[\s\u3000]+/gu, '').length;
 }
 
 // 「文字生成音乐」的默认音乐描述——点击后预填进文本节点，用户可在此基础上改。
+// 同样是原样发给模型的提示词，锁中文。
+// i18n-exempt-start
 const TEXT_TO_MUSIC_DEFAULT_CONTENT =
   '生成一首现代品牌电子音乐（约 110 BPM），干净有力的低频贝斯，清晰电子鼓点，整体风格高级、未来感强。开场节奏型贝斯与简洁合成器音色建立律动。主段加入稳定鼓点，节奏清晰，保持克制的张力。强化段加入更丰富的音层，合成器音色提升，律动增强但不过度拥挤。结尾鼓点减弱，仅保留低频与氛围音渐出，干净利落收尾。';
+// i18n-exempt-end
 
 const SPAWN_UPLOAD_WIDTH = 320;
 
@@ -235,7 +241,7 @@ export const TextAnnotationNode = memo(({
   const isCompactView = isReferenceOnly || COMPACT_MODES.has(mode);
   const [isEditingContent, setIsEditingContent] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const resolvedTitle = resolveNodeDisplayName(CANVAS_NODE_TYPES.textAnnotation, data, t);
+  const resolvedTitle = localizeNodeDisplayName(CANVAS_NODE_TYPES.textAnnotation, data, t);
   const minHeightForView = isCompactView ? COMPACT_MIN_HEIGHT : MIN_HEIGHT;
   const defaultHeightForView = isCompactView ? COMPACT_DEFAULT_HEIGHT : DEFAULT_HEIGHT;
   const resolvedWidth = Math.max(MIN_WIDTH, Math.round(width ?? DEFAULT_WIDTH));
@@ -306,7 +312,9 @@ export const TextAnnotationNode = memo(({
     };
     const newNodeId = addNode(CANVAS_NODE_TYPES.video, position, seedData);
     addEdge(id, newNodeId);
-    useCanvasStore.getState().autoGroupSpawn(id, [newNodeId], { label: t('node.textAnnotation.group.textToVideo') });
+    useCanvasStore
+      .getState()
+      .autoGroupSpawn(id, [newNodeId], { label: t('node.textNode.group.textToVideo') });
   }, [addEdge, addNode, findNodePosition, id, t]);
 
   const spawnUploadNode = useCallback(() => {
@@ -324,7 +332,9 @@ export const TextAnnotationNode = memo(({
     const seedData: Partial<UploadImageNodeData> = { imageOnly: true };
     const newNodeId = addNode(CANVAS_NODE_TYPES.upload, position, seedData);
     addEdge(newNodeId, id);
-    useCanvasStore.getState().autoGroupSpawn(id, [newNodeId], { label: t('node.textAnnotation.group.imageToPrompt') });
+    useCanvasStore
+      .getState()
+      .autoGroupSpawn(id, [newNodeId], { label: t('node.textNode.group.imageToPrompt') });
   }, [addEdge, addNode, id, t]);
 
   // 克隆音频 / 文字生成音乐：在文本节点下游派生一个音频节点并连边（文本 → 音频），
@@ -334,7 +344,10 @@ export const TextAnnotationNode = memo(({
     const position = findNodePosition(id, 480, 180);
     const newNodeId = addNode(CANVAS_NODE_TYPES.audio, position, { audioKind });
     addEdge(id, newNodeId);
-    const label = audioKind === 'music' ? t('node.textAnnotation.group.textToMusicGen') : t('node.textAnnotation.group.textToMusic');
+    const label =
+      audioKind === 'music'
+        ? t('node.textNode.group.textToMusic')
+        : t('node.textNode.group.cloneAudio');
     useCanvasStore.getState().autoGroupSpawn(id, [newNodeId], { label });
   }, [addEdge, addNode, findNodePosition, id, t]);
 
@@ -714,7 +727,7 @@ export const TextAnnotationNode = memo(({
                     />
                     <button
                       type="button"
-                      title={t('node.textAnnotation.detachReference')}
+                      title={t('node.textNode.detachUpstreamImage')}
                       className="nodrag absolute right-0 top-0 z-10 hidden h-4 w-4 items-center justify-center rounded-bl-md bg-black/75 text-white transition-colors hover:bg-red-500 group-hover:flex"
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => {

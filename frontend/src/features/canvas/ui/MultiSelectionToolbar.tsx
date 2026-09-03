@@ -366,7 +366,7 @@ export const MultiSelectionToolbar = memo(() => {
             onClick={() => setArrangeMenuOpen((open) => !open)}
           >
             <LayoutGrid className="h-4 w-4 text-text-muted" />
-            <span>{t('canvas.multiSelectionToolbar.arrange')}</span>
+            <span>{t('canvas.multiSelect.arrange')}</span>
             <ChevronDown className="h-3.5 w-3.5 text-text-muted" />
           </button>
 
@@ -378,7 +378,7 @@ export const MultiSelectionToolbar = memo(() => {
             onClick={handleDuplicate}
           >
             <Copy className="h-4 w-4 text-text-muted" />
-            <span>{t('canvas.multiSelectionToolbar.createDuplicate')}</span>
+            <span>{t('canvas.multiSelect.duplicate')}</span>
           </button>
 
           <button
@@ -392,7 +392,7 @@ export const MultiSelectionToolbar = memo(() => {
             ) : (
               <Download className="h-4 w-4 text-text-muted" />
             )}
-            <span>{t('canvas.multiSelectionToolbar.batchDownload')}</span>
+            <span>{t('canvas.multiSelect.batchDownload')}</span>
           </button>
 
           <div className={MULTI_TOOLBAR_SEPARATOR_CLASS} />
@@ -404,7 +404,7 @@ export const MultiSelectionToolbar = memo(() => {
               onClick={() => setGroupMenuOpen((open) => !open)}
             >
               <Group className="h-4 w-4 text-text-muted" />
-              <span>{t('canvas.multiSelectionToolbar.group')}</span>
+              <span>{t('canvas.multiSelect.group')}</span>
               <ChevronDown className="h-3.5 w-3.5 text-text-muted" />
             </button>
 
@@ -416,7 +416,7 @@ export const MultiSelectionToolbar = memo(() => {
                   onClick={handleGroup}
                 >
                   <Group className="h-4 w-4 text-text-muted" />
-                  <span>{t('canvas.multiSelectionToolbar.group')}</span>
+                  <span>{t('canvas.multiSelect.group')}</span>
                 </button>
                 <div className="group/sb relative">
                   <button
@@ -434,11 +434,11 @@ export const MultiSelectionToolbar = memo(() => {
                     }}
                   >
                     <Clapperboard className="h-4 w-4 text-text-muted" />
-                    <span>{t('canvas.multiSelectionToolbar.mergeStoryboardGroup')}</span>
+                    <span>{t('canvas.multiSelect.mergeStoryboard')}</span>
                   </button>
                   {!canMergeStoryboard ? (
                     <div className="pointer-events-none absolute right-0 top-full z-10 mt-1.5 hidden w-max max-w-[240px] rounded-lg border border-white/10 bg-[#1c1c1e]/95 px-3 py-1.5 text-xs leading-relaxed text-white/80 shadow-[0_10px_24px_rgba(0,0,0,0.35)] backdrop-blur-2xl group-hover/sb:block">
-                      {t('canvas.multiSelectionToolbar.storyboardGroupTooltip')}
+                      {t('canvas.multiSelect.mergeStoryboardHint')}
                     </div>
                   ) : null}
                 </div>
@@ -455,12 +455,12 @@ export const MultiSelectionToolbar = memo(() => {
             onClick={handleBatchDelete}
             title={
               deletableIds.length === 0
-                ? t('canvas.multiSelectionToolbar.lockedNodesDeleteTooltip')
-                : t('canvas.multiSelectionToolbar.deleteNodesTooltip', { count: deletableIds.length })
+                ? t('canvas.multiSelect.deleteAllLocked')
+                : t('canvas.multiSelect.deleteCount', { count: deletableIds.length })
             }
           >
             <Trash2 className="h-4 w-4 text-text-muted" />
-            <span>{t('canvas.multiSelectionToolbar.batchDelete')}</span>
+            <span>{t('canvas.multiSelect.batchDelete')}</span>
           </button>
         </div>
 
@@ -476,7 +476,7 @@ export const MultiSelectionToolbar = memo(() => {
               onClick={() => handleArrange('graph')}
             >
               <Workflow className="h-4 w-4 text-text-muted" />
-              <span>{t('canvas.multiSelectionToolbar.gridLayout')}</span>
+              <span>{t('canvas.multiSelect.arrangeGrid')}</span>
             </button>
             <button
               type="button"
@@ -484,7 +484,7 @@ export const MultiSelectionToolbar = memo(() => {
               onClick={() => handleArrange('horizontal')}
             >
               <StretchHorizontal className="h-4 w-4 text-text-muted" />
-              <span>{t('canvas.multiSelectionToolbar.horizontalLayout')}</span>
+              <span>{t('canvas.multiSelect.arrangeHorizontal')}</span>
             </button>
             <button
               type="button"
@@ -492,7 +492,7 @@ export const MultiSelectionToolbar = memo(() => {
               onClick={() => handleArrange('vertical')}
             >
               <StretchVertical className="h-4 w-4 text-text-muted" />
-              <span>{t('canvas.multiSelectionToolbar.verticalLayout')}</span>
+              <span>{t('canvas.multiSelect.arrangeVertical')}</span>
             </button>
           </div>
         )}

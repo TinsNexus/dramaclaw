@@ -89,11 +89,11 @@ interface TextEditorState {
 }
 
 const TOOL_BUTTONS: ToolButton[] = [
-  { type: 'rect', labelKey: 'canvas.annotateToolEditor.tools.rect', icon: Square },
-  { type: 'ellipse', labelKey: 'canvas.annotateToolEditor.tools.ellipse', icon: Circle },
-  { type: 'arrow', labelKey: 'canvas.annotateToolEditor.tools.arrow', icon: ArrowRight },
-  { type: 'pen', labelKey: 'canvas.annotateToolEditor.tools.pen', icon: Brush },
-  { type: 'text', labelKey: 'canvas.annotateToolEditor.tools.text', icon: Type },
+  { type: 'rect', labelKey: 'canvas.paintTools.rect', icon: Square },
+  { type: 'ellipse', labelKey: 'canvas.annotateEditor.ellipse', icon: Circle },
+  { type: 'arrow', labelKey: 'canvas.annotateEditor.arrow', icon: ArrowRight },
+  { type: 'pen', labelKey: 'canvas.paintTools.brush', icon: Brush },
+  { type: 'text', labelKey: 'canvas.annotateEditor.text', icon: Type },
 ];
 
 function toNumber(value: unknown, fallback: number): number {
@@ -1158,7 +1158,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
           })}
           <button
             type="button"
-            title={t('canvas.annotateToolEditor.moveImageTitle')}
+            title={t('canvas.annotateEditor.panHint')}
             onClick={() => {
               setHandTool(true);
               setTextEditorState(null);
@@ -1169,14 +1169,14 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
             }`}
           >
             <Hand className="h-3.5 w-3.5" />
-            {t('canvas.annotateToolEditor.moveImageLabel')}
+            {t('canvas.annotateEditor.pan')}
           </button>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title={t('canvas.annotateToolEditor.zoomOutTitle')}
-            aria-label={t('canvas.annotateToolEditor.zoomOutTitle')}
+            title={t('canvas.zoom.zoomOut')}
+            aria-label={t('canvas.zoom.zoomOut')}
             className={`${ANNOTATE_TOOL_BUTTON_BASE_CLASS} text-text-muted/82 hover:text-text-dark/95`}
             onClick={() => zoomByStep(1 / ZOOM_BUTTON_STEP)}
             disabled={!canZoomOut}
@@ -1188,8 +1188,8 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
           </span>
           <button
             type="button"
-            title={t('canvas.annotateToolEditor.zoomInTitle')}
-            aria-label={t('canvas.annotateToolEditor.zoomInTitle')}
+            title={t('canvas.zoom.zoomIn')}
+            aria-label={t('canvas.zoom.zoomIn')}
             className={`${ANNOTATE_TOOL_BUTTON_BASE_CLASS} text-text-muted/82 hover:text-text-dark/95`}
             onClick={() => zoomByStep(ZOOM_BUTTON_STEP)}
             disabled={!canZoomIn}
@@ -1198,8 +1198,8 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
           </button>
           <button
             type="button"
-            title={t('canvas.annotateToolEditor.fitToWindowTitle')}
-            aria-label={t('canvas.annotateToolEditor.fitToWindowTitle')}
+            title={t('canvas.annotateEditor.fitWindow')}
+            aria-label={t('canvas.annotateEditor.fitWindow')}
             className={`${ANNOTATE_TOOL_BUTTON_BASE_CLASS} text-text-muted/82 hover:text-text-dark/95`}
             onClick={resetZoom}
             disabled={!canResetZoom}
@@ -1216,7 +1216,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
                   style={{ backgroundColor: color }}
                   aria-hidden="true"
                 />
-                <span>{t('canvas.annotateToolEditor.colorLabel')}</span>
+                <span>{t('canvas.annotateEditor.color')}</span>
                 <input
                   type="color"
                   value={color}
@@ -1263,7 +1263,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
             disabled={!canUndo}
           >
             <Undo2 className="h-3.5 w-3.5" />
-            {t('canvas.annotateToolEditor.undoLabel')}
+            {t('canvas.paintTools.undoShort')}
           </button>
           <button
             type="button"
@@ -1275,7 +1275,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
               <path d="M3 7v6h6" />
               <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
             </svg>
-            {t('canvas.annotateToolEditor.redoLabel')}
+            {t('canvas.paintTools.redoShort')}
           </button>
           <button
             type="button"
@@ -1284,7 +1284,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
             disabled={!canDeleteSelected}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            {t('canvas.annotateToolEditor.deleteSelectedLabel')}
+            {t('viewer.threeD.deleteSelected')}
           </button>
           <button
             type="button"
@@ -1298,7 +1298,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
             disabled={!canClear}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            {t('canvas.annotateToolEditor.clearAllLabel')}
+            {t('canvas.annotateEditor.clear')}
           </button>
         </div>
       </div>
@@ -1421,14 +1421,14 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
                   className="rounded border border-[rgba(255,255,255,0.22)] px-2 py-1 text-xs text-text-muted hover:bg-bg-dark"
                   onClick={handleCancelTextEditor}
                 >
-                  {t('canvas.annotateToolEditor.cancelLabel')}
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   className="rounded border border-accent/45 bg-accent/20 px-2 py-1 text-xs text-text-dark hover:bg-accent/30"
                   onClick={handleCommitTextEditor}
                 >
-                  {t('canvas.annotateToolEditor.confirmLabel')}
+                  {t('common.confirm')}
                 </button>
               </div>
             </div>

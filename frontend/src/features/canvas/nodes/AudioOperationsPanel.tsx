@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowUp,
@@ -73,13 +74,13 @@ const MUSIC_LENGTH_SELECT_MENU_CLASS =
   '!z-[260] !min-w-[140px] !border-white/10 !bg-[#202024] !text-text-dark shadow-[0_14px_34px_rgba(0,0,0,0.5)]';
 // 音乐时长预设（毫秒）。后端范围 3000–600000，这里给常用档位。
 const MUSIC_LENGTH_PRESETS: ReadonlyArray<{ ms: number; labelKey: string }> = [
-  { ms: 30000, labelKey: 'node.audioOperationPanel.preset30s' },
-  { ms: 60000, labelKey: 'node.audioOperationPanel.preset1m' },
-  { ms: 120000, labelKey: 'node.audioOperationPanel.preset2m' },
-  { ms: 180000, labelKey: 'node.audioOperationPanel.preset3m' },
-  { ms: 240000, labelKey: 'node.audioOperationPanel.preset4m' },
-  { ms: 300000, labelKey: 'node.audioOperationPanel.preset5m' },
-  { ms: 600000, labelKey: 'node.audioOperationPanel.preset10m' },
+  { ms: 30000, labelKey: 'node.audioPanel.musicLength.30s' },
+  { ms: 60000, labelKey: 'node.audioPanel.musicLength.1m' },
+  { ms: 120000, labelKey: 'node.audioPanel.musicLength.2m' },
+  { ms: 180000, labelKey: 'node.audioPanel.musicLength.3m' },
+  { ms: 240000, labelKey: 'node.audioPanel.musicLength.4m' },
+  { ms: 300000, labelKey: 'node.audioPanel.musicLength.5m' },
+  { ms: 600000, labelKey: 'node.audioPanel.musicLength.10m' },
 ];
 
 function musicBillingSecondsFromMs(ms: number): number {
@@ -261,7 +262,9 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
       <div className="px-3 pt-3">
         <label className="flex flex-col gap-2">
           <span className={AUDIO_INPUT_LABEL_CLASS}>
-            {isMusic ? t('node.audioOperationPanel.inputMusicDesc') : t('node.audioOperationPanel.inputSynthText')}
+            {isMusic
+              ? t('node.audioPanel.promptLabel.music')
+              : t('node.audioPanel.promptLabel.speech')}
           </span>
           <textarea
             value={textDraft}
@@ -284,8 +287,8 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
             onKeyDown={(event) => event.stopPropagation()}
             placeholder={
               isMusic
-                ? t('node.audioOperationPanel.musicPlaceholder')
-                : t('node.audioOperationPanel.synthPlaceholder')
+                ? t('node.audioPanel.promptPlaceholder.music')
+                : t('node.audioPanel.promptPlaceholder.speech')
             }
             disabled={isGenerating}
             className={`${AUDIO_INPUT_FIELD_CLASS} ui-scrollbar resize-none py-2 leading-[1.65] ${
@@ -299,8 +302,10 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
       <div className="px-3 pb-3 pt-4">
         <label className="flex flex-col gap-2">
           <span className={AUDIO_INPUT_LABEL_CLASS}>
-            {t('node.audioOperationPanel.emotionLabel')}
-            <span className="ml-1 text-text-muted/60">{t('node.audioOperationPanel.optionalFreeInput')}</span>
+            {t('node.audioPanel.emotionLabel')}
+            <span className="ml-1 text-text-muted/60">
+              {t('node.audioPanel.emotionOptional')}
+            </span>
           </span>
           <input
             type="text"
@@ -322,7 +327,7 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
-            placeholder={t('node.audioOperationPanel.emotionPlaceholder')}
+            placeholder={t('node.audioPanel.emotionPlaceholder')}
             disabled={isGenerating}
             className={`${AUDIO_INPUT_FIELD_CLASS} h-9`}
           />
@@ -332,13 +337,13 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
 
       {voiceMissing ? (
         <p className="px-3 pb-2 text-[12px] text-amber-300">
-          请先配置或选择声线
+          {t('node.audioPanel.voiceMissing')}
         </p>
       ) : null}
 
       <div className="flex shrink-0 items-center justify-end gap-2 px-3 pb-3 pt-1">
         <IconButton
-          title={t('node.audioOperationPanel.translateTooltip')}
+          title={modelTaskAccess.message ?? t('node.audioPanel.translate')}
           onClick={handleTranslate}
           disabled={
             modelTaskAccess.blocked
@@ -356,7 +361,7 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
         </IconButton>
         {!isMusic && (
           <IconButton
-            title={t('node.audioOperationPanel.voiceSettingsTooltip')}
+            title={t('node.audioPanel.voiceSettings')}
             onClick={() => setShowVoiceSettings((v) => !v)}
             active={showVoiceSettings}
           >
@@ -365,7 +370,7 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
         )}
         {isMusic && (
           <IconButton
-            title={t('node.audioOperationPanel.advancedSettingsTooltip')}
+            title={t('node.audioPanel.advancedSettings')}
             onClick={() => setShowMusicSettings((v) => !v)}
             active={showMusicSettings}
           >
@@ -381,7 +386,10 @@ export function AudioOperationsPanel({ nodeId, data }: AudioOperationsPanelProps
         <button
           type="button"
           disabled={submitDisabled}
-          title={t('node.audioOperationPanel.generateTooltip')}
+          title={
+            modelTaskAccess.message
+            ?? (voiceMissing ? t('node.audioPanel.voiceMissing') : t('node.audioPanel.generate'))
+          }
           onClick={handleSubmit}
           className={`${NODE_GENERATE_BUTTON_BASE_CLASS} ${
             submitDisabled
@@ -488,7 +496,8 @@ function MusicSettingToggle({
 }
 
 // 设置项标签后的「?」说明（hover 弹 tooltip）。
-function MusicSettingHelp({ text, t }: { text: string; t: (key: string) => string }) {
+function MusicSettingHelp({ text }: { text: string }) {
+  const { t } = useTranslation();
   return (
     <TooltipProvider delay={120}>
       <Tooltip>
@@ -496,7 +505,7 @@ function MusicSettingHelp({ text, t }: { text: string; t: (key: string) => strin
           render={
             <button
               type="button"
-              aria-label={t('node.audioOperationPanel.helpAriaLabel')}
+              aria-label={t('node.audioPanel.help')}
               className="inline-flex cursor-help items-center text-text-muted/70 transition-colors hover:text-text-dark"
               onClick={(event) => event.stopPropagation()}
             />
@@ -528,15 +537,17 @@ function AudioMusicSettingsPanel({
   return (
     <div className="border-t border-white/[0.04] px-4 pb-3 pt-1">
       <div className="flex items-center justify-between py-2">
-        <span className="text-[12px] font-semibold text-text-muted">{t('node.audioOperationPanel.advancedSettingsLabel')}</span>
+        <span className="text-[12px] font-semibold text-text-muted">
+          {t('node.audioPanel.advancedSettings')}
+        </span>
       </div>
       <div className="flex items-center justify-between gap-3 py-1">
         <span className="inline-flex items-center gap-1.5 text-[13px] text-text-dark">
-          {t('node.audioOperationPanel.musicLengthLabel')}
-          <MusicSettingHelp text={t('node.audioOperationPanel.musicLengthHelp')} t={t} />
+          {t('node.audioPanel.musicDuration')}
+          <MusicSettingHelp text={t('node.audioPanel.musicDurationHelp')} />
         </span>
         <UiSelect
-          aria-label={t('node.audioOperationPanel.musicLengthLabel')}
+          aria-label={t('node.audioPanel.musicDuration')}
           value={String(musicLengthMs)}
           onChange={(event) =>
             updateNodeData(nodeId, { musicLengthMs: Number(event.target.value) })
@@ -554,22 +565,22 @@ function AudioMusicSettingsPanel({
       </div>
       <div className="flex items-center justify-between gap-3 py-1">
         <span className="inline-flex items-center gap-1.5 text-[13px] text-text-dark">
-          {t('node.audioOperationPanel.forceInstrumentalLabel')}
-          <MusicSettingHelp text={t('node.audioOperationPanel.forceInstrumentalHelp')} t={t} />
+          {t('node.audioPanel.forceInstrumental')}
+          <MusicSettingHelp text={t('node.audioPanel.forceInstrumentalHelp')} />
         </span>
         <MusicSettingToggle
-          ariaLabel={t('node.audioOperationPanel.forceInstrumentalLabel')}
+          ariaLabel={t('node.audioPanel.forceInstrumental')}
           checked={forceInstrumental}
           onChange={(next) => updateNodeData(nodeId, { forceInstrumental: next })}
         />
       </div>
       <div className="flex items-center justify-between gap-3 py-1">
         <span className="inline-flex items-center gap-1.5 text-[13px] text-text-dark">
-          {t('node.audioOperationPanel.respectSectionsDurationsLabel')}
-          <MusicSettingHelp text={t('node.audioOperationPanel.respectSectionsDurationsHelp')} t={t} />
+          {t('node.audioPanel.respectSections')}
+          <MusicSettingHelp text={t('node.audioPanel.respectSectionsHelp')} />
         </span>
         <MusicSettingToggle
-          ariaLabel={t('node.audioOperationPanel.respectSectionsDurationsLabel')}
+          ariaLabel={t('node.audioPanel.respectSections')}
           checked={respectSectionsDurations}
           onChange={(next) =>
             updateNodeData(nodeId, { respectSectionsDurations: next })
@@ -585,7 +596,7 @@ function AudioVoiceSettingsPanel({ nodeId, data }: AudioVoiceSettingsPanelProps)
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   // 默认音色的拉取放在 AudioNode 里完成（音频节点一挂载就会触发）；这里只负责展示。
   // 显示兜底改为「加载中…」而不是「项目解说人」——避免在 references 落地前误导用户。
-  const voiceLabel = data.voiceLabel ?? t('node.audioOperationPanel.voiceLoadingLabel');
+  const voiceLabel = data.voiceLabel ?? t('node.audioPanel.voiceLoading');
   const voiceLanguage = data.voiceLanguage ?? '';
   const currentRef: AudioVoiceRef = data.voiceRef ?? { scope: 'project_narrator' };
   const [modalOpen, setModalOpen] = useState(false);
@@ -625,7 +636,9 @@ function AudioVoiceSettingsPanel({ nodeId, data }: AudioVoiceSettingsPanelProps)
   return (
     <div className="border-t border-white/[0.04] px-4 pt-1 pb-3">
       <div className="flex items-center justify-between py-2">
-        <span className="text-[12px] font-semibold text-text-muted">{t('node.audioOperationPanel.voiceSettingsLabel')}</span>
+        <span className="text-[12px] font-semibold text-text-muted">
+          {t('node.audioPanel.voiceSettings')}
+        </span>
       </div>
       <div className="flex min-h-[55px] w-full items-center gap-3 rounded-[10px] border border-white/[0.08] bg-transparent px-3 py-2">
         <div className="min-w-0 flex-1">
@@ -633,7 +646,13 @@ function AudioVoiceSettingsPanel({ nodeId, data }: AudioVoiceSettingsPanelProps)
             <span className="truncate text-[14px] font-medium text-text-dark">{voiceLabel}</span>
             <button
               type="button"
-              title={copyState === 'success' ? t('node.audioOperationPanel.copiedTooltip') : copyState === 'error' ? t('node.audioOperationPanel.copyFailedTooltip') : t('node.audioOperationPanel.copyVoiceRefTooltip')}
+              title={
+                copyState === 'success'
+                  ? t('node.audioPanel.copied')
+                  : copyState === 'error'
+                    ? t('node.audioPanel.copyFailed')
+                    : t('node.audioPanel.copyVoiceRef')
+              }
               onClick={handleCopyVoiceId}
               className={`flex h-4 w-4 shrink-0 items-center justify-center transition-colors ${
                 copyState === 'success'
@@ -659,7 +678,7 @@ function AudioVoiceSettingsPanel({ nodeId, data }: AudioVoiceSettingsPanelProps)
           )}
           <button
             type="button"
-            title={t('node.audioOperationPanel.switchVoiceTooltip')}
+            title={t('node.audioPanel.switchVoice')}
             onClick={() => setModalOpen(true)}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-dark transition-colors hover:bg-white/[0.06]"
           >
@@ -685,23 +704,29 @@ function AudioVoiceSettingsPanel({ nodeId, data }: AudioVoiceSettingsPanelProps)
   );
 }
 
-function describeVoiceRef(
-  ref: AudioVoiceRef,
-  t: (key: string, opts?: Record<string, unknown>) => string = (key) => key,
-): string {
+function describeVoiceRef(ref: AudioVoiceRef, t: TFunction): string {
   switch (ref.scope) {
     case 'project_narrator':
-      return t('node.audioOperationPanel.projectNarratorLabel');
+      return t('node.voiceRef.projectNarrator');
     case 'user_custom':
-      return ref.voiceId ?? t('node.audioOperationPanel.customVoiceLabel');
+      return ref.voiceId ?? t('node.voiceRef.userCustom');
     case 'character_default':
-      return t('node.audioOperationPanel.characterDefaultVoice', { name: ref.characterName ?? t('node.audioOperationPanel.characterLabel') });
+      return t('node.voiceRef.characterDefault', {
+        name: ref.characterName ?? t('node.voiceRef.character'),
+      });
     case 'character_age_group':
-      return t('node.audioOperationPanel.characterAgeGroupVoice', { name: ref.characterName ?? t('node.audioOperationPanel.characterLabel'), slot: ref.slot ?? '' });
+      return t('node.voiceRef.characterAgeGroup', {
+        name: ref.characterName ?? t('node.voiceRef.character'),
+        slot: ref.slot ?? t('node.voiceRef.ageGroup'),
+      });
     case 'identity':
-      return t('node.audioOperationPanel.identityOwnVoice', { id: ref.identityId ?? t('node.audioOperationPanel.identityLabel') });
+      return t('node.voiceRef.identity', {
+        id: ref.identityId ?? t('node.voiceRef.identityFallback'),
+      });
     case 'identity_resolved':
-      return t('node.audioOperationPanel.identityResolvedVoice', { id: ref.identityId ?? t('node.audioOperationPanel.identityLabel') });
+      return t('node.voiceRef.identityResolved', {
+        id: ref.identityId ?? t('node.voiceRef.identityFallback'),
+      });
     default:
       return ref.scope;
   }

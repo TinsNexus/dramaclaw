@@ -29,53 +29,6 @@ vi.mock("@xyflow/react", async () => {
   };
 });
 
-vi.mock("react-i18next", () => ({
-  initReactI18next: { type: "3rdParty", init: () => {} },
-  useTranslation: () => {
-    const translations: Record<string, string> = {
-      "node.beatContextNode.heading": "Ngữ cảnh beat",
-      "node.beatContextNode.standaloneTitle": "Ngữ cảnh beat tuỳ chỉnh",
-      "node.beatContextNode.syncToMainline": "Đồng bộ lên mạch chính",
-      "node.beatContextNode.unset": "Chưa đặt",
-      "node.beatContextNode.fields.visual": "Khung hình mở đầu",
-      "node.beatContextNode.fields.scene": "Bối cảnh",
-      "node.beatContextNode.fields.time": "Thời gian",
-      "node.beatContextNode.fields.identities": "Danh tính xuất hiện",
-      "node.beatContextNode.fields.props": "Đạo cụ xuất hiện",
-      "node.beatContextNode.placeholders.visual": "Chưa đặt; nhấp để nhập mô tả khung hình mở đầu",
-      "node.beatContextNode.empty.noCharacter": "Không có nhân vật",
-      "node.beatContextNode.empty.noProp": "Không có đạo cụ xuất hiện",
-      "node.beatContextNode.status.fresh": "Ngữ cảnh đã đồng bộ; kỹ năng sẽ dùng node hiện tại.",
-      "node.beatContextNode.status.syncing": "Đang đồng bộ lên mạch chính...",
-      "node.beatContextNode.status.syncError": "Đồng bộ thất bại: {{message}}",
-      "node.beatContextNode.status.standaloneLocalOnly": "Ngữ cảnh tuỳ chỉnh; chỉ dùng trong canvas hiện tại.",
-      "node.beatContextNode.palette.identityColor": "Màu danh tính",
-      "node.beatContextNode.palette.actorColors": "Màu nhân vật",
-      "node.beatContextNode.palette.propColor": "Màu đạo cụ",
-      "node.beatContextNode.palette.propColors": "Màu đạo cụ",
-      "node.beatContextNode.mentionCandidates.identity": "Nhân vật",
-      "node.beatContextNode.mentionCandidates.prop": "Đạo cụ",
-      "episode.workbench.text.identities": "Danh tính xuất hiện",
-      "episode.workbench.text.props": "Đạo cụ xuất hiện",
-      "episode.workbench.text.noCharacter": "Không có nhân vật",
-      "episode.workbench.text.noProp": "Không có đạo cụ",
-    };
-
-    return {
-      t: (key: string, options?: { defaultValue?: string; message?: string }) => {
-        if (key === "node.beatContextNode.status.syncError") {
-          return `Đồng bộ thất bại: ${options?.message || "Lỗi không xác định"}`;
-        }
-        // Prioritize the translations dictionary over defaultValue
-        if (translations[key]) {
-          return translations[key];
-        }
-        return options?.defaultValue ?? key;
-      },
-    };
-  },
-}));
-
 vi.mock("@/api/projects", () => ({
   listFreezoneBeatContext: (...args: unknown[]) =>
     listFreezoneBeatContext(...args),

@@ -1,20 +1,15 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import SideRays from "@/components/react-bits/side-rays";
+import { CinematicSideRays } from "./CinematicSideRays";
 import styles from "./fourth-screen.module.css";
 
-// `key` tra vào `landing.fourth.sets`, `kicker` là nhãn cố định không dịch.
-const copySets = [
-  { key: "s1", kicker: "SYSTEM 01" },
-  { key: "s2", kicker: "SYSTEM 02" },
-  { key: "s3", kicker: "SYSTEM 03" },
+const COPY_SETS = [
+  { id: "s1", kicker: "SYSTEM 01" },
+  { id: "s2", kicker: "SYSTEM 02" },
+  { id: "s3", kicker: "SYSTEM 03" },
 ];
 
-const gridItems = [
-  { key: "i1", number: "01" },
-  { key: "i2", number: "02" },
-  { key: "i3", number: "03" },
-];
+const GRID_CARDS = ["breakdown", "lock", "advance"];
 
 const clamp = (value: number, min = 0, max = 1) =>
   Math.min(max, Math.max(min, value));
@@ -46,24 +41,11 @@ export function FourthScreen({
   return (
     <section className={styles.layer} style={sceneStyle}>
       {raysActive ? (
-        <SideRays
-          className={styles.rays}
-          speed={2.5}
-          rayColor1="#eab308"
-          rayColor2="#96c8ff"
-          intensity={2}
-          spread={2}
-          origin="top-right"
-          tilt={0}
-          saturation={1.5}
-          blend={0.75}
-          falloff={1.6}
-          opacity={1}
-        />
+        <CinematicSideRays className={styles.rays} />
       ) : null}
       <div className={styles.inner}>
         <div className={styles.copyArea}>
-          {copySets.map((copy, index) => {
+          {COPY_SETS.map((copy, index) => {
             const enter = segment(sequenceProgress, index / 3 - 0.04, 0.16);
             const exit = segment(sequenceProgress, (index + 0.78) / 3, 0.14);
             const copyOpacity = Math.max(0, enter * (1 - exit));
@@ -74,27 +56,27 @@ export function FourthScreen({
             } as CSSProperties;
 
             return (
-              <div className={styles.copyBlock} key={copy.key} style={copyStyle}>
+              <div className={styles.copyBlock} key={copy.id} style={copyStyle}>
                 <p className={styles.kicker}>{copy.kicker}</p>
                 <h2 className={styles.title}>
-                  <span>{t(`landing.fourth.sets.${copy.key}.titleTop`)}</span>
-                  <span>{t(`landing.fourth.sets.${copy.key}.titleBottom`)}</span>
+                  <span>{t(`loginCinematic.fourth.sets.${copy.id}.titleTop`)}</span>
+                  <span>{t(`loginCinematic.fourth.sets.${copy.id}.titleBottom`)}</span>
                 </h2>
-                <p className={styles.lead}>{t(`landing.fourth.sets.${copy.key}.lead`)}</p>
+                <p className={styles.lead}>{t(`loginCinematic.fourth.sets.${copy.id}.lead`)}</p>
               </div>
             );
           })}
         </div>
 
         <div className={styles.grid} aria-label="DramaHub creator workflow">
-          {gridItems.map((item, index) => (
+          {GRID_CARDS.map((cardId, index) => (
             <article
               className={`${styles.item} ${activeIndex === index ? styles.itemActive : ""}`}
-              key={item.key}
+              key={cardId}
             >
-              <span className={styles.number}>{item.number}</span>
-              <h3>{t(`landing.fourth.items.${item.key}.title`)}</h3>
-              <p>{t(`landing.fourth.items.${item.key}.body`)}</p>
+              <span className={styles.number}>{`0${index + 1}`}</span>
+              <h3>{t(`loginCinematic.fourth.cards.${cardId}.title`)}</h3>
+              <p>{t(`loginCinematic.fourth.cards.${cardId}.body`)}</p>
             </article>
           ))}
         </div>

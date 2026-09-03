@@ -180,7 +180,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
     const field = plugin.fields.find((item) => item.type === 'select' && item.key === 'aspectRatio');
     if (!field) {
       return [
-        { label: t('canvas.cropToolEditor.aspectRatioFree'), value: 'free' },
+        { labelKey: 'canvas.cropTool.ratioFree', value: 'free' },
         { label: '1:1', value: '1:1' },
         { label: '16:9', value: '16:9' },
         { label: '9:16', value: '9:16' },
@@ -192,7 +192,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
         { label: '5:4', value: '5:4' },
         { label: '2:1', value: '2:1' },
         { label: '21:9', value: '21:9' },
-        { label: t('canvas.cropToolEditor.aspectRatioOriginal'), value: 'original' },
+        { labelKey: 'canvas.cropTool.ratioOriginal', value: 'original' },
       ];
     }
 
@@ -224,10 +224,10 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
       return null;
     }
     if (!customRatioInput.trim()) {
-      return t('canvas.cropToolEditor.enterRatioExample');
+      return t('canvas.cropTool.ratioEmpty');
     }
     if (!parseCustomRatio(customRatioInput)) {
-      return t('canvas.cropToolEditor.invalidRatioFormat');
+      return t('canvas.cropTool.ratioInvalid');
     }
     return null;
   }, [aspectMode, customRatioInput, t]);
@@ -370,7 +370,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
                 })
               }
             >
-              {item.label}
+              {item.labelKey ? t(item.labelKey) : item.label}
             </button>
           );
         })}
@@ -389,7 +389,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
             })
           }
         >
-          {t('canvas.cropToolEditor.custom')}
+          {t('canvas.cropTool.ratioCustom')}
         </button>
       </div>
 
@@ -407,7 +407,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
                 customAspectRatio: next,
               });
             }}
-            placeholder={t('canvas.cropToolEditor.enterRatioPlaceholder')}
+            placeholder={t('canvas.cropTool.ratioPlaceholder')}
             className="h-8 w-[220px] rounded-[8px] border border-white/[0.10] bg-bg-dark/42 px-3 text-sm text-text-dark outline-none transition-colors placeholder:text-text-dark/52 focus:border-white/[0.18]"
           />
           {customRatioError && <span className="text-xs text-red-400">{customRatioError}</span>}

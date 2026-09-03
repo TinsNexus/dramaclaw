@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import type { FreezoneGenerationHistoryRecord } from '@/api/ops';
+import type { TFn } from '@/lib/i18n-types';
 import { resolveMediaUrl } from '@/lib/media-url';
 
 /**
@@ -304,21 +305,18 @@ export function hasCompletedHistoryRecords(
   return records.some(isCompleted);
 }
 
-function formatRelativeTime(
-  iso: string,
-  t: (key: string, options?: Record<string, unknown>) => string = (key) => key,
-): string {
+function formatRelativeTime(iso: string, t: TFn): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diffMs = Date.now() - then;
   const sec = Math.round(diffMs / 1000);
-  if (sec < 60) return t('canvas.nodeGenHistory.relativeSeconds', { count: Math.max(sec, 0) });
+  if (sec < 60) return t('canvas.nodeHistory.secondsAgo', { count: Math.max(sec, 0) });
   const min = Math.round(sec / 60);
-  if (min < 60) return t('canvas.nodeGenHistory.relativeMinutes', { count: min });
+  if (min < 60) return t('canvas.nodeHistory.minutesAgo', { count: min });
   const hr = Math.round(min / 60);
-  if (hr < 24) return t('canvas.nodeGenHistory.relativeHours', { count: hr });
+  if (hr < 24) return t('canvas.nodeHistory.hoursAgo', { count: hr });
   const day = Math.round(hr / 24);
-  if (day < 30) return t('canvas.nodeGenHistory.relativeDays', { count: day });
+  if (day < 30) return t('canvas.nodeHistory.daysAgo', { count: day });
   return new Date(then).toLocaleDateString();
 }
 
@@ -367,7 +365,6 @@ export function NodeGenerationHistory({
   className,
 }: NodeGenerationHistoryProps) {
   const { t } = useTranslation();
-
   // Only successful generations belong in the history strip — failed / pending
   // / running attempts are noise here. Newest first; the backend already sorts,
   // but guard against ordering drift.
@@ -390,7 +387,8 @@ export function NodeGenerationHistory({
       <div className="flex items-center justify-between px-0.5">
         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
           <History className="h-3 w-3" />
-          {t('canvas.nodeGenHistory.title')}{sorted.length > 0 ? ` · ${sorted.length}` : ''}
+          {t('canvas.nodeHistory.title')}
+          {sorted.length > 0 ? ` · ${sorted.length}` : ''}
         </span>
         {onRefresh && (
           <button
@@ -400,7 +398,7 @@ export function NodeGenerationHistory({
               event.stopPropagation();
               onRefresh();
             }}
-            title={t('canvas.nodeGenHistory.refreshTooltip')}
+            title={t('canvas.nodeHistory.refresh')}
           >
             {isLoading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -446,7 +444,7 @@ export function NodeGenerationHistory({
               }}
               title={`${formatRelativeTime(record.recorded_at, t)}${
                 completed ? '' : ` · ${record.status}`
-              }${active ? ` · ${t('canvas.nodeGenHistory.currentLabel')}` : ''}`}
+              }${active ? ` · ${t('canvas.nodeHistory.current')}` : ''}`}
               className={`group relative h-14 w-14 shrink-0 overflow-hidden rounded-[8px] border transition ${
                 active
                   ? 'border-[rgb(var(--accent-rgb))]'

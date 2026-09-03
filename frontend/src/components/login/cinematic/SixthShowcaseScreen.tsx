@@ -32,9 +32,9 @@ function FilmShowcase({ sequenceProgress }: { sequenceProgress: number }) {
               href={`/watch/${COMMUNITY_WATCH_WORK}`}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={t("landing.common.watchNowAria")}
+              aria-label={t("loginCinematic.watchCommunity")}
             >
-              <span>{t("landing.common.watchNow")}</span>
+              <span>{t("loginCinematic.watchNow")}</span>
             </a>
           </article>
         ))}
@@ -68,8 +68,8 @@ export function SixthShowcaseScreen({
     <section className={styles.layer} style={style}>
       <div className={styles.header}>
         <p>SHOWCASE 06</p>
-        <h2>{t("landing.sixth.title")}</h2>
-        <span>{t("landing.sixth.subtitle")}</span>
+        <h2>{t("loginCinematic.sixth.heading")}</h2>
+        <span>{t("loginCinematic.sixth.lead")}</span>
       </div>
 
       <FilmShowcase sequenceProgress={sequenceProgress} />

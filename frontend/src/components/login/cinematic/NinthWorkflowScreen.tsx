@@ -55,11 +55,11 @@ export function NinthWorkflowScreen({
       <div className={styles.header}>
         <p>WORKFLOW 09</p>
         <h2>
-          {t("landing.ninth.titleTop")}
+          {t("loginCinematic.ninth.headingTop")}
           <br />
-          {t("landing.ninth.titleBottom")}
+          {t("loginCinematic.ninth.headingAccent")}
         </h2>
-        <span>{t("landing.ninth.subtitle")}</span>
+        <span>{t("loginCinematic.ninth.lead")}</span>
       </div>
 
       <div className={styles.path} aria-hidden="true">
@@ -86,16 +86,16 @@ export function NinthWorkflowScreen({
                     <video src={cinematicVideos.pk} muted loop playsInline autoPlay preload="metadata" />
                     <div className={styles.previewScrim} />
                     <div className={styles.previewTitle}>
-                      <strong>{t("landing.ninth.previewTitle")}</strong>
+                      <strong>{t("loginCinematic.ninth.featuredWork")}</strong>
                     </div>
                     <a
                       className={styles.watchButton}
                       href={`/watch/${COMMUNITY_WATCH_WORK}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={t("landing.common.watchNowAria")}
+                      aria-label={t("loginCinematic.watchCommunity")}
                     >
-                      <span>{t("landing.common.watchNow")}</span>
+                      <span>{t("loginCinematic.watchNow")}</span>
                     </a>
                   </div>
                 </div>
@@ -103,8 +103,8 @@ export function NinthWorkflowScreen({
               <div className={styles.node}>
                 <span>{item.id}</span>
               </div>
-              <h3>{t(`landing.ninth.steps.${item.id}.title`)}</h3>
-              <p>{t(`landing.ninth.steps.${item.id}.body`)}</p>
+              <h3>{t(`loginCinematic.ninth.steps.${item.id}.title`)}</h3>
+              <p>{t(`loginCinematic.ninth.steps.${item.id}.body`)}</p>
             </article>
           );
         })}

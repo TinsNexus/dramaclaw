@@ -42,12 +42,12 @@ export function MediaModelParameterChip({ parameters, values = {}, mode, onChang
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        title={t("canvas.mediaModelParamChip.title")}
+        title={t("canvas.modelParams.title")}
         className={NODE_TEXT_CONTROL_TRIGGER_CLASS}
         onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
       >
         <SlidersHorizontal className="h-3.5 w-3.5" />
-        <span>{t("canvas.mediaModelParamChip.title")}</span>
+        <span>{t("canvas.modelParams.title")}</span>
       </button>
       {open && (
         <div
@@ -75,7 +75,7 @@ export function MediaModelParameterChip({ parameters, values = {}, mode, onChang
                       ? Array.from(e.target.selectedOptions, (option) => optionValue(item, option.value))
                       : optionValue(item, e.target.value))}
                   >
-                    {!item.required && item.control !== "multiselect" && <option value="">{t("canvas.mediaModelParamChip.default")}</option>}
+                    {!item.required && item.control !== "multiselect" && <option value="">{t("canvas.modelParams.defaultOption")}</option>}
                     {(item.options ?? []).map((option) => {
                       const token = optionToken(option);
                       return <option key={token} value={token}>{String(option)}</option>;

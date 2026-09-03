@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import loginStyles from "@/components/login/login.module.css";
@@ -6,8 +7,18 @@ import SideRays from "@/components/react-bits/side-rays";
 import styles from "./eleventh-faq-screen.module.css";
 import { businessWechatQrUrl } from "./media";
 
-// Mỗi khoá tra vào `landing.eleventh.faqs`.
-const faqs = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10"];
+const FAQ_IDS = [
+  "difference",
+  "gettingStarted",
+  "mirrorVsCanvas",
+  "canvasOverwrite",
+  "whyAssetsFirst",
+  "contentTypes",
+  "teamRoles",
+  "unstableResults",
+  "dcUniverse",
+  "afterLogin",
+];
 
 export function EleventhFaqScreen({
   exitProgress = 0,
@@ -46,17 +57,17 @@ export function EleventhFaqScreen({
       />
       <div className={styles.inner}>
         <header className={styles.header}>
-          <h2>{t("landing.eleventh.title")}</h2>
-          <span>{t("landing.eleventh.subtitle")}</span>
+          <h2>{t("loginCinematic.faq.heading")}</h2>
+          <span>{t("loginCinematic.faq.subheading")}</span>
         </header>
 
         <div className={styles.list}>
-          {faqs.map((item, index) => {
+          {FAQ_IDS.map((faqId, index) => {
             const isOpen = openIndex === index;
             return (
               <article
                 className={`${styles.item} ${isOpen ? styles.itemOpen : ""}`}
-                key={item}
+                key={faqId}
               >
                 <button
                   type="button"
@@ -66,12 +77,12 @@ export function EleventhFaqScreen({
                     setOpenIndex(isOpen ? -1 : index);
                   }}
                 >
-                  <span>{t(`landing.eleventh.faqs.${item}.question`)}</span>
+                  <span>{t(`loginCinematic.faq.items.${faqId}.question`)}</span>
                   <Plus aria-hidden="true" />
                 </button>
                 <div className={styles.answer} aria-hidden={!isOpen}>
                   <div className={styles.answerInner}>
-                    <p>{t(`landing.eleventh.faqs.${item}.answer`)}</p>
+                    <p>{t(`loginCinematic.faq.items.${faqId}.answer`)}</p>
                   </div>
                 </div>
               </article>
@@ -80,25 +91,25 @@ export function EleventhFaqScreen({
         </div>
 
         <div className={styles.footer}>
-          <p>{t("landing.eleventh.footerQuestion")}</p>
+          <p>{t("loginCinematic.faq.contactPrompt")}</p>
           <div className={`${loginStyles.businessWechat} ${styles.contactHover}`}>
             <button
               type="button"
               className={`${loginStyles.businessWechatTrigger} ${styles.contactButton}`}
-              aria-label={t("landing.common.contactBusinessAria")}
+              aria-label={t("loginCinematic.faq.contactOpen")}
             >
-              {t("landing.common.contactBusiness")}
+              {t("loginCinematic.faq.contactCta")}
             </button>
             <div
               className={`${loginStyles.businessWechatPopover} ${styles.contactPopover}`}
               role="dialog"
-              aria-label={t("landing.common.contactBusinessDialog")}
+              aria-label={t("loginCinematic.faq.contactLabel")}
             >
               <div className={`${loginStyles.businessWechatPanel} ${styles.contactPanel}`}>
                 <img
                   className={styles.contactQr}
                   src={businessWechatQrUrl}
-                  alt={t("landing.common.businessQrAlt")}
+                  alt={t("loginCinematic.faq.qrAlt")}
                   draggable={false}
                 />
               </div>

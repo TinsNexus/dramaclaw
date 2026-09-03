@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PushTarget } from "@/api/push";
+import type { TFn } from "@/lib/i18n-types";
 import { promoteToAsset } from "./promoteToAsset";
 
 const GLOBAL_SLOT_KINDS = new Set<PushTarget["kind"]>([
@@ -55,7 +56,7 @@ export function BatchCommitDialog({
   onClose,
   onDone,
 }: BatchCommitDialogProps) {
-  const { t } = useTranslation("freezone", { keyPrefix: "commit.batch" });
+  const { t } = useTranslation();
   const [rows, setRows] = useState<Record<string, RowState>>(() =>
     Object.fromEntries(
       items.map((it) => [
@@ -109,7 +110,13 @@ export function BatchCommitDialog({
 
   const handleClose = () => {
     if (done && succeeded > 0) {
-      onDone(t("onDoneMessage", { succeeded, failed, skipped: items.length - sendable.length }));
+      onDone(
+        t("freezone.commit.batch.doneMessage", {
+          succeeded,
+          failed,
+          skipped: items.length - sendable.length,
+        }),
+      );
     }
     onClose();
   };
@@ -120,17 +127,22 @@ export function BatchCommitDialog({
         <header className="flex items-center justify-between px-5 py-4 border-b border-border-default">
           <div>
             <div className="text-base font-semibold text-text">
-              📤 {t("header.title")}
+              {t("freezone.commit.batch.title")}
             </div>
             <div className="text-xs text-text-muted mt-0.5">
-              {t("header.subtitle", { project, total: items.length, pushable: sendable.length, skipped: items.length - sendable.length })}
+              {t("freezone.commit.batch.subtitle", {
+                project,
+                total: items.length,
+                sendable: sendable.length,
+                skipped: items.length - sendable.length,
+              })}
             </div>
           </div>
           <button
             type="button"
             onClick={handleClose}
             className="text-text-muted hover:text-text transition text-sm"
-            aria-label={t("close.label")}
+            aria-label={t("common.close")}
           >
             ✕
           </button>
@@ -138,7 +150,7 @@ export function BatchCommitDialog({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="text-xs text-text-muted/80 mb-3 leading-relaxed">
-            {t("description")}
+            {t("freezone.commit.batch.hint")}
           </div>
           <ul className="space-y-1.5">
             {items.map((it) => {
@@ -161,10 +173,12 @@ export function BatchCommitDialog({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-text truncate">{it.label}</div>
                     <div className="text-xs text-text-muted truncate">
-                      {it.target ? renderTargetLabel(it.target) : t("noSource")}
+                      {it.target
+                        ? renderTargetLabel(it.target)
+                        : t("freezone.commit.batch.noProvenance")}
                     </div>
                   </div>
-                  <StatusBadge state={state} />
+                  <StatusBadge state={state} t={t} />
                 </li>
               );
             })}
@@ -174,8 +188,12 @@ export function BatchCommitDialog({
         <footer className="px-5 py-4 border-t border-border-default flex items-center justify-between">
           <div className="text-sm text-text-muted">
             {done
-              ? t("footer.statusDone", { succeeded, failed, skipped: items.length - sendable.length })
-              : t("footer.statusPending", { count: sendable.length })}
+              ? t("freezone.commit.batch.summaryDone", {
+                  succeeded,
+                  failed,
+                  skipped: items.length - sendable.length,
+                })
+              : t("freezone.commit.batch.summaryReady", { count: sendable.length })}
           </div>
           <div className="flex gap-2">
             <button
@@ -184,7 +202,7 @@ export function BatchCommitDialog({
               className="px-3 py-1.5 rounded-lg text-text-muted hover:text-text text-sm transition"
               disabled={submitting}
             >
-              {done ? t("button.done") : t("button.cancel")}
+              {done ? t("freezone.commit.batch.done") : t("common.cancel")}
             </button>
             {!done && (
               <button
@@ -193,7 +211,12 @@ export function BatchCommitDialog({
                 disabled={submitting || sendable.length === 0}
                 className="px-4 py-1.5 rounded-lg bg-accent/90 hover:bg-accent text-white text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? t("button.submitRunning", { done: succeeded + failed, total: sendable.length }) : t("button.submit", { count: sendable.length })}
+                {submitting
+                  ? t("freezone.commit.batch.submitting", {
+                      current: succeeded + failed,
+                      total: sendable.length,
+                    })
+                  : t("freezone.commit.batch.submit", { count: sendable.length })}
               </button>
             )}
             {done && failed > 0 && (
@@ -203,7 +226,7 @@ export function BatchCommitDialog({
                 disabled={submitting}
                 className="px-4 py-1.5 rounded-lg bg-yellow-600/90 hover:bg-yellow-500 text-white text-sm transition"
               >
-                {t("button.retry", { count: failed })}
+                {t("freezone.commit.batch.retryFailed", { count: failed })}
               </button>
             )}
           </div>
@@ -213,22 +236,37 @@ export function BatchCommitDialog({
   );
 }
 
-function StatusBadge({ state }: { state: RowState }) {
-  const { t } = useTranslation("freezone", { keyPrefix: "commit.batch" });
+function StatusBadge({ state, t }: { state: RowState; t: TFn }) {
   if (state.status === "pending")
-    return <span className="text-xs text-text-muted shrink-0">{t("status.pending")}</span>;
+    return (
+      <span className="text-xs text-text-muted shrink-0">
+        {t("freezone.commit.batch.status.pending")}
+      </span>
+    );
   if (state.status === "running")
-    return <span className="text-xs text-accent shrink-0">{t("status.running")}</span>;
+    return (
+      <span className="text-xs text-accent shrink-0">
+        {t("freezone.commit.batch.status.running")}
+      </span>
+    );
   if (state.status === "ok")
-    return <span className="text-xs text-emerald-400 shrink-0">✓ {t("status.success")}</span>;
+    return (
+      <span className="text-xs text-emerald-400 shrink-0">
+        {t("freezone.commit.batch.status.ok")}
+      </span>
+    );
   if (state.status === "skipped")
-    return <span className="text-xs text-text-muted/70 shrink-0">{t("status.skipped")}</span>;
+    return (
+      <span className="text-xs text-text-muted/70 shrink-0">
+        {t("freezone.commit.batch.status.skipped")}
+      </span>
+    );
   return (
     <span
       className="text-xs text-red-400 shrink-0 cursor-help"
       title={state.error ?? ""}
     >
-      ✗ {t("status.failed")}
+      {t("freezone.commit.batch.status.failed")}
     </span>
   );
 }

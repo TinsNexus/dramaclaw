@@ -2,6 +2,8 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useTranslation } from "react-i18next";
 import { isMainlineContext, type MainlineContext } from "./mainlineContext";
+import { useTranslation } from "react-i18next";
+import type { TFn } from "@/lib/i18n-types";
 import type { CandidateBindingRole } from "./mainlineContext";
 
 interface NodeContextBadgesProps {
@@ -9,37 +11,29 @@ interface NodeContextBadgesProps {
   variant?: "floating" | "subtle";
 }
 
-const LABEL_KEYS: Record<string, string> = {
-  identity: "freezone.nodeContextBadges.labels.identity",
-  voice: "freezone.nodeContextBadges.labels.voice",
-  narrator_voice: "freezone.nodeContextBadges.labels.narratorVoice",
-  bgm: "BGM",
-  sfx: "freezone.nodeContextBadges.labels.sfx",
-  ambient_audio: "freezone.nodeContextBadges.labels.ambientAudio",
-  scene: "freezone.nodeContextBadges.labels.scene",
-  prop: "freezone.nodeContextBadges.labels.prop",
-  beat: "Beat",
-  sketch: "freezone.nodeContextBadges.labels.sketch",
-  frame: "freezone.nodeContextBadges.labels.frame",
-  video: "freezone.nodeContextBadges.labels.video",
-  audio: "freezone.nodeContextBadges.labels.audio",
-  director_combined: "freezone.nodeContextBadges.labels.directorCombined",
-  selected_background: "freezone.nodeContextBadges.labels.selectedBackground",
-};
+const KIND_KEYS = new Set([
+  "identity",
+  "voice",
+  "narrator_voice",
+  "bgm",
+  "sfx",
+  "ambient_audio",
+  "scene",
+  "prop",
+  "beat",
+  "sketch",
+  "frame",
+  "video",
+  "audio",
+  "director_combined",
+  "selected_background",
+]);
 
-const BINDING_LABEL_KEYS: Record<CandidateBindingRole, string> = {
-  background_candidate: "freezone.nodeContextBadges.bindingLabels.backgroundCandidate",
-  sketch_candidate: "freezone.nodeContextBadges.bindingLabels.sketchCandidate",
-  frame_candidate: "freezone.nodeContextBadges.bindingLabels.frameCandidate",
-  selected_background: "freezone.nodeContextBadges.labels.selectedBackground",
-  current_sketch: "freezone.nodeContextBadges.bindingLabels.currentSketch",
-  current_frame: "freezone.nodeContextBadges.bindingLabels.currentFrame",
-};
+function kindLabel(kind: string, t: TFn): string {
+  return KIND_KEYS.has(kind) ? t(`freezone.nodeContext.kind.${kind}`) : kind;
+}
 
-function badgeText(
-  ctx: MainlineContext,
-  t: (key: string, opts?: any) => string = (key) => key
-): string {
+function badgeText(ctx: MainlineContext, t: TFn): string {
   if (typeof ctx.episode === "number" && typeof ctx.beat === "number") {
     if (ctx.kind === "beat") return `EP${ctx.episode} / Beat ${ctx.beat}`;
     if (
@@ -50,26 +44,26 @@ function badgeText(
       ctx.kind === "director_combined" ||
       ctx.kind === "selected_background"
     ) {
-      return `${t(LABEL_KEYS[ctx.kind])} · EP${ctx.episode}/B${ctx.beat}`;
+      return t("freezone.nodeContext.withEpisodeBeat", {
+        label: kindLabel(ctx.kind, t),
+        episode: ctx.episode,
+        beat: ctx.beat,
+      });
     }
   }
-  if (ctx.kind === "identity")
-    return t("freezone.nodeContextBadges.identityBadge", {
-      character: ctx.character || ctx.identityId || ctx.label || "",
+  if (ctx.kind === "identity" || ctx.kind === "voice") {
+    return t("freezone.nodeContext.withName", {
+      label: kindLabel(ctx.kind, t),
+      name: ctx.character || ctx.identityId || ctx.label || "",
     });
-  if (ctx.kind === "voice")
-    return t("freezone.nodeContextBadges.voiceBadge", {
-      character: ctx.character || ctx.identityId || ctx.label || "",
-    });
-  if (ctx.kind === "scene")
-    return t("freezone.nodeContextBadges.sceneBadge", {
-      scene: ctx.sceneId || ctx.label || "",
-    });
-  if (ctx.kind === "prop")
-    return t("freezone.nodeContextBadges.propBadge", {
-      prop: ctx.propId || ctx.label || "",
-    });
-  return t(LABEL_KEYS[ctx.kind]) || ctx.kind;
+  }
+  if (ctx.kind === "scene") {
+    return t("freezone.nodeContext.withName", { label: kindLabel(ctx.kind, t), name: ctx.sceneId || ctx.label || "" });
+  }
+  if (ctx.kind === "prop") {
+    return t("freezone.nodeContext.withName", { label: kindLabel(ctx.kind, t), name: ctx.propId || ctx.label || "" });
+  }
+  return kindLabel(ctx.kind, t);
 }
 
 function contextKey(ctx: MainlineContext, index: number): string {
@@ -127,7 +121,7 @@ export function NodeContextBadges({ contexts, variant = "floating" }: NodeContex
       <div className="flex max-w-full flex-wrap items-center gap-1">
         <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200/18 bg-amber-200/8 px-2 py-0.5 text-[10px] font-medium leading-none tracking-wide text-amber-100/78 backdrop-blur">
           <LinkIconDot />
-          <span className="shrink-0">{t("freezone.nodeContextBadges.mainlineAssets")}</span>
+          <span className="shrink-0">{t("freezone.nodeContext.mainlineAsset")}</span>
           <span className="min-w-0 truncate text-amber-100/72">{badgeText(primary, t)}</span>
         </div>
         {visible.map((ctx, index) => (
@@ -157,7 +151,7 @@ export function NodeContextBadges({ contexts, variant = "floating" }: NodeContex
     <div className="pointer-events-none absolute left-2 top-9 z-20 flex max-w-[calc(100%-16px)] flex-col items-start gap-1.5">
       <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-cyan-200/50 bg-cyan-950/80 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.22)] backdrop-blur">
         <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
-        <span className="shrink-0">{t("freezone.nodeContextBadges.mainlineAssets")}</span>
+        <span className="shrink-0">{t("freezone.nodeContext.mainlineAsset")}</span>
         <span className="min-w-0 truncate text-cyan-100/85">{badgeText(primary, t)}</span>
       </div>
       <div className="flex max-w-full flex-wrap gap-1">
@@ -200,7 +194,7 @@ export function CandidateBindingBadges({ roles }: { roles: CandidateBindingRole[
           className="inline-flex max-w-[220px] items-center gap-1 rounded-full border border-amber-200/45 bg-amber-950/80 px-2 py-0.5 text-[10px] font-semibold text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.2)] backdrop-blur"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-          {t(BINDING_LABEL_KEYS[role])}
+          {t(`freezone.nodeContext.binding.${role}`)}
         </span>
       ))}
     </div>

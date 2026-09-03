@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Replace } from 'lucide-react';
 import { Position } from '@xyflow/react';
 import { useTranslation } from 'react-i18next';
@@ -87,12 +88,12 @@ export function AssetCommitHandle({ node }: { node: CanvasNode }) {
       <button
         type="button"
         onPointerDown={handlePointerDown}
-        title={t('canvas.assetCommitHandle.title')}
+        title={t('canvas.assetReplace.handleHint')}
         className={`${NODE_SIDE_ACTION_BUTTON_CLASS} active:cursor-grabbing`}
         style={{ cursor: 'grab' }}
       >
         <Replace className={NODE_SIDE_ACTION_ICON_CLASS} />
-        {t('canvas.assetCommitHandle.label')}
+        {t('canvas.assetReplace.handleLabel')}
       </button>
     </NodeSideActionRail>
   );

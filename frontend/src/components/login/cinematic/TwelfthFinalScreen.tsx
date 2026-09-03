@@ -47,25 +47,25 @@ export function TwelfthFinalScreen({
           draggable={false}
           aria-hidden="true"
         />
-        <h2>{t("landing.twelfth.title")}</h2>
-        <p>{t("landing.twelfth.subtitle")}</p>
+        <h2>{t("loginCinematic.twelfth.heading")}</h2>
+        <p>{t("loginCinematic.twelfth.lead")}</p>
         <div className={styles.actions}>
           <button type="button" className={styles.primary} onClick={onStart}>
-            {t("landing.twelfth.primary")}
+            {t("loginCinematic.twelfth.primaryCta")}
           </button>
           <div className={styles.business}>
             <button type="button" className={styles.secondary}>
-              {t("landing.twelfth.secondary")}
+              {t("loginCinematic.twelfth.secondaryCta")}
             </button>
             <div
               className={styles.businessPopover}
               role="dialog"
-              aria-label={t("landing.common.contactBusinessDialog")}
+              aria-label={t("loginCinematic.faq.contactLabel")}
             >
               <div className={styles.businessPanel}>
                 <img
                   src={businessWechatQrUrl}
-                  alt={t("landing.common.businessQrAlt")}
+                  alt={t("loginCinematic.faq.qrAlt")}
                   draggable={false}
                 />
               </div>

@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { Viewer, CONSTANTS } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 import { Camera, Loader2, RotateCcw, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,10 +42,10 @@ const { ROTATE_UP, ROTATE_DOWN, ROTATE_LEFT, ROTATE_RIGHT, ZOOM_IN, ZOOM_OUT } =
 
 const DEG_TO_RAD = Math.PI / 180;
 const FOV_PRESETS = [
-  { labelKey: "viewerKit.panoCapture.fovPresetFisheye", value: 160 },
-  { labelKey: "viewerKit.panoCapture.fovPresetWide", value: 120 },
-  { labelKey: "viewerKit.panoCapture.fovPresetStandard", value: 70 },
-  { labelKey: "viewerKit.panoCapture.fovPresetTelephoto", value: 8 },
+  { key: "fisheye", value: 160 },
+  { key: "wide", value: 120 },
+  { key: "standard", value: 70 },
+  { key: "tele", value: 8 },
 ] as const;
 const DIRECTION_OFFSETS = {
   Front: 0,
@@ -215,7 +216,6 @@ export function PanoCaptureSurface({
   onClose,
 }: PanoCaptureSurfaceProps) {
   const { t } = useTranslation();
-  const finalCaptureLabel = captureLabel || t("viewerKit.panoCapture.captureLabel");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cropFrameElementRef = useRef<HTMLDivElement | null>(null);
@@ -662,7 +662,7 @@ export function PanoCaptureSurface({
     const canvas = hostRef.current?.querySelector("canvas");
     const viewer = viewerRef.current;
     if (!canvas || !viewer) {
-      setViewerError(t("viewerKit.panoCapture.viewerNotReady"));
+      setViewerError(t("viewer.pano.notReady"));
       return;
     }
     setIsCapturing(true);
@@ -726,11 +726,11 @@ export function PanoCaptureSurface({
     manifest.beat_context
       ? `EP ${manifest.beat_context.episode} / Beat ${manifest.beat_context.beat}`
       : null,
-    viewerPurposeLabel(viewerPurpose ?? (manifest.mode === "beat" ? "beat" : "asset")),
+    viewerPurposeLabel(viewerPurpose ?? (manifest.mode === "beat" ? "beat" : "asset"), t),
     "canonical pano",
     manifest.allowed_destinations.includes("beat_selected_background")
-      ? t("viewerKit.panoCapture.contextSaveTarget")
-      : t("viewerKit.panoCapture.contextSceneEntry"),
+      ? t("viewer.pano.contextSaveTarget")
+      : t("viewer.pano.contextDownloadOnly"),
   ].filter((label): label is string => Boolean(label));
 
   return (
@@ -770,14 +770,14 @@ export function PanoCaptureSurface({
           </div>
           <Button variant="outline" size="sm" onClick={resetView}>
             <RotateCcw className="size-3.5" />
-            {t("viewerKit.panoCapture.resetButton")}
+            {t("viewer.pano.resetView")}
           </Button>
           <Button size="sm" onClick={() => void capture()} disabled={isCapturing}>
             {isCapturing ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
-            {finalCaptureLabel}
+            {captureLabel ?? t("viewer.pano.capture")}
           </Button>
           {onClose && (
-            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t("viewerKit.panoCapture.closeButton")}>
+            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t("common.close")}>
               <X className="size-4" />
             </Button>
           )}
@@ -821,7 +821,7 @@ export function PanoCaptureSurface({
               onClick={() => setFovDeg(preset.value)}
               className="h-7 rounded-md border border-border bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              {t(preset.labelKey)}
+              {t(`viewer.pano.fovPresets.${preset.key}`)}
             </button>
           ))}
         </div>
@@ -838,17 +838,17 @@ export function PanoCaptureSurface({
           ))}
         </div>
         <Button variant="outline" size="sm" onClick={lockCurrentView}>
-          {t("viewerKit.panoCapture.lockViewButton")}
+          {t("viewer.pano.lockCurrentView")}
         </Button>
         <Button
           variant={planetBackup ? "secondary" : "outline"}
           size="sm"
           onClick={planetBackup ? exitPlanetView : enterPlanetView}
         >
-          {planetBackup ? t("viewerKit.panoCapture.exitPlanetView") : t("viewerKit.panoCapture.enterPlanetView")}
+          {planetBackup ? t("viewer.pano.exitPlanet") : t("viewer.pano.enterPlanet")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => void copyCorrectionJson()}>
-          {t("viewerKit.panoCapture.copyCorrectionJson")}
+          {t("viewer.pano.copyParamsJson")}
         </Button>
         {onSaveCorrection && (
           <Button
@@ -857,14 +857,14 @@ export function PanoCaptureSurface({
             onClick={() => void saveCorrection()}
             disabled={isSavingCorrection}
           >
-            {isSavingCorrection ? t("viewerKit.panoCapture.saving") : t("viewerKit.panoCapture.saveCorrection")}
+            {isSavingCorrection ? t("viewer.pano.saving") : t("viewer.pano.saveCorrection")}
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={() => setShowGuides((value) => !value)}>
-          {showGuides ? t("viewerKit.panoCapture.hideGuides") : t("viewerKit.panoCapture.showGuides")}
+          {showGuides ? t("viewer.pano.hideGuides") : t("viewer.pano.showGuides")}
         </Button>
         <Button variant="outline" size="sm" onClick={resetCropFrame}>
-          {t("viewerKit.panoCapture.resetCropFrame")}
+          {t("viewer.pano.resetCropFrame")}
         </Button>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 px-4 py-2 text-xs">
@@ -892,7 +892,7 @@ export function PanoCaptureSurface({
           />
         </label>
         <Button variant="outline" size="sm" onClick={setFrontYawFromView}>
-          {t("viewerKit.panoCapture.setFrontFromView")}
+          {t("viewer.pano.setFrontFromView")}
         </Button>
         <label className="flex items-center gap-2 text-muted-foreground">
           roll
@@ -964,7 +964,7 @@ export function PanoCaptureSurface({
           />
         </label>
         <Button variant="outline" size="sm" onClick={resetSphereCorrection}>
-          {t("viewerKit.panoCapture.resetSphereCorrection")}
+          {t("viewer.pano.resetCorrection")}
         </Button>
       </div>
       {viewerError && (
@@ -1016,10 +1016,10 @@ export function PanoCaptureSurface({
         {saveResult && (
           <div className="pointer-events-auto absolute bottom-3 right-3 z-10 max-w-[min(460px,calc(100%-24px))] rounded-lg border border-emerald-500/40 bg-background/90 p-3 text-xs shadow-lg backdrop-blur">
             <div className="font-medium text-emerald-600">
-              {t("viewerKit.panoCapture.saved")} {saveResult.anchor_id || t("viewerKit.panoCapture.screenshot")}
+              {t("viewer.pano.saved", { name: saveResult.anchor_id || t("viewer.pano.captureNoun") })}
             </div>
             <div className="mt-1 break-all text-muted-foreground">
-              {saveResult.rel_path || saveResult.path || t("viewerKit.panoCapture.noPathReturned")}
+              {saveResult.rel_path || saveResult.path || t("viewer.pano.noPathReturned")}
             </div>
             <div className="mt-1 text-muted-foreground">
               {saveResult.width} x {saveResult.height}
@@ -1029,9 +1029,9 @@ export function PanoCaptureSurface({
         {captureHistory.length > 0 && (
           <div className="pointer-events-auto absolute bottom-3 left-3 z-10 max-w-[min(560px,calc(100%-24px))] rounded-lg border border-border/70 bg-background/90 p-2 shadow-lg backdrop-blur">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-foreground">{t("viewerKit.panoCapture.captureHistory")}</div>
+              <div className="text-xs font-medium text-foreground">{t("viewer.pano.captureList")}</div>
               <Button variant="ghost" size="sm" onClick={clearCaptureHistory}>
-                {t("viewerKit.panoCapture.clearCaptureHistory")}
+                {t("viewer.pano.clearCaptureList")}
               </Button>
             </div>
             <div className="flex gap-2 overflow-x-auto">
@@ -1039,11 +1039,11 @@ export function PanoCaptureSurface({
                 <div key={item.id} className="w-32 shrink-0 overflow-hidden rounded-md border border-border bg-card">
                   <img
                     src={item.url}
-                    alt={t("viewerKit.panoCapture.screenshotAlt", { id: item.id })}
+                    alt={t("viewer.pano.captureN", { id: item.id })}
                     className="h-16 w-full object-cover"
                   />
                   <div className="space-y-0.5 p-2 text-[11px] leading-tight">
-                    <div className="font-medium text-foreground">{t("viewerKit.panoCapture.screenshotLabel", { id: item.id })}</div>
+                    <div className="font-medium text-foreground">{t("viewer.pano.captureN", { id: item.id })}</div>
                     <div className="text-muted-foreground">
                       {item.width} x {item.height} · {item.aspect}
                     </div>
@@ -1056,7 +1056,7 @@ export function PanoCaptureSurface({
                       download={`pano-capture-${item.id}.png`}
                       className="inline-flex text-primary hover:underline"
                     >
-                      {t("viewerKit.panoCapture.downloadScreenshot", { id: item.id })}
+                      {t("viewer.pano.downloadCaptureN", { id: item.id })}
                     </a>
                   </div>
                 </div>

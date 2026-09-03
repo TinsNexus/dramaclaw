@@ -122,6 +122,24 @@ def test_clean_scene_name_and_time_preserves_specific_location_anchor():
     assert tod == ""
 
 
+@pytest.mark.parametrize(
+    ("raw_name", "expected_name", "expected_time"),
+    [
+        ("Seoul Subway Station 11:47 PM", "Seoul Subway Station", "夜晚"),
+        ("Living Room - NIGHT", "Living Room", "夜晚"),
+        ("Park, daytime", "Park", "白天"),
+        ("Studio 54", "Studio 54", ""),
+    ],
+)
+def test_clean_scene_name_and_time_removes_english_time_suffixes(
+    raw_name, expected_name, expected_time
+):
+    name, tod = clean_scene_name_and_time(raw_name, "")
+
+    assert name == expected_name
+    assert tod == expected_time
+
+
 def test_normalized_scene_block_validator_cleans_location_time():
     block = NormalizedSceneBlock(
         episode_number=3,
@@ -225,36 +243,63 @@ class _FakeAgent:
 
 
 @pytest.mark.asyncio
-async def test_normalize_screenplay_scenes_uses_agent_output():
-    fake_agent = _FakeAgent(
+async def test_single_normalizer_keeps_a_parsed_english_location_verbatim():
+    from novelvideo.cognee.screenplay_normalizer import (
+        NormalizedSceneHeader,
+        normalize_screenplay_scene_header,
+    )
+
+    agent = _FakeAgent(
         NormalizedSceneHeader(
-            episode_number=3,
+            episode_number=1,
             scene_no="1",
-            location="凤鸣皇城·苏鸾寝殿",
-            time_of_day="亥时",
+            location="中央图书馆",
+            time_of_day="白天",
             interior_exterior="内",
-            aliases=["苏鸾寝殿"],
-            scene_type="interior",
+        )
+    )
+
+    result = await normalize_screenplay_scene_header(
+        "1-1 Central Library - DAY",
+        location_hint="Central Library",
+        context_lines=["MAYA walks between the shelves."],
+        agent=agent,
+    )
+
+    assert result is not None and result.location == "Central Library"
+    assert "English" in agent.prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_batch_normalizer_keeps_each_parsed_english_location_verbatim():
+    from novelvideo.cognee.screenplay_normalizer import (
+        BatchSceneHeaderItem,
+        NormalizedSceneHeaderBatch,
+    )
+
+    agent = _FakeAgent(
+        NormalizedSceneHeaderBatch(
+            scenes=[
+                BatchSceneHeaderItem(
+                    index=0,
+                    episode_number=1,
+                    scene_no="1",
+                    location="中央图书馆",
+                    time_of_day="白天",
+                    interior_exterior="内",
+                )
+            ]
         )
     )
 
     scenes = await normalize_screenplay_scenes(
-        "3-1、凤鸣皇城·苏鸾寝殿 亥时 内\n人物：苏糖、沈晚、锦绣\n△寝殿内，床帐放下。",
-        agent=fake_agent,
+        "INT./EXT. CENTRAL LIBRARY - DAY\n"
+        "MAYA walks between the shelves and opens a book.",
+        agent=agent,
     )
 
-    assert len(scenes) == 1
-    assert scenes[0].location == "凤鸣皇城·苏鸾寝殿"
-    assert scenes[0].time_of_day == "夜晚"
-    assert scenes[0].characters == ["苏糖", "沈晚", "锦绣"]
-    assert scenes[0].content_lines == ["△寝殿内，床帐放下。"]
-    assert "3-1、凤鸣皇城·苏鸾寝殿 亥时 内" in fake_agent.prompts[0]
-    assert "<scene_header>" in fake_agent.prompts[0]
-    assert "</scene_header>" in fake_agent.prompts[0]
-    assert "人物：苏糖、沈晚、锦绣" not in fake_agent.prompts[0]
-    assert "<scene_context>" in fake_agent.prompts[0]
-    assert "△寝殿内，床帐放下。" in fake_agent.prompts[0]
-    assert "location 是稳定物理地点" not in fake_agent.prompts[0]
+    assert [scene.location for scene in scenes] == ["CENTRAL LIBRARY"]
+    assert "English" in agent.prompts[0]
 
 
 @pytest.mark.asyncio

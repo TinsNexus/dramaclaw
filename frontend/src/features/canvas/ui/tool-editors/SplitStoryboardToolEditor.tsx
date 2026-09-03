@@ -484,18 +484,18 @@ export function SplitStoryboardToolEditor({ sourceImageUrl, options, onOptionsCh
       </div>
 
       <div className="h-full space-y-4 rounded-[10px] border border-white/[0.10] bg-[#111214]/72 p-3.5">
-        <div className="text-sm font-medium text-text-dark">{t('canvas.splitStoryboardEditor.parameters')}</div>
+        <div className="text-sm font-medium text-text-dark">{t('canvas.splitEditor.params')}</div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
           <NumberStepper
-            label={t('canvas.splitStoryboardEditor.rows')}
+            label={t('canvas.splitEditor.rows')}
             value={rows}
             min={MIN_GRID_SIZE}
             max={MAX_GRID_SIZE}
             onChange={(value) => updateOptions({ rows: value })}
           />
           <NumberStepper
-            label={t('canvas.splitStoryboardEditor.cols')}
+            label={t('canvas.splitEditor.cols')}
             value={cols}
             min={MIN_GRID_SIZE}
             max={MAX_GRID_SIZE}
@@ -505,7 +505,7 @@ export function SplitStoryboardToolEditor({ sourceImageUrl, options, onOptionsCh
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-text-muted">
-            <span>{t('canvas.splitStoryboardEditor.lineThickness')}</span>
+            <span>{t('canvas.splitEditor.lineThickness')}</span>
             <span>
               {formatPercent(lineThicknessPercent)}
               {naturalSize ? ` (${lineThicknessPx}px)` : ''}
@@ -544,17 +544,17 @@ export function SplitStoryboardToolEditor({ sourceImageUrl, options, onOptionsCh
 
         <div className="rounded-[8px] border border-white/[0.10] bg-bg-dark/42 px-3 py-2 text-xs text-text-muted">
           <div className="flex items-center justify-between">
-            <span>{t('canvas.splitStoryboardEditor.outputCellCount')}</span>
+            <span>{t('canvas.splitEditor.cellCount')}</span>
             <span className="font-medium text-text-dark">{rows * cols}</span>
           </div>
           {layout && (
             <>
               <div className="mt-1 flex items-center justify-between">
-                <span>{t('canvas.splitStoryboardEditor.cellWidth')}</span>
+                <span>{t('canvas.splitEditor.cellWidth')}</span>
                 <span>{splitSizeLabel(layout.minCellWidth, layout.maxCellWidth)}</span>
               </div>
               <div className="mt-1 flex items-center justify-between">
-                <span>{t('canvas.splitStoryboardEditor.cellHeight')}</span>
+                <span>{t('canvas.splitEditor.cellHeight')}</span>
                 <span>{splitSizeLabel(layout.minCellHeight, layout.maxCellHeight)}</span>
               </div>
             </>
@@ -563,7 +563,7 @@ export function SplitStoryboardToolEditor({ sourceImageUrl, options, onOptionsCh
 
         {hasLayoutError && (
           <div className="rounded-[8px] border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            {t('canvas.splitStoryboardEditor.error.lineTooThick')}
+            {t('canvas.splitEditor.layoutError')}
           </div>
         )}
       </div>

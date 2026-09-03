@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./scroll-video-scene.module.css";
@@ -87,9 +88,9 @@ export function ScrollVideoScene({
         href={`/watch/${COMMUNITY_WATCH_WORK}`}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={t("landing.common.watchNowAria")}
+        aria-label={t("loginCinematic.watchCommunity")}
       >
-        <span>{t("landing.common.watchNow")}</span>
+        <span>{t("loginCinematic.watchNow")}</span>
       </a>
       <div className={`${styles.copy} ${align === "right" ? styles.copyRight : ""}`}>
         <p className={styles.kicker}>{kicker}</p>

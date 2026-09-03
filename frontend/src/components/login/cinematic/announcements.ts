@@ -64,7 +64,7 @@ const AnnouncementSchema = z.object({
   id: z.string().trim().min(1),
   publishedAt: z
     .string()
-    .refine((value) => Number.isFinite(Date.parse(value)), "publishedAt 必须是可解析的 ISO 8601"),
+    .refine((value) => Number.isFinite(Date.parse(value)), "publishedAt 必须是可解析的 ISO 8601"), // i18n-exempt —— zod 校验的开发期报错
   pinned: z.boolean().optional(),
   // 至少得有一种语言，否则这条公告渲染出来是张空卡。
   i18n: z.record(z.string(), AnnouncementTextSchema).refine((map) => Object.keys(map).length > 0),
@@ -228,7 +228,6 @@ function loadReadIds(): string[] {
 
 export type AnnouncementReadState = {
   isRead: (id: string) => boolean;
-  markRead: (id: string) => void;
   markAllRead: (ids: readonly string[]) => void;
   unreadCount: (ids: readonly string[]) => number;
 };
@@ -236,37 +235,26 @@ export type AnnouncementReadState = {
 export function useAnnouncementReadState(): AnnouncementReadState {
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(() => new Set(loadReadIds()));
 
-  const persist = useCallback((next: ReadonlySet<string>) => {
-    setReadIds(next);
-    try {
-      window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify([...next]));
-    } catch {
-      // 存不下就只在本次会话里生效，不影响这一次的交互。
-    }
+  const markAllRead = useCallback((ids: readonly string[]) => {
+    if (ids.length === 0) return;
+
+    setReadIds((current) => {
+      const next = new Set(current);
+      const previousSize = next.size;
+      ids.forEach((id) => next.add(id));
+      if (next.size === previousSize) return current;
+
+      try {
+        window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // 存不下就只在本次会话里生效，不影响这一次的交互。
+      }
+      return next;
+    });
   }, []);
-
-  const markRead = useCallback(
-    (id: string) => {
-      setReadIds((current) => {
-        if (current.has(id)) return current;
-        const next = new Set(current).add(id);
-        persist(next);
-        return next;
-      });
-    },
-    [persist],
-  );
-
-  const markAllRead = useCallback(
-    (ids: readonly string[]) => {
-      persist(new Set(ids));
-    },
-    [persist],
-  );
 
   return {
     isRead: useCallback((id: string) => readIds.has(id), [readIds]),
-    markRead,
     markAllRead,
     unreadCount: useCallback(
       (ids: readonly string[]) => ids.filter((id) => !readIds.has(id)).length,

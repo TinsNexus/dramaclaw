@@ -14,15 +14,7 @@ import {
 import { promoteToAsset } from "@/features/freezone/commit/promoteToAsset";
 import { assetToPushTarget, completeTarget, inferDefaultTarget } from "@/features/freezone/commit/pushTarget";
 
-// Vietnamese translation mapping for tests
-const viTranslations: Record<string, string> = {
-  "freezone.commit.dialog.heading.directorWorldState": "Trạng thái thế giới đạo diễn",
-  "freezone.commit.dialog.heading.manifestCommit": "Gửi manifest thế giới đạo diễn hiện tại",
-  "freezone.commit.dialog.label.scene": "Bối cảnh",
-  "freezone.commit.dialog.directorWorldSource.custom": "Thế giới 3D tùy chỉnh",
-};
-
-const translateVi = (key: string): string => viTranslations[key] ?? key;
+import { zhT } from "../../helpers/i18n-fixtures";
 
 describe("CommitDialog target kinds", () => {
   it("hides deprecated and auxiliary scene asset kinds from user selection", () => {
@@ -75,8 +67,9 @@ describe("CommitDialog target kinds", () => {
 
     expect(source).toContain("commitSourceTitle");
     expect(source).toContain('target?.kind === "scene_director_world"');
-    expect(source).toContain('t("freezone.commit.dialog.heading.directorWorldState")');
-    expect(source).toContain('t("freezone.commit.dialog.heading.manifestCommit")');
+    // 文案已搬进词条，源码里只剩 key；词条内容由 locale 对齐测试兜底。
+    expect(source).toContain('t("freezone.commit.directorWorldState")');
+    expect(source).toContain('t("freezone.commit.directorWorldManifestHint")');
   });
 
   it("shows model scene targets as scene selection instead of a raw scene_id-only field", () => {
@@ -86,7 +79,7 @@ describe("CommitDialog target kinds", () => {
     );
 
     expect(source).toContain("listScenes(project)");
-    expect(source).toContain('t("freezone.commit.dialog.label.scene")');
+    expect(source).toContain('aria-label={t("freezone.commit.sections.scene")}');
     expect(source).toContain("sceneOptionLabel(scene)");
   });
 
@@ -113,8 +106,8 @@ describe("CommitDialog target kinds", () => {
       },
       "/static/u/p/freezone/generated/master_sharp.sog",
       "master_sharp.sog",
-      translateVi,
-    )).toBe("Thế giới 3D tùy chỉnh");
+      zhT,
+    )).toBe("自定义 3D 世界");
   });
 
   it("does not allow scene director world through the file-copy commit route", async () => {

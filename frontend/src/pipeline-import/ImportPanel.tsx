@@ -2,6 +2,8 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFn } from "@/lib/i18n-types";
+import { isAutoEpisodeTitle } from "@/lib/episode-title";
 import {
   listCharacters,
   listEpisodes,
@@ -66,7 +68,7 @@ const DEFAULT_KIND_TOGGLES: KindToggles = {
 };
 
 export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
-  const { t } = useTranslation("pipelineImport.importPanel");
+  const { t } = useTranslation();
   const [characters, setCharacters] = useState<SupertaleCharacter[]>([]);
   const [episodes, setEpisodes] = useState<SupertaleEpisodeSummary[]>([]);
   const [selectedCharacters, setSelectedCharacters] = useState<Set<string>>(new Set());
@@ -98,13 +100,13 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : t("importFailed"));
+        setError(err instanceof Error ? err.message : t("pipelineImport.import.loadFailed"));
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [project]);
+  }, [project, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,18 +136,16 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
 
   const previewAssets = useMemo(
     () =>
-      collectAssets(
-        {
-          project,
-          characters,
-          selectedCharacters,
-          beats,
-          selectedBeats,
-          episode: selectedEpisode,
-          kinds,
-        },
+      collectAssets({
+        project,
+        characters,
+        selectedCharacters,
+        beats,
+        selectedBeats,
+        episode: selectedEpisode,
+        kinds,
         t,
-      ),
+      }),
     [project, characters, selectedCharacters, beats, selectedBeats, selectedEpisode, kinds, t],
   );
 
@@ -163,7 +163,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
   const footer = (
     <>
       <div className="mr-auto text-xs text-text-muted self-center">
-        {t("willImportNImages", { n: previewAssets.length })}
+        {t("pipelineImport.import.willImport", { count: previewAssets.length })}
       </div>
       <UiButton variant="ghost" size="sm" onClick={onClose}>
         {t("common.cancel")}
@@ -174,7 +174,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
         onClick={handleSubmit}
         disabled={previewAssets.length === 0 || submitting}
       >
-        {submitting ? t("importing") : t("import")}
+        {submitting ? t("pipelineImport.import.submitting") : t("pipelineImport.import.submit")}
       </UiButton>
     </>
   );
@@ -182,13 +182,13 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
   return (
     <UiModal
       isOpen
-      title={t("importAssetsToCanvas")}
+      title={t("pipelineImport.import.title")}
       onClose={onClose}
       footer={footer}
       widthClassName="w-[640px]"
     >
       <div className="text-xs text-text-muted -mt-1 mb-3">
-        {t("projectLabel", { project })}
+        {t("pipelineImport.import.project", { project })}
       </div>
 
       <div className="ui-scrollbar max-h-[60vh] overflow-y-auto space-y-5 -mx-1 px-1">
@@ -198,38 +198,38 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
           <div className="text-sm text-red-400 py-8 text-center">{error}</div>
         ) : (
           <>
-            <Section title={t("assetTypes")}>
+            <Section title={t("pipelineImport.import.assetKinds")}>
               <KindToggleRow
-                label={t("identityLabel")}
+                label={t("pipelineImport.import.kind.identity")}
                 checked={kinds.identity}
                 onChange={(v) => setKinds({ ...kinds, identity: v })}
               />
               <KindToggleRow
-                label={t("portraitLabel")}
+                label={t("pipelineImport.import.kind.portrait")}
                 checked={kinds.portrait}
                 onChange={(v) => setKinds({ ...kinds, portrait: v })}
               />
               <KindToggleRow
-                label={t("frameLabel")}
+                label={t("pipelineImport.import.kind.frame")}
                 checked={kinds.frame}
                 onChange={(v) => setKinds({ ...kinds, frame: v })}
               />
               <KindToggleRow
-                label={t("sketchLabel")}
+                label={t("pipelineImport.import.kind.sketch")}
                 checked={kinds.sketch}
                 onChange={(v) => setKinds({ ...kinds, sketch: v })}
               />
               <KindToggleRow
-                label={t("directorRenderLabel")}
+                label={t("pipelineImport.import.kind.directorRender")}
                 checked={kinds.director_render}
                 onChange={(v) => setKinds({ ...kinds, director_render: v })}
               />
             </Section>
 
             {(kinds.identity || kinds.portrait) && (
-              <Section title={t("characters.title")}>
+              <Section title={t("pipelineImport.createIdentity.character")}>
                 {characters.length === 0 ? (
-                  <div className="text-xs text-text-muted">{t("noCharactersMessage")}</div>
+                  <div className="text-xs text-text-muted">{t("pipelineImport.import.noCharacters")}</div>
                 ) : (
                   <CharactersList
                     characters={characters}
@@ -246,7 +246,7 @@ export function ImportPanel({ project, onClose, onImport }: ImportPanelProps) {
             )}
 
             {(kinds.frame || kinds.sketch || kinds.director_render) && (
-              <Section title={t("episodeBeatSection")}>
+              <Section title={t("pipelineImport.import.episodeBeat")}>
                 <EpisodePicker
                   episodes={episodes}
                   selectedEpisode={selectedEpisode}
@@ -347,10 +347,12 @@ function EpisodePicker({
   selectedEpisode: number | null;
   onSelect: (ep: number) => void;
 }) {
-  const { t } = useTranslation("pipelineImport.importPanel");
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2 text-sm text-text-dark">
-      <span className="text-text-muted text-xs shrink-0">{t("episodeLabel")}</span>
+      <span className="text-text-muted text-xs shrink-0">
+        {t("pipelineImport.import.episodeLabel")}
+      </span>
       <div className="flex-1">
         <UiSelect
           value={selectedEpisode ?? ""}
@@ -358,7 +360,10 @@ function EpisodePicker({
         >
           {episodes.map((ep) => (
             <option key={ep.episode_num} value={ep.episode_num}>
-              ep{ep.episode_num} {ep.title ? `- ${ep.title}` : ""}
+              ep{ep.episode_num}{" "}
+              {ep.title && !isAutoEpisodeTitle(ep.title, ep.episode_num)
+                ? `- ${ep.title}`
+                : ""}
             </option>
           ))}
         </UiSelect>
@@ -376,7 +381,7 @@ function BeatRange({
   selected: Set<number>;
   onChange: (v: Set<number>) => void;
 }) {
-  const { t } = useTranslation("pipelineImport.importPanel");
+  const { t } = useTranslation();
   const allSelected = selected.size === total;
   const noneSelected = selected.size === 0;
   const setAll = () => onChange(new Set(Array.from({ length: total }, (_, i) => i + 1)));
@@ -395,7 +400,7 @@ function BeatRange({
           onClick={setAll}
           disabled={allSelected}
         >
-          {t("canvas.history.selectAll")}
+          {t("pipelineImport.import.selectAll")}
         </UiButton>
         <UiButton
           variant="ghost"
@@ -404,7 +409,7 @@ function BeatRange({
           onClick={setNone}
           disabled={noneSelected}
         >
-          {t("selectNone")}
+          {t("pipelineImport.import.selectNone")}
         </UiButton>
       </div>
       <div className="ui-scrollbar grid grid-cols-8 gap-1 max-h-32 overflow-y-auto pr-1">
@@ -442,6 +447,7 @@ interface CollectArgs {
   selectedBeats: Set<number>;
   episode: number | null;
   kinds: KindToggles;
+  t: TFn;
 }
 
 function collectAssets(
@@ -462,7 +468,7 @@ function collectAssets(
           id: `identity:${args.project}:${c.name}:${idKey}`,
           kind: "identity",
           url,
-          label: `${c.display_name || c.name} · ${idKey || t("identityDefaultLabel")}`,
+          label: `${c.display_name || c.name} · ${idKey || args.t("pipelineImport.import.identityFallbackLabel")}`,
           meta: {
             project: args.project,
             character: c.name,
@@ -476,7 +482,7 @@ function collectAssets(
         id: `portrait:${args.project}:${c.name}`,
         kind: "portrait",
         url: c.portrait_url,
-        label: `${c.display_name || c.name} · ${t("portraitDefaultLabel")}`,
+        label: `${c.display_name || c.name} · ${args.t("pipelineImport.import.portraitLabel")}`,
         meta: { project: args.project, character: c.name },
       });
     }
@@ -517,7 +523,7 @@ function collectAssets(
             id: `director_render:${args.project}:ep${args.episode}:beat${beatNum}`,
             kind: "director_render",
             url: drUrl,
-            label: `ep${args.episode} · beat ${beatNum} · ${t("directorRenderDefaultLabel")}`,
+            label: `ep${args.episode} · beat ${beatNum} · ${args.t("pipelineImport.import.directorRenderLabel")}`,
             meta: { project: args.project, episode: args.episode, beat: beatNum },
           });
         }

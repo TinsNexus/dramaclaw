@@ -19,6 +19,7 @@ import {
 import { isLowDetailZoom } from '@/features/canvas/application/canvasLod';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { toast } from 'sonner';
 import { ArrowUp, Loader2, Orbit } from 'lucide-react';
 
@@ -78,7 +79,10 @@ import {
   type CanvasNode,
   type ThreeDWorldNodeData,
 } from '@/features/canvas/domain/canvasNodes';
-import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import {
+  isNodeUsingDefaultDisplayName,
+  localizeNodeDisplayName,
+} from '@/features/canvas/domain/nodeDisplay';
 import {
   NodeHeader,
   NODE_HEADER_FLOATING_POSITION_CLASS,
@@ -131,7 +135,7 @@ interface UpstreamRef {
 function nodeLabel(node: CanvasNode, t: (key: string) => string = (key) => key): string {
   const dn = (node.data as { displayName?: unknown }).displayName;
   if (typeof dn === 'string' && dn.trim().length > 0) return dn;
-  return node.type ?? t('node.threeDWorld.upstreamNode');
+  return node.type ?? i18n.t('node.threeDWorld.upstreamNodeFallback');
 }
 
 function upstreamRef(node: CanvasNode | undefined | null, t: (key: string) => string = (key) => key): UpstreamRef | null {
@@ -406,7 +410,7 @@ function buildLocalDirectorManifest({
     display_name:
       typeof data.displayName === 'string' && data.displayName.trim()
         ? data.displayName
-        : 'Director World',
+        : i18n.t('node.threeDWorld.directorWorld'),
     source: manifestSource,
     sources: directorSources.length > 0 ? directorSources : undefined,
     active_source_id: data.activeSourceId ?? activeSource?.id,
@@ -509,9 +513,10 @@ function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): P
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error(t('node.threeDWorld.failedToReadScreenshot')));
+      else reject(new Error(i18n.t('node.threeDWorld.captureReadFailed')));
     };
-    reader.onerror = () => reject(reader.error ?? new Error(t('node.threeDWorld.failedToReadScreenshot')));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error(i18n.t('node.threeDWorld.captureReadFailed')));
     reader.readAsDataURL(blob);
   });
 }
@@ -520,7 +525,7 @@ function imageSize(dataUrl: string, t: (key: string) => string = (key) => key): 
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
-    image.onerror = () => reject(new Error(t('node.threeDWorld.failedToParseScreenshotDimensions')));
+    image.onerror = () => reject(new Error(i18n.t('node.threeDWorld.captureSizeFailed')));
     image.src = dataUrl;
   });
 }
@@ -582,11 +587,11 @@ function ReferenceImageThumb({
         onMouseEnter={showPreview}
         onMouseLeave={hidePreview}
         className="group nodrag relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04] transition-colors hover:border-white/30"
-        title={t('node.threeDWorld.referenceUpstreamImage')}
+        title={t('node.threeDWorld.refImageTitle')}
       >
         <img
           src={resolveImageDisplayUrl(item.url)}
-          alt={t('node.threeDWorld.upstreamImageReference')}
+          alt={t('node.threeDWorld.refImageAlt')}
           className="h-full w-full object-cover"
         />
         <ReferenceDetachButton nodeId={item.nodeId} onDetach={onDetach} />
@@ -601,7 +606,7 @@ function ReferenceImageThumb({
             <div className="overflow-hidden rounded-xl border border-white/15 bg-surface-dark/95 shadow-2xl backdrop-blur-sm">
               <img
                 src={resolveImageDisplayUrl(item.url)}
-                alt={t('node.threeDWorld.upstreamImageReferencePreview')}
+                alt={t('node.threeDWorld.refImagePreviewAlt')}
                 className="block h-auto w-full object-contain"
                 draggable={false}
               />
@@ -660,7 +665,8 @@ interface OpsPanelProps {
               >
                 {referenceImages.map((item, index) => (
                   <option key={item.nodeId} value={item.nodeId} className="bg-surface-dark text-text-dark">
-                    {item.displayName || t('node.threeDWorld.imageIndex', { index: index + 1 })}
+                    {item.displayName
+                      || t('node.threeDWorld.refImageFallback', { index: index + 1 })}
                   </option>
                 ))}
               </select>
@@ -860,10 +866,11 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
   );
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.threeDWorld, data, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.threeDWorld, data, t),
     [data, t],
   );
-  const headerTitle = resolvedTitle === t('node.displayName.threeDWorld')
+  // 没改过名就显示「导演世界」这个更贴切的叫法；用户自己起的名一律照原样。
+  const headerTitle = isNodeUsingDefaultDisplayName(CANVAS_NODE_TYPES.threeDWorld, data)
     ? t('viewer.threeD.directorWorld')
     : resolvedTitle;
 
@@ -1006,14 +1013,14 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
     const projectId = readUrl().project;
     const sourceNode = sourceNodeForGeneration;
     if (!projectId) {
-      updateNodeData(id, { errorMessage: t('node.threeDWorld.failedToIdentifyProject') });
+      updateNodeData(id, { errorMessage: t('node.threeDWorld.noProject') });
       return;
     }
     if (!upstream) return;
     if (isGenerating) return;
     if (upstream.kind === 'text') {
       updateNodeData(id, {
-        errorMessage: t('node.threeDWorld.textTo3DNotSupported'),
+        errorMessage: t('node.threeDWorld.textTo3dUnsupported'),
       });
       return;
     }
@@ -1027,7 +1034,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
           id: `upstream-pano:${sourceNode.id}`,
           source_type: 'pano360' as const,
           source_kind: 'pano' as const,
-          label: t('node.threeDWorld.pano360Image'),
+          label: t('node.threeDWorld.pano360Label'),
           url: sourceUrl,
           pano_url: sourceUrl,
           slot_kind: 'scene_director_pano_360' as const,
@@ -1065,11 +1072,11 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         sourceKind,
         label:
           sourceKind === 'pano'
-            ? t('node.threeDWorld.pano3DGS')
-            : t('node.threeDWorld.image3DGS'),
+            ? t('node.threeDWorld.pano3dgsLabel')
+            : t('node.threeDWorld.image3dgsLabel'),
       });
       if (!generatedSource) {
-        throw new Error(t('node.threeDWorld.failedToFindDirectorWorldAddress'));
+        throw new Error(t('node.threeDWorld.worldUrlMissing'));
       }
       const currentWorld = useCanvasStore.getState().nodes.find((node) => node.id === id);
       const currentSources = (
@@ -1094,7 +1101,9 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
       updateNodeData(id, {
         isGenerating: false,
         taskKey: null,
-        errorMessage: t('node.threeDWorld.generationFailed', { message: error instanceof Error ? error.message : String(error) }),
+        errorMessage: t('node.threeDWorld.generateFailed', {
+          message: error instanceof Error ? error.message : String(error),
+        }),
       });
     } finally {
       void refreshHistory();
@@ -1115,7 +1124,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
   const handleCaptureSelectedBackground = useCallback(
     async (blob: Blob) => {
       if (!beatContext) {
-        throw new Error(t('node.threeDWorld.notInBeatContextCannotSetBg'));
+        throw new Error(t('node.threeDWorld.notInBeatContext'));
       }
       await uploadAndAutoCommitSelectedBackgroundCandidate(
         { episode: beatContext.episode, beat: beatContext.beat },
@@ -1140,14 +1149,14 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
       if (!beatContext) return;
       const projectId = readUrl().project;
       if (!projectId) {
-        throw new Error(t('node.threeDWorld.missingProjectToSaveComposite'));
+        throw new Error(t('node.threeDWorld.combinedNoProject'));
       }
       if (!meta.captureBundle) {
-        throw new Error(t('node.threeDWorld.compositeImageMissingBundles'));
+        throw new Error(t('node.threeDWorld.combinedBundleMissing'));
       }
       const bundle = await uploadDirectorCaptureBundle(projectId, id, meta.captureBundle);
       const imageUrl = bundle.urls?.combined ?? '';
-      if (!imageUrl) throw new Error(t('node.threeDWorld.canvasCompositeImageMissingUrl'));
+      if (!imageUrl) throw new Error(t('node.threeDWorld.combinedUrlMissing'));
       updateNodeData(id, {
         previewImageUrl: withImageCacheBust(imageUrl, Date.now()),
         director_control_bundle: bundle,
@@ -1193,7 +1202,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
                 uploadedUrl: bundle.urls?.combined ?? '',
                 width: combinedSize.width,
                 height: combinedSize.height,
-                label: t('node.threeDWorld.directorCompositeImage'),
+                label: t('node.threeDWorld.combinedLabel'),
                 metadata: {
                   ...baseMetadata,
                   render_mode: 'combined',
@@ -1204,18 +1213,18 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
                 uploadedUrl: bundle.urls?.env_only ?? '',
                 width: envOnlySize.width,
                 height: envOnlySize.height,
-                label: t('node.threeDWorld.pureBgImage'),
+                label: t('node.threeDWorld.envOnlyLabel'),
                 metadata: {
                   ...baseMetadata,
                   render_mode: 'env_only',
                 },
               },
             ],
-            { cols: 2, groupName: t('node.threeDWorld.directorWorldOutput') },
+            { cols: 2, groupName: t('node.threeDWorld.captureGroupName') },
           );
           updateNodeData(id, {
             scene: meta.snapshot,
-            errorMessage: groupId ? null : t('node.threeDWorld.screenshotOutputToCanvasFailed'),
+            errorMessage: groupId ? null : t('node.threeDWorld.captureOutputFailed'),
           });
           if (groupId) {
             toast.success(t('viewer.threeD.outputToCanvasNodeSuccess'));
@@ -1234,7 +1243,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
             uploadedUrl,
             width: size.width,
             height: size.height,
-            label: t('node.threeDWorld.directorWorldKindLabel', { kind: meta.kind }),
+            label: t('node.threeDWorld.captureLabel', { kind: meta.kind }),
             metadata: {
               viewer: '3gs',
               render_mode: meta.kind,
@@ -1245,7 +1254,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         ]);
         updateNodeData(id, {
           scene: meta.snapshot,
-          errorMessage: groupId ? null : t('node.threeDWorld.screenshotOutputToCanvasFailed'),
+          errorMessage: groupId ? null : t('node.threeDWorld.captureOutputFailed'),
         });
         if (groupId) {
           toast.success(t('viewer.threeD.outputToCanvasNodeSuccess'));
@@ -1373,7 +1382,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         {previewThumb ? (
           <img
             src={resolveImageDisplayUrl(previewThumb)}
-            alt={t('node.threeDWorld.directorWorldThumbnail')}
+            alt={t('node.threeDWorld.thumbAlt')}
             className="h-full w-full object-cover"
             draggable={false}
           />

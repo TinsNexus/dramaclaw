@@ -9,6 +9,7 @@ import {
   useRef,
 } from 'react';
 import { createPortal } from 'react-dom';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   Handle,
@@ -39,7 +40,7 @@ import {
   isImageEditNode,
   isUploadNode,
 } from '@/features/canvas/domain/canvasNodes';
-import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { EXPORT_RESULT_DISPLAY_NAME, localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   canvasToDataUrl,
   loadImageElement,
@@ -252,7 +253,7 @@ async function applyStoryboardTextOverlay(
   rows: number,
   cols: number,
   layout: MergeStoryboardImagesResult,
-  t: (key: string) => string = (key) => key
+  t: TFunction
 ): Promise<string> {
   if (!options.showFrameIndex && !options.showFrameNote) {
     return imageSource;
@@ -265,7 +266,7 @@ async function applyStoryboardTextOverlay(
 
   const context = canvas.getContext('2d');
   if (!context) {
-    throw new Error(t('node.storyboardNode.canvasInitError'));
+    throw new Error(t('node.storyboard.exportCanvasInitFailed'));
   }
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -426,7 +427,7 @@ const FrameCard = memo(
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[11px] text-text-muted">
-              {t('node.storyboardNode.emptyFrame')}
+              {t('node.storyboard.emptyCell')}
             </div>
           )}
 
@@ -438,7 +439,7 @@ const FrameCard = memo(
               event.stopPropagation();
               onEditFrame(frame);
             }}
-            title={t('node.storyboardNode.editSingleFrameTooltip')}
+            title={t('node.storyboard.editCell')}
           >
             <SquareArrowOutUpRight className="h-3 w-3" />
           </button>
@@ -451,7 +452,7 @@ const FrameCard = memo(
               event.stopPropagation();
               onTogglePicker(frame.id, event.clientX, event.clientY);
             }}
-            title={t('node.storyboardNode.replaceFromInputTooltip')}
+            title={t('node.storyboard.replaceFromInput')}
           >
             <ImagePlus className="h-3 w-3" />
           </button>
@@ -467,7 +468,9 @@ const FrameCard = memo(
           }}
           onMouseDown={(event) => event.stopPropagation()}
           onWheelCapture={(event) => event.stopPropagation()}
-          placeholder={t('node.storyboardNode.frameNoteDescription', { frameNo: String(index + 1).padStart(2, '0') })}
+          placeholder={t('node.storyboard.cellNotePlaceholder', {
+            no: String(index + 1).padStart(2, '0'),
+          })}
           className="ui-scrollbar nodrag nowheel h-10 w-full resize-none overflow-y-auto border-0 border-t border-[rgba(255,255,255,0.12)] bg-bg-dark/90 px-2 py-1 text-[10px] text-text-dark outline-none focus:border-accent"
         />
       </div>
@@ -535,7 +538,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
   }, [id, resolvedNodeHeight, resolvedNodeWidth, updateNodeInternals]);
 
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardSplit, data, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.storyboardSplit, data, t),
     [data, t]
   );
 
@@ -571,7 +574,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
         imageUrl: item.imageUrl,
         previewImageUrl: item.previewImageUrl,
         displayUrl: resolveImageDisplayUrl(item.previewImageUrl || item.imageUrl),
-        label: `图${index + 1}`,
+        label: t('node.storyboard.inputImageLabel', { index: index + 1 }),
       })),
     [incomingImageRefs]
   );
@@ -686,13 +689,13 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
       try {
         const sourceImage = frame.imageUrl ?? frame.previewImageUrl;
         if (!sourceImage) {
-          setExportError(t('node.storyboardNode.noEditableImage'));
+          setExportError(t('node.storyboard.noEditableImage'));
           return;
         }
         const frameIndex = orderedFrames.findIndex((item) => item.id === frame.id);
         const frameTitle = frameIndex >= 0
-          ? t('node.storyboardNode.frameTitle', { index: frameIndex + 1 })
-          : t(EXPORT_RESULT_DISPLAY_NAME.storyboardFrameEdit);
+          ? t('node.storyboard.cellTitle', { index: frameIndex + 1 })
+          : EXPORT_RESULT_DISPLAY_NAME.storyboardFrameEdit;
 
         const prepared = await prepareNodeImage(sourceImage);
         // Upload so the edit node's imageUrl is a real backend URL instead of a
@@ -718,7 +721,9 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
           addEdge(id, createdNodeId);
         }
       } catch (error) {
-        setExportError(error instanceof Error ? error.message : t('node.storyboardNode.createEditNodeError'));
+        setExportError(
+          error instanceof Error ? error.message : t('node.storyboard.createEditNodeFailed'),
+        );
       }
     },
     [addDerivedExportNode, addEdge, id, orderedFrames]
@@ -748,7 +753,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
         (frame) => frame.imageUrl ?? frame.previewImageUrl ?? ''
       );
       if (frameSources.every((source) => !source)) {
-        throw new Error(t('node.storyboardNode.noExportImages'));
+        throw new Error(t('node.storyboard.noExportableImages'));
       }
       console.info(`${EXPORT_TRACE_PREFIX} frame-sources-ready`, {
         traceId,
@@ -906,7 +911,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
         elapsedMs: Math.round(performance.now() - traceStart),
         error,
       });
-      setExportError(error instanceof Error ? error.message : t('node.storyboardNode.exportError'));
+      setExportError(error instanceof Error ? error.message : t('node.storyboard.exportFailed'));
     } finally {
       setIsExporting(false);
     }
@@ -943,7 +948,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
         .filter((item) => item.source.length > 0);
 
       if (frameEntries.length === 0) {
-        throw new Error(t('node.storyboardNode.noExportImages'));
+        throw new Error(t('node.storyboard.cellNoExportableImage'));
       }
 
       const rootDir = await resolvePackRootDir();
@@ -951,9 +956,12 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
         return;
       }
 
-      const normalizedProjectName = sanitizePathSegment(readUrl().project ?? '', t('node.storyboardNode.defaultProjectName'));
+      const normalizedProjectName = sanitizePathSegment(
+        readUrl().project ?? '',
+        t('node.storyboard.untitledProject'),
+      );
       const outputDir = [rootDir, normalizedProjectName].filter(Boolean).join('/');
-      const fileProjectName = sanitizeExportLabel(normalizedProjectName, 40) || t('node.storyboardNode.defaultProjectNameFallback');
+      const fileProjectName = sanitizeExportLabel(normalizedProjectName, 40) || t('node.storyboard.projectFallback');
       for (const item of frameEntries) {
         const frameNo = String(item.index + 1).padStart(2, '0');
         const noteLabel = sanitizeExportLabel(item.note, 60);
@@ -964,7 +972,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
       }
 
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : t('node.storyboardNode.packDownloadError'));
+      setExportError(error instanceof Error ? error.message : t('node.storyboard.packFailed'));
     } finally {
       setIsPackingSingleImages(false);
     }
@@ -1092,7 +1100,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
               </div>
             ) : (
               <div className="px-2 py-2 text-sm text-text-muted">
-                {t('node.storyboardNode.noInputImages')}
+                {t('node.storyboard.noInputImages')}
               </div>
             )}
           </div>,
@@ -1114,7 +1122,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                   checked={exportOptions.showFrameIndex}
                   onCheckedChange={(checked) => patchExportOptions({ showFrameIndex: checked })}
                 />
-                {t('node.storyboardNode.showFrameIndex')}
+                {t('node.storyboard.showFrameIndex')}
               </label>
               <label className="flex items-center gap-2 whitespace-nowrap text-text-dark/90">
                 <UiCheckbox
@@ -1122,13 +1130,13 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                   checked={exportOptions.showFrameNote}
                   onCheckedChange={(checked) => patchExportOptions({ showFrameNote: checked })}
                 />
-                {t('node.storyboardNode.showFrameNote')}
+                {t('node.storyboard.showFrameNote')}
               </label>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.imageFit')}</span>
+                <span className="truncate">{t('node.storyboard.imageFit')}</span>
                 <UiSelect
                   className={STORYBOARD_EXPORT_FIELD_CLASS}
                   value={exportOptions.imageFit}
@@ -1138,12 +1146,12 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                     })
                   }
                 >
-                  <option value="cover">{t('node.storyboardNode.imageFitCover')}</option>
-                  <option value="contain">{t('node.storyboardNode.imageFitContain')}</option>
+                  <option value="cover">{t('node.storyboard.imageFitCover')}</option>
+                  <option value="contain">{t('node.storyboard.imageFitContain')}</option>
                 </UiSelect>
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.notePlacement')}</span>
+                <span className="truncate">{t('node.storyboard.notePlacement')}</span>
                 <UiSelect
                   className={STORYBOARD_EXPORT_FIELD_CLASS}
                   value={exportOptions.notePlacement}
@@ -1153,12 +1161,12 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                     })
                   }
                 >
-                  <option value="overlay">{t('node.storyboardNode.notePlacementOverlay')}</option>
-                  <option value="bottom">{t('node.storyboardNode.notePlacementBottom')}</option>
+                  <option value="overlay">{t('node.storyboard.notePlacementOverlay')}</option>
+                  <option value="bottom">{t('node.storyboard.notePlacementBottom')}</option>
                 </UiSelect>
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.frameIndexPrefix')}</span>
+                <span className="truncate">{t('node.storyboard.frameIndexPrefix')}</span>
                 <UiInput
                   value={exportOptions.frameIndexPrefix}
                   maxLength={4}
@@ -1170,7 +1178,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
 
             <div className="grid grid-cols-4 gap-2">
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.cellGap')}</span>
+                <span className="truncate">{t('node.storyboard.cellGap')}</span>
                 <UiInput
                   type="number"
                   min={0}
@@ -1183,7 +1191,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                 />
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.fontSize')}</span>
+                <span className="truncate">{t('node.storyboard.fontSize')}</span>
                 <UiInput
                   type="number"
                   min={1}
@@ -1196,7 +1204,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                 />
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.backgroundColor')}</span>
+                <span className="truncate">{t('node.storyboard.backgroundColor')}</span>
                 <input
                   type="color"
                   value={exportOptions.backgroundColor}
@@ -1205,7 +1213,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
                 />
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="truncate">{t('node.storyboardNode.textColor')}</span>
+                <span className="truncate">{t('node.storyboard.textColor')}</span>
                 <input
                   type="color"
                   value={exportOptions.textColor}
@@ -1234,12 +1242,16 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
               }}
             >
               <SlidersHorizontal className={`${NODE_CONTROL_ICON_CLASS} shrink-0`} />
-              <span>{t('node.storyboardNode.exportSettings')}</span>
+              <span>{t('node.storyboard.exportSettings')}</span>
             </UiChipButton>
           </div>
 
           <div className="truncate text-[11px] text-text-muted/80">
-            {t('node.storyboardNode.gridInfo', { rows: gridRows, cols: gridCols, frameCount: totalFrames })}
+            {t('node.storyboard.gridSummary', {
+              rows: gridRows,
+              cols: gridCols,
+              count: totalFrames,
+            })}
           </div>
         </div>
 
@@ -1255,7 +1267,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
             disabled={isAnyExporting}
           >
             <FolderOpen className={NODE_CONTROL_ICON_CLASS} />
-            {isPackingSingleImages ? t('node.storyboardNode.packingProgress') : t('node.storyboardNode.packDownload')}
+            {isPackingSingleImages ? t('node.storyboard.packing') : t('node.storyboard.pack')}
           </UiButton>
           <UiButton
             size="sm"
@@ -1268,7 +1280,7 @@ export const StoryboardNode = memo(({ id, data, selected, width, height }: Story
             disabled={isAnyExporting}
           >
             <Download className={NODE_CONTROL_ICON_CLASS} />
-            {isExporting ? t('node.storyboardNode.exportingProgress') : t('node.storyboardNode.mergeGrid')}
+            {isExporting ? t('node.storyboard.exporting') : t('node.storyboard.mergeGrid')}
           </UiButton>
         </div>
       </div>

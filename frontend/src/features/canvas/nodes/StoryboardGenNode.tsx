@@ -26,7 +26,7 @@ import {
   type StoryboardRatioControlMode,
   type StoryboardGenNodeData,
 } from '@/features/canvas/domain/canvasNodes';
-import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { EXPORT_RESULT_DISPLAY_NAME, localizeNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { canvasAiGateway } from '@/features/canvas/application/canvasServices';
@@ -105,7 +105,6 @@ interface PickerAnchor {
   top: number;
 }
 
-// AUTO_ASPECT_RATIO_OPTION is now created dynamically in the component with i18n support
 const PICKER_FALLBACK_ANCHOR: PickerAnchor = { left: 8, top: 8 };
 
 // 分镜节点永远把渲染好的宫格图作为参考图一起提交，所以模式恒为图生图。
@@ -611,7 +610,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   );
   const frameDescriptionDraftsRef = useRef(frameDescriptionDrafts);
   const resolvedTitle = useMemo(
-    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardGen, nodeData, t),
+    () => localizeNodeDisplayName(CANVAS_NODE_TYPES.storyboardGen, nodeData, t),
     [nodeData, t]
   );
 
@@ -621,7 +620,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       incomingImages.map((imageUrl, index) => ({
         imageUrl,
         displayUrl: resolveImageDisplayUrl(imageUrl),
-        label: `图${index + 1}`,
+        label: `图${index + 1}`, // i18n-exempt —— 与 prompt 里的 @图N 成对
       })),
     [incomingImages]
   );
@@ -659,13 +658,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   }, [effectiveExtraParams, nodeData.size, selectedModel]);
 
   const autoAspectRatioOption = useMemo<AspectRatioChoice>(
-    () => ({
-      value: AUTO_REQUEST_ASPECT_RATIO,
-      label: t('modelParams.autoAspectRatio'),
-    }),
+    () => ({ value: AUTO_REQUEST_ASPECT_RATIO, label: t('modelParams.autoAspectRatio') }),
     [t]
   );
-
   const aspectRatioOptions = useMemo<AspectRatioChoice[]>(
     () => [autoAspectRatioOption, ...selectedModel.aspectRatios],
     [autoAspectRatioOption, selectedModel.aspectRatios]
@@ -982,6 +977,8 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     const { gridRows, gridCols, frames } = nodeData;
     const parts: string[] = [];
 
+    // 下面拼的是发给模型的 prompt，不是界面文案，跟着界面语言走反而会让出图不稳。
+    // i18n-exempt-start
     const promptDirectives: string[] = [
       `生成一张${gridRows}×${gridCols}的${gridRows * gridCols}宫格多版本候选图，每一格是独立候选画面`,
     ];
@@ -1005,6 +1002,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
       parts.push(`候选${index + 1}：${sanitizedDescription}`);
     });
+    // i18n-exempt-end
 
     return parts.join('\n');
   }, [
@@ -1106,7 +1104,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     // 后台一个图片模型都没配时不放行（上面的网格预览是纯本地渲染，不受影响）：
     // selectedModel 此时是占位定义，提交出去后端 `_resolve_catalog_request` 直接 409。
     if (imageModelsEmpty) {
-      const errorMessage = t('node.imageEdit.noModelAvailable');
+      const errorMessage = t('node.storyboardGen.noImageModelConfigured');
       setError(errorMessage);
       void showErrorDialog(errorMessage, t('common.error'));
       return;
@@ -1114,7 +1112,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
     const prompt = buildPrompt();
     if (!prompt) {
-      const errorMessage = t('node.storyboardGen.emptyFrameDescription');
+      const errorMessage = t('node.storyboardGen.needOneFrameDescription');
       setError(errorMessage);
       void showErrorDialog(errorMessage, t('common.error'));
       return;
@@ -1228,7 +1226,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         ...generationTaskDescriptor(ref),
       });
     } catch (generationError) {
-      const resolvedError = resolveErrorContent(generationError, t('node.imageNode.generationFailed'));
+      const resolvedError = resolveErrorContent(generationError, t('node.storyboardGen.generateFailed'));
       const displayErrorMessage = backendErrorToastMessage(generationError, t);
       const diagnostics = resolveGenerationErrorDiagnostics(
         generationError,
@@ -1383,7 +1381,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       return;
     }
 
-    const marker = `@图${imageIndex + 1}`;
+    const marker = `@图${imageIndex + 1}`; // i18n-exempt —— 后端解析的引用 token
     const currentDescription = frameDescriptionDraftsRef.current[frame.id] ?? frame.description;
     const cursor = pickerCursor ?? currentDescription.length;
     const { nextText: nextDescription, nextCursor } = insertReferenceToken(

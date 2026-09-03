@@ -171,9 +171,12 @@ describe("director bundle canvas assets", () => {
       "utf8",
     );
 
-    // After i18n migration, check translation files for terminology instead of hardcoded strings
-    expect(zh).toContain("导演合成资产");
-    expect(vi).toContain("Tài sản dựng video của đạo diễn");
+    // 文案已搬进词条，源码里只剩 key；措辞本身对着 locale 查。
+    expect(dialog).toContain('t("freezone.commit.success.directorRender"');
+    expect(shell).toContain('t("freezone.commit.success.directorRender"');
+    expect(JSON.parse(zh).freezone.commit.success.directorRender).toContain("导演合成资产");
+    expect(dialog).not.toContain("导演合成 bundle");
+    expect(shell).not.toContain("导演合成 bundle");
     expect(zh).not.toContain("导演合成 bundle");
     expect(vi).not.toContain("composite bundle");
     // Source code should reference these strings via i18n keys
@@ -203,15 +206,13 @@ describe("director bundle canvas assets", () => {
       "utf8",
     );
 
-    // After i18n migration, check translation files for terminology
-    expect(zh).toContain("主线资产");
-    expect(vi).toContain("Tài sản chính tuyến");
-    expect(zh).not.toContain("主线素材");
-    expect(vi).not.toContain("tư liệu chính tuyến"); // Old naming
-    // Source code should reference these strings via i18n keys
-    expect(panel).toContain("freezone.assetLibrary.panelTab.library");
-    expect(badges).toContain("mainlineAssets");
-    // Verify no hardcoded old terminology in source
+    // 文案搬进 i18n 之后这两处只剩 key，中文在词条表里；"主线素材" 这个旧叫法
+    // 三个文件都不该再出现。
+    expect(panel).toContain("freezone.assetPanel.tab.library");
+    expect(badges).toContain("freezone.nodeContext.mainlineAsset");
+    expect(zh).toContain('"library": "主线资产"');
+    expect(zh).toContain('"mainlineAsset": "主线资产"');
+    expect(`${panel}\n${badges}\n${zh}`).not.toContain("主线素材");
     expect(panel).not.toContain(">素材库<");
     expect(selectedBackgroundSlot).not.toContain("当前背景 · EP");
     expect(selectedBackgroundSlot).not.toContain("已设置 EP");

@@ -14,13 +14,8 @@ interface CreateIdentityDialogProps {
   onSuccess: (message: string) => void;
 }
 
-const AGE_OPTIONS = [
-  { value: "", labelKey: "pipelineImport.createIdentity.ageGroupNoSpecify" },
-  { value: "child", label: "child" },
-  { value: "youth", label: "youth" },
-  { value: "middle", label: "middle" },
-  { value: "elder", label: "elder" },
-];
+// age_group 的取值是后端存的枚举，直接当英文标签显示；只有空值那档需要文案。
+const AGE_OPTIONS = ["", "child", "youth", "middle", "elder"];
 
 export function CreateIdentityDialog({
   project,
@@ -63,6 +58,8 @@ export function CreateIdentityDialog({
     };
   }, [project]);
 
+  const { t } = useTranslation();
+
   const canSubmit = useMemo(
     () => !!character.trim() && !!identityName.trim() && !submitting,
     [character, identityName, submitting],
@@ -81,7 +78,12 @@ export function CreateIdentityDialog({
         face_prompt: facePrompt.trim(),
         age_group: ageGroup,
       });
-      onSuccess(t("pipelineImport.createIdentity.successMessage", { character: result.character, identityName: result.identity_name }));
+      onSuccess(
+        t("pipelineImport.createIdentity.created", {
+          character: result.character,
+          identity: result.identity_name,
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -94,9 +96,11 @@ export function CreateIdentityDialog({
       <div className="w-full max-w-2xl rounded-xl border border-border-default bg-surface shadow-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-text">{t("pipelineImport.createIdentity.title")}</h2>
+            <h2 className="text-sm font-semibold text-text">
+              {t("pipelineImport.createIdentity.title")}
+            </h2>
             <p className="text-xs text-text-muted mt-0.5">
-              {t("pipelineImport.createIdentity.description")}
+              {t("pipelineImport.createIdentity.subtitle")}
             </p>
           </div>
           <button
@@ -164,26 +168,28 @@ export function CreateIdentityDialog({
                 className="mt-1 w-full rounded-md border border-border-default bg-bg-dark px-3 py-2 text-sm text-text"
               >
                 {AGE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.labelKey ? t(option.labelKey) : option.label}
+                  <option key={option} value={option}>
+                    {option || t("pipelineImport.createIdentity.ageUnspecified")}
                   </option>
                 ))}
               </select>
             </label>
 
             <label className="block">
-              <span className="text-xs text-text-muted">{t("pipelineImport.createIdentity.appearanceDescription")}</span>
+              <span className="text-xs text-text-muted">{t("pipelineImport.createIdentity.appearance")}</span>
               <textarea
                 value={appearanceDetails}
                 onChange={(e) => setAppearanceDetails(e.target.value)}
                 rows={3}
-                placeholder={t("pipelineImport.createIdentity.appearanceDescriptionPlaceholder")}
+                placeholder={t("pipelineImport.createIdentity.appearancePlaceholder")}
                 className="mt-1 w-full rounded-md border border-border-default bg-bg-dark px-3 py-2 text-sm text-text"
               />
             </label>
 
             <label className="block">
-              <span className="text-xs text-text-muted">{t("pipelineImport.createIdentity.facePrompt")}</span>
+              <span className="text-xs text-text-muted">
+                {t("pipelineImport.createIdentity.facePrompt")}
+              </span>
               <textarea
                 value={facePrompt}
                 onChange={(e) => setFacePrompt(e.target.value)}
@@ -215,7 +221,9 @@ export function CreateIdentityDialog({
             disabled={!canSubmit}
             className="px-3 py-1.5 rounded-md bg-accent text-bg-dark text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? t("pipelineImport.createIdentity.creatingButton") : t("pipelineImport.createIdentity.createButton")}
+            {submitting
+              ? t("pipelineImport.createIdentity.submitting")
+              : t("pipelineImport.createIdentity.submit")}
           </button>
         </div>
       </div>

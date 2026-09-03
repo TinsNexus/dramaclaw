@@ -54,6 +54,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { TFn } from "@/lib/i18n-types";
 
 import { toast } from "sonner";
 
@@ -330,10 +331,15 @@ function beatContextText(ctx: BeatMainlineContext): string {
   ].filter(Boolean).join("\n");
 }
 
-function beatContextNodeData(ctx: BeatMainlineContext, t?: (key: string, vars?: Record<string, unknown>) => string): Record<string, unknown> {
-  const displayName = t ? t("canvas.nodeActionToolbar.beatContextNodeTitle", { episode: ctx.episode, beat: ctx.beat }) : `Beat Context · EP${ctx.episode}/B${ctx.beat}`;
+function beatContextNodeData(
+  ctx: BeatMainlineContext,
+  t: TFn,
+): Record<string, unknown> {
   return {
-    displayName,
+    displayName: t("canvas.nodeToolbar.beatContextName", {
+      episode: ctx.episode,
+      beat: ctx.beat,
+    }),
     content: beatContextText(ctx),
     projectId: ctx.projectId,
     episode: ctx.episode,
@@ -1060,6 +1066,7 @@ export const NodeActionToolbar = memo(
         node.width,
         requestFocusNode,
         setSelectedNode,
+        t,
       ],
     );
 
@@ -1110,7 +1117,7 @@ export const NodeActionToolbar = memo(
                 key="mainline-lock-pill"
                 className="rounded-full bg-amber-500/15 px-3 py-1.5 text-sm text-amber-100"
               >
-                {t("canvas.nodeActionToolbar.mainlineProjectionLocked")}
+                {t("canvas.nodeToolbar.mainlineLocked")}
               </span>
             )}
             {isPresetLocked && workbenchTarget && (
@@ -1124,18 +1131,20 @@ export const NodeActionToolbar = memo(
                 }}
               >
                 <FolderOpen className="h-3.5 w-3.5" />
-                {openingWorkbench ? t("canvas.nodeActionToolbar.opening") : t("canvas.nodeActionToolbar.openWorkbench")}
+                {openingWorkbench
+                  ? t("canvas.nodeToolbar.openingWorkbench")
+                  : t("canvas.nodeToolbar.openWorkbench")}
               </UiChipButton>
             )}
             {extractableBeatContext && node.type !== CANVAS_NODE_TYPES.beatContext && (
               <UiChipButton
                 key="extract-beat-context"
                 className={TOOLBAR_TEXT_BUTTON_CLASS}
-                title={t("canvas.nodeActionToolbar.beatContextButtonTitle")}
+                title={t("canvas.nodeToolbar.beatContextHint")}
                 onClick={handleEnsureBeatContextNode}
               >
                 <Link2 className="h-3.5 w-3.5" />
-                {t("canvas.nodeActionToolbar.beatContext")}
+                {t("canvas.nodeToolbar.beatContext")}
               </UiChipButton>
             )}
             {/* AI 改图按钮暂时隐藏（保留代码，等需求恢复时取消注释）
@@ -1957,8 +1966,8 @@ export const NodeActionToolbar = memo(
                           ? videoData.displayName
                           : "video";
                     const baseName = rawName.replace(/\.[^/.]+$/, "");
-                    const audioTitle = `${baseName}_背景音`;
-                    const silentTitle = `${baseName}_无声`;
+                    const audioTitle = `${baseName}_${t("canvas.nodeToolbar.audioSuffix")}`;
+                    const silentTitle = `${baseName}_${t("canvas.nodeToolbar.silentSuffix")}`;
 
                     const audioPos = findNodePosition(node.id, 480, 180);
                     const audioNodeId = addNode(
@@ -2347,7 +2356,7 @@ export const NodeActionToolbar = memo(
                       <UiChipButton
                         key="group-color"
                         className={TOOLBAR_TEXT_BUTTON_CLASS}
-                        title={t("canvas.nodeActionToolbar.groupBackgroundColorTitle")}
+                        title={t("canvas.nodeToolbar.groupBackground")}
                         onClick={(event) => event.stopPropagation()}
                       >
                         {groupColor ? (
@@ -2358,7 +2367,7 @@ export const NodeActionToolbar = memo(
                         ) : (
                           <Palette className="h-3.5 w-3.5" />
                         )}
-                        {t("canvas.nodeActionToolbar.backgroundColor")}
+                        {t("canvas.nodeToolbar.backgroundColor")}
                         <ChevronDown className="h-3 w-3" />
                       </UiChipButton>
                     </DropdownMenuTrigger>
@@ -2371,7 +2380,7 @@ export const NodeActionToolbar = memo(
                       <div className="grid grid-cols-5 gap-1.5 p-1.5">
                         <button
                           type="button"
-                          title={t("canvas.nodeActionToolbar.none")}
+                          title={t("canvas.nodeToolbar.noColor")}
                           onClick={() => updateNodeData(nodeId, { backgroundColor: null })}
                           className={`relative flex h-6 w-6 items-center justify-center rounded-full border bg-transparent transition-transform hover:scale-110 ${
                             groupColor ? 'border-white/25' : 'border-white ring-1 ring-white/60'
@@ -2383,7 +2392,7 @@ export const NodeActionToolbar = memo(
                           <button
                             key={preset.key}
                             type="button"
-                            title={preset.label}
+                            title={t(preset.labelKey)}
                             onClick={() =>
                               updateNodeData(nodeId, { backgroundColor: preset.value })
                             }
@@ -2403,11 +2412,11 @@ export const NodeActionToolbar = memo(
                       <UiChipButton
                         key="group-arrange"
                         className={TOOLBAR_TEXT_BUTTON_CLASS}
-                        title={t("canvas.nodeActionToolbar.arrangeTitle")}
+                        title={t("canvas.nodeToolbar.arrangeMode")}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <LayoutGrid className="h-3.5 w-3.5" />
-                        {t("canvas.nodeActionToolbar.arrange")}
+                        {t("canvas.multiSelect.arrange")}
                         <ChevronDown className="h-3 w-3" />
                       </UiChipButton>
                     </DropdownMenuTrigger>
@@ -2421,19 +2430,19 @@ export const NodeActionToolbar = memo(
                         className={TOOLBAR_MENU_ITEM_CLASS}
                         onSelect={() => arrangeGroupChildren(nodeId, 'grid')}
                       >
-                        {t("canvas.nodeActionToolbar.grid")}
+                        {t("canvas.nodeToolbar.arrangeGrid")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className={TOOLBAR_MENU_ITEM_CLASS}
                         onSelect={() => arrangeGroupChildren(nodeId, 'horizontal')}
                       >
-                        {t("canvas.nodeActionToolbar.arrangeHorizontal")}
+                        {t("canvas.nodeToolbar.arrangeHorizontal")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className={TOOLBAR_MENU_ITEM_CLASS}
                         onSelect={() => arrangeGroupChildren(nodeId, 'vertical')}
                       >
-                        {t("canvas.nodeActionToolbar.arrangeVertical")}
+                        {t("canvas.nodeToolbar.arrangeVertical")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -2514,10 +2523,10 @@ export const NodeActionToolbar = memo(
                     nodeId: node.id,
                   });
                 }}
-                title={t("canvas.nodeActionToolbar.commitNodeTitle")}
+                title={t("canvas.nodeToolbar.commitHint")}
               >
                 <Send className="h-3.5 w-3.5" />
-                {t("canvas.nodeActionToolbar.commit")}
+                {t("freezone.commit.submit")}
               </UiChipButton>
             )}
           </UiPanel>

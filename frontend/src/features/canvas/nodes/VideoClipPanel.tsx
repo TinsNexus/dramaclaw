@@ -146,7 +146,6 @@ export const VideoClipPanel = memo(function VideoClipPanel({
   onSubmit,
 }: VideoClipPanelProps) {
   const { t } = useTranslation();
-
   const totalMs = useMemo(() => {
     if (typeof durationMs === 'number' && durationMs > 0) return durationMs;
     return null;
@@ -264,14 +263,14 @@ export const VideoClipPanel = memo(function VideoClipPanel({
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-dark/80 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
         onClick={onExit}
         disabled={isSubmitting}
-        title={t('node.videoClip.exitClip')}
+        title={t('canvas.videoClip.exit')}
       >
         <X className="h-4 w-4" />
       </button>
       <button
         type="button"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-dark/72"
-        title={t('node.videoClip.subtitlesTbd')}
+        title={t('canvas.videoClip.subtitleTodo')}
         disabled
       >
         <TypeIcon className="h-4 w-4" />
@@ -298,12 +297,12 @@ export const VideoClipPanel = memo(function VideoClipPanel({
 
         {thumbsState === 'loading' && thumbs.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-text-muted/70">
-            {t('node.videoClip.extractingFrames')}
+            {t('canvas.videoClip.extractingFrames')}
           </div>
         )}
         {thumbsState === 'error' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-text-muted/70">
-            {t('node.videoClip.frameLoadFailed')}
+            {t('canvas.videoClip.framesFailed')}
           </div>
         )}
 
@@ -325,14 +324,14 @@ export const VideoClipPanel = memo(function VideoClipPanel({
           <div
             className="absolute inset-y-0 left-0 flex w-3 cursor-ew-resize items-center justify-center rounded-l-md bg-white"
             onPointerDown={startDrag('start')}
-            title={t('node.videoClip.dragAdjustStart')}
+            title={t('canvas.videoClip.dragStart')}
           >
             <div className="h-4 w-[2px] rounded-full bg-black/40" />
           </div>
           <div
             className="absolute inset-y-0 right-0 flex w-3 cursor-ew-resize items-center justify-center rounded-r-md bg-white"
             onPointerDown={startDrag('end')}
-            title={t('node.videoClip.dragAdjustEnd')}
+            title={t('canvas.videoClip.dragEnd')}
           >
             <div className="h-4 w-[2px] rounded-full bg-black/40" />
           </div>
@@ -350,7 +349,7 @@ export const VideoClipPanel = memo(function VideoClipPanel({
       <button
         type="button"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-dark/72"
-        title={t('node.videoClip.muteTbd')}
+        title={t('canvas.videoClip.muteTodo')}
         disabled
       >
         <VolumeX className="h-4 w-4" />
@@ -358,7 +357,7 @@ export const VideoClipPanel = memo(function VideoClipPanel({
       <button
         type="button"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-dark/72"
-        title={t('node.videoClip.loopTbd')}
+        title={t('canvas.videoClip.loopTodo')}
         disabled
       >
         <Repeat className="h-4 w-4" />
@@ -368,7 +367,11 @@ export const VideoClipPanel = memo(function VideoClipPanel({
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-text-muted"
         onClick={handleSubmit}
         disabled={!totalMs || selectionMs < MIN_CLIP_MS || isSubmitting}
-        title={isSubmitting ? t('node.videoClip.clipping') : t('node.videoClip.submitClip')}
+        title={
+          isSubmitting
+            ? t('canvas.videoClip.submitting')
+            : t('canvas.videoClip.submit')
+        }
       >
         {isSubmitting ? (
           <Loader2 className="h-4 w-4 animate-spin" />

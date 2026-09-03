@@ -34,6 +34,8 @@ import {
   isDirectorWorldSourceSlotTarget,
 } from "./sceneDirectorWorldCommit";
 import { nodeDataAfterCommittedSlot } from "./committedNodePatch";
+import { isAutoEpisodeTitle } from "@/lib/episode-title";
+import type { TFn } from "@/lib/i18n-types";
 
 // CommitDialog 显示给用户的 slot 选项。已隐藏:
 // - scene_360       — 已 deprecate (presets.py:703-710 注释),被 scene_director_pano_360 取代
@@ -45,31 +47,32 @@ import { nodeDataAfterCommittedSlot } from "./committedNodePatch";
 //   a "导演合成资产"; commit code wraps ordinary canvas images as manual bundles.
 // Backend PushTargetKind type 仍保留这些 kind (兼容旧 canvas / 旧 client 传入),
 // 只是 UI 不主动列出。
-const KIND_LABELS_KEYS: Record<PushTargetKind, string> = {
-  frame: "freezone.commit.dialog.kind.frame",
-  sketch: "freezone.commit.dialog.kind.sketch",
-  director_render: "freezone.commit.dialog.kind.directorRender",
-  selected_background: "freezone.commit.dialog.kind.selectedBackground",
-  identity: "freezone.commit.dialog.kind.identity",
-  identity_costume: "freezone.commit.dialog.kind.identityCostume",
-  identity_portrait: "freezone.commit.dialog.kind.identityPortrait",
-  portrait: "freezone.commit.dialog.kind.portrait",
-  scene_master: "freezone.commit.dialog.kind.sceneMaster",
-  scene_reverse_master: "freezone.commit.dialog.kind.sceneReverseMaster",
-  scene_spatial_layout: "Scene Spatial Layout (空间布局图)",
-  scene_360: "Scene 360 (DEPRECATED — use Director Pano 360)",
-  scene_director_world: "freezone.commit.dialog.kind.sceneDirectorWorld",
-  scene_director_pano_360: "freezone.commit.dialog.kind.sceneDirectorPano360",
-  scene_3gs_active_ply: "freezone.commit.dialog.kind.scene3gsActivePly",
-  scene_3gs_master_ply: "freezone.commit.dialog.kind.scene3gsMasterPly",
-  scene_3gs_reverse_ply: "freezone.commit.dialog.kind.scene3gsReversePly",
-  scene_3gs_pano_ply: "freezone.commit.dialog.kind.scene3gsPanoPly",
-  scene_3gs_custom_scene: "freezone.commit.dialog.kind.scene3gsCustomScene",
-  scene_3gs_collision_glb: "freezone.commit.dialog.kind.scene3gsCollisionGlb",
-  prop_ref: "freezone.commit.dialog.kind.propRef",
-  video: "freezone.commit.dialog.kind.video",
-  beat_audio: "freezone.commit.dialog.kind.beatAudio",
-};
+// 槽位顺序即下拉里的顺序，所以保留成数组而不是靠词条表的键序。
+const KIND_ORDER: PushTargetKind[] = [
+  "frame",
+  "sketch",
+  "director_render",
+  "selected_background",
+  "identity",
+  "identity_costume",
+  "identity_portrait",
+  "portrait",
+  "scene_master",
+  "scene_reverse_master",
+  "scene_spatial_layout",
+  "scene_360",
+  "scene_director_world",
+  "scene_director_pano_360",
+  "scene_3gs_active_ply",
+  "scene_3gs_master_ply",
+  "scene_3gs_reverse_ply",
+  "scene_3gs_pano_ply",
+  "scene_3gs_custom_scene",
+  "scene_3gs_collision_glb",
+  "prop_ref",
+  "video",
+  "beat_audio",
+];
 
 // 用户主动选择面板里隐藏的 slot kinds (defaultTarget 仍可被推断到,只是不
 // 在 UiSelect dropdown 里手动选)。
@@ -116,21 +119,19 @@ const COMMIT_SELECT_MENU_CLASS =
 function renderCommitSuccessMessage(
   target: PushTarget,
   result: PushResult,
-  t: (key: string, options?: Record<string, unknown>) => string = (key) => key,
+  t: TFn,
 ): string {
   if (target.kind === "director_render") {
-    return t("freezone.commit.dialog.success.directorRender", { path: result.target_path });
+    return t("freezone.commit.success.directorRender", { path: result.target_path });
   }
   if (target.kind === "scene_director_world") {
-    return t("freezone.commit.dialog.success.directorWorld", { path: result.target_path });
+    return t("freezone.commit.success.directorWorld", { path: result.target_path });
   }
-  const backup = result.backup
-    ? t("freezone.commit.dialog.success.backup", { path: result.backup })
-    : "";
-  const staleMarked = result.stale_marked
-    ? t("freezone.commit.dialog.success.staleMarked", { count: result.stale_marked })
-    : "";
-  return t("freezone.commit.dialog.success.default", { path: result.target_path, backup, staleMarked });
+  return t("freezone.commit.success.default", { path: result.target_path }) +
+    (result.backup ? t("freezone.commit.success.backupSuffix", { path: result.backup }) : "") +
+    (result.stale_marked
+      ? t("freezone.commit.success.staleSuffix", { count: result.stale_marked })
+      : "");
 }
 
 const SCENE_SLOT_KINDS = new Set<PushTargetKind>([
@@ -330,7 +331,7 @@ export function CommitDialog({
           setCharacter(chars[0].name);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("freezone.commit.dialog.error.loadOptionsFailed"));
+        setError(err instanceof Error ? err.message : t("freezone.commit.errors.loadOptions"));
       }
     })();
     return () => {
@@ -433,12 +434,10 @@ export function CommitDialog({
   const noModelSourceForSlotCommit = mediaType === "model" && modelSlotKinds.length === 0;
   const showTargetKindSelect = mediaType === "image" ||
     (mediaType === "model" && kind !== "scene_director_world");
-  const targetKindOptions = Object.entries(KIND_LABELS_KEYS)
-    .filter(([k]) => {
-      const optionKind = k as PushTargetKind;
-      if (!isUserSelectableCommitKind(optionKind)) return false;
-      return mediaType === "model" ? modelSlotKinds.includes(optionKind) : true;
-    });
+  const targetKindOptions = KIND_ORDER.filter((optionKind) => {
+    if (!isUserSelectableCommitKind(optionKind)) return false;
+    return mediaType === "model" ? modelSlotKinds.includes(optionKind) : true;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -478,7 +477,7 @@ export function CommitDialog({
         if (cancelled) return;
         setIdentityOptions([]);
         setIdentityId(null);
-        setError(err instanceof Error ? err.message : t("freezone.commit.dialog.error.loadIdentityIdFailed"));
+        setError(err instanceof Error ? err.message : t("freezone.commit.errors.loadIdentities"));
       } finally {
         if (!cancelled) setIdentitiesLoading(false);
       }
@@ -491,7 +490,7 @@ export function CommitDialog({
   const displayedIdentityOptions = identityOptionsForSelect(identityOptions, identityId);
 
   const target = buildTarget(kind, episode, beat, character, identityId, sceneId, propId);
-  const targetLabel = target ? renderTargetLabel(target, t) : t("freezone.commit.dialog.targetLabel.incomplete");
+  const targetLabel = target ? renderTargetLabel(target, t) : t("freezone.commit.targetIncomplete");
   const nodeSourceLabel =
     typeof sourceLabelOverride === "string" && sourceLabelOverride.trim()
       ? sourceLabelOverride.trim()
@@ -502,14 +501,14 @@ export function CommitDialog({
     ? directorWorldSourceDisplayName(nodeData, sourceUrl, nodeSourceLabel, t)
     : "";
   const commitSourceTitle = target?.kind === "scene_director_world"
-    ? t("freezone.commit.dialog.heading.directorWorldState")
+    ? t("freezone.commit.directorWorldState")
     : mediaType === "model"
       ? modelSourceLabel
       : mediaLabel;
   const commitSourceSubtitle = target?.kind === "scene_director_world"
-    ? t("freezone.commit.dialog.heading.manifestCommit")
+    ? t("freezone.commit.directorWorldManifestHint")
     : mediaType === "model"
-      ? t("freezone.commit.dialog.heading.modelSubmit")
+      ? t("freezone.commit.modelCommitHint")
       : sourceLabel;
   const commitSourceBadge = target?.kind === "scene_director_world"
     ? "WORLD"
@@ -559,9 +558,9 @@ export function CommitDialog({
     setSubmitting(true);
     try {
       const target = buildTarget(kind, episode, beat, character, identityId, sceneId, propId);
-      if (!target) throw new Error(t("freezone.commit.dialog.error.targetIncomplete"));
+      if (!target) throw new Error(t("freezone.commit.errors.incompleteTarget"));
       if (mediaType === "model" && isDirectorWorldSourceSlotTarget(target) && !modelSlotKinds.includes(target.kind)) {
-        throw new Error(t("freezone.commit.dialog.error.noDirectorWorldSource"));
+        throw new Error(t("freezone.commit.errors.noWorldSource"));
       }
       if (target.kind === "director_render") {
         const result = await commitDirectorRenderFromCanvasSource(project, target, {
@@ -576,9 +575,9 @@ export function CommitDialog({
       if (target.kind === "scene_director_world") {
         const latestNodeData = getNodeData?.() ?? nodeData;
         if (!latestNodeData) {
-          throw new Error(t("freezone.commit.dialog.error.requireNodeData"));
+          throw new Error(t("freezone.commit.errors.needCanvasNodeState"));
         }
-        const result = await commitSceneDirectorWorldFromCanvasNode(project, target, latestNodeData);
+        const result = await commitSceneDirectorWorldFromCanvasNode(project, target, latestNodeData, t);
         onSuccess(renderCommitSuccessMessage(target, result, t), result, target);
         onClose();
         return;
@@ -595,10 +594,10 @@ export function CommitDialog({
       let nodeDataPatch: Record<string, unknown> | null = null;
       const directorWorldManifestData =
         mediaType === "model" && latestNodeData && isDirectorWorldSourceSlotTarget(target)
-          ? nodeDataAfterCommittedSlot(latestNodeData, target, result, project)
+          ? nodeDataAfterCommittedSlot(latestNodeData, target, result, project, t)
           : null;
       if (latestNodeData && !isDirectorWorldSourceSlotTarget(target)) {
-        nodeDataPatch = nodeDataAfterCommittedSlot(latestNodeData, target, result, project);
+        nodeDataPatch = nodeDataAfterCommittedSlot(latestNodeData, target, result, project, t);
       }
       if (directorWorldManifestData && isDirectorWorldSourceSlotTarget(target)) {
         nodeDataPatch = directorWorldManifestData;
@@ -607,9 +606,10 @@ export function CommitDialog({
             project,
             { kind: "scene_director_world", scene_id: target.scene_id },
             directorWorldManifestData,
+            t,
             { pruneStale: false },
           );
-          message += t("freezone.commit.dialog.success.syncedDirectorWorldState");
+          message += t("freezone.commit.success.directorWorldSynced");
         }
       }
       onSuccess(message, result, target, nodeDataPatch);
@@ -640,15 +640,19 @@ export function CommitDialog({
       >
         <header className="flex items-start gap-3 px-5 pb-2 pt-4">
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold leading-tight text-text-dark">{t("freezone.commit.dialog.header.title")}</h2>
-            <p className="mt-0.5 truncate text-xs text-text-muted">{t("freezone.commit.dialog.header.projectLabel")}{project}</p>
+            <h2 className="text-[15px] font-semibold leading-tight text-text-dark">
+              {t("freezone.commit.title")}
+            </h2>
+            <p className="mt-0.5 truncate text-xs text-text-muted">
+              {t("freezone.commit.projectLine", { project })}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             className="text-text-muted transition hover:text-text-dark disabled:opacity-30"
-            aria-label={t("freezone.commit.dialog.header.closeButton")}
+            aria-label={t("common.close")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -692,37 +696,32 @@ export function CommitDialog({
           {noTargetYet && (
             <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2.5 text-xs leading-relaxed text-amber-200/90">
               {noModelSourceForSlotCommit
-                ? t("freezone.commit.dialog.error.noDirectorWorldSource")
-                : t("freezone.commit.dialog.error.noDirectorWorldSourceForSlot")}
+                ? t("freezone.commit.errors.noWorldSource")
+                : t("freezone.commit.errors.noSlotSource")}
             </div>
           )}
 
           {/* 目标类型下拉：图像可选全部可见槽；3D 模型只可选场景 3GS 槽。 */}
           {showTargetKindSelect && (
-            <Section title={t("freezone.commit.dialog.label.targetKind")}>
+            <Section title={t("freezone.commit.sections.targetKind")}>
               <UiSelect
                 value={kind}
                 onChange={(e) => setKind(e.target.value as PushTargetKind)}
-                aria-label={t("freezone.commit.dialog.label.targetKind")}
+                aria-label={t("freezone.commit.sections.targetKind")}
                 className={COMMIT_FIELD_BORDER_CLASS}
                 menuClassName={COMMIT_SELECT_MENU_CLASS}
               >
-                {targetKindOptions
-                  .map(([k]) => {
-                    const kindKey = KIND_LABELS_KEYS[k as PushTargetKind];
-                    const label = kindKey ? t(kindKey) : k;
-                    return (
-                      <option key={k} value={k}>
-                        {label}
-                      </option>
-                    );
-                  })}
+                {targetKindOptions.map((optionKind) => (
+                  <option key={optionKind} value={optionKind}>
+                    {t(`freezone.commit.kinds.${optionKind}`)}
+                  </option>
+                ))}
               </UiSelect>
             </Section>
           )}
 
           {!noTargetYet && isBeatStyle && (
-            <Section title={t("freezone.commit.dialog.label.targetLocation")}>
+            <Section title={t("freezone.commit.sections.targetLocation")}>
               {mediaType === "image" && (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {BEAT_SLOT_KINDS.map((slotKind) => {
@@ -749,14 +748,16 @@ export function CommitDialog({
                   <UiSelect
                     value={episode ?? ""}
                     onChange={(e) => setEpisode(Number(e.target.value))}
-                    aria-label={t("freezone.commit.dialog.label.episode")}
+                    aria-label={t("freezone.commit.sections.episode")}
                     className={COMMIT_FIELD_BORDER_CLASS}
                     menuClassName={COMMIT_SELECT_MENU_CLASS}
                   >
                     {episodes.map((ep) => (
                       <option key={ep.episode_num} value={ep.episode_num}>
                         ep{ep.episode_num}
-                        {ep.title ? ` · ${ep.title}` : ""}
+                        {ep.title && !isAutoEpisodeTitle(ep.title, ep.episode_num)
+                          ? ` · ${ep.title}`
+                          : ""}
                       </option>
                     ))}
                   </UiSelect>
@@ -772,12 +773,12 @@ export function CommitDialog({
                   >
                     {beatsLoading && (
                       <option value="" disabled>
-                        {t("freezone.commit.dialog.label.loadingBeats")}
+                        {t("freezone.commit.loadingBeats")}
                       </option>
                     )}
                     {!beatsLoading && beatOptions.length === 0 && (
                       <option value="" disabled>
-                        {t("freezone.commit.dialog.label.noBeats")}
+                        {t("freezone.commit.noBeats")}
                       </option>
                     )}
                     {beatOptions.map((n) => (
@@ -792,7 +793,7 @@ export function CommitDialog({
           )}
 
           {isIdentityStyle && (
-            <Section title={t("freezone.commit.dialog.label.targetLocation")}>
+            <Section title={t("freezone.commit.sections.targetLocation")}>
               <div className="space-y-2">
                 <UiSelect
                   value={character ?? ""}
@@ -800,7 +801,7 @@ export function CommitDialog({
                     setCharacter(e.target.value);
                     setIdentityId(null);
                   }}
-                  aria-label={t("freezone.commit.dialog.label.character")}
+                  aria-label={t("freezone.commit.sections.character")}
                   className={COMMIT_FIELD_BORDER_CLASS}
                   menuClassName={COMMIT_SELECT_MENU_CLASS}
                 >
@@ -821,11 +822,11 @@ export function CommitDialog({
                   >
                     {identitiesLoading ? (
                       <option value="" disabled>
-                        {t("freezone.commit.dialog.label.loadingIdentityId")}
+                        {t("freezone.commit.loadingIdentities")}
                       </option>
                     ) : displayedIdentityOptions.length === 0 ? (
                       <option value="" disabled>
-                        {t("freezone.commit.dialog.label.noIdentityId")}
+                        {t("freezone.commit.noIdentities")}
                       </option>
                     ) : (
                       displayedIdentityOptions.map((id) => {
@@ -844,13 +845,13 @@ export function CommitDialog({
           )}
 
           {isSceneStyle && (
-            <Section title={t("freezone.commit.dialog.label.targetLocation")}>
+            <Section title={t("freezone.commit.sections.targetLocation")}>
               {scenes.length > 0 ? (
                 <UiSelect
                   value={sceneId}
                   onChange={(e) => setSceneId(e.target.value)}
                   disabled={scenesLoading}
-                  aria-label={t("freezone.commit.dialog.label.scene")}
+                  aria-label={t("freezone.commit.sections.scene")}
                   className={COMMIT_FIELD_BORDER_CLASS}
                   menuClassName={COMMIT_SELECT_MENU_CLASS}
                 >
@@ -868,39 +869,39 @@ export function CommitDialog({
                 <UiInput
                   value={sceneId}
                   onChange={(e) => setSceneId(e.target.value)}
-                  placeholder={t("freezone.commit.dialog.placeholder.sceneId")}
+                  placeholder={t("freezone.commit.sceneIdPlaceholder")}
                   className={COMMIT_FIELD_BORDER_CLASS}
                 />
               )}
-              <p className="mt-2 text-[11px] text-text-muted">{t("freezone.commit.dialog.hint.sceneSlot")}</p>
+              <p className="mt-2 text-[11px] text-text-muted">{t("freezone.commit.sceneSlotHint")}</p>
             </Section>
           )}
 
           {isPropStyle && (
-            <Section title={t("freezone.commit.dialog.label.targetLocation")}>
+            <Section title={t("freezone.commit.sections.targetLocation")}>
               <UiInput
                 value={propId}
                 onChange={(e) => setPropId(e.target.value)}
-                placeholder={t("freezone.commit.dialog.placeholder.propId")}
+                placeholder={t("freezone.commit.propIdPlaceholder")}
                 className={COMMIT_FIELD_BORDER_CLASS}
               />
-              <p className="mt-2 text-[11px] text-text-muted">{t("freezone.commit.dialog.hint.propSlot")}</p>
+              <p className="mt-2 text-[11px] text-text-muted">{t("freezone.commit.propSlotHint")}</p>
             </Section>
           )}
 
           {isGlobalSlot && (
-            <Section title={t("freezone.commit.dialog.label.impactPreview")}>
+            <Section title={t("freezone.commit.sections.impact")}>
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-3 text-xs">
                 {impactLoading ? (
                   <div className="flex items-center gap-2 text-text-muted">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    {t("freezone.commit.dialog.label.calculatingImpact")}
+                    {t("freezone.commit.impactCalculating")}
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center gap-1.5 font-semibold text-amber-300">
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      {t("freezone.commit.dialog.label.affectingBeats", { count: impactBeats.length })}
+                      {t("freezone.commit.impactCount", { count: impactBeats.length })}
                     </div>
                     {impactBeats.length > 0 && (
                       <div className="ui-scrollbar mt-2 max-h-28 space-y-1 overflow-y-auto pr-1">
@@ -912,7 +913,7 @@ export function CommitDialog({
                         ))}
                         {impactBeats.length > 12 && (
                           <div className="text-text-muted">
-                            {t("freezone.commit.dialog.label.moreBeatsNotShown", { count: impactBeats.length - 12 })}
+                            {t("freezone.commit.impactMore", { count: impactBeats.length - 12 })}
                           </div>
                         )}
                       </div>
@@ -937,9 +938,7 @@ export function CommitDialog({
                           <path d="M3.5 8.5l3 3 6-7" />
                         </svg>
                       </span>
-                      <span className="leading-relaxed">
-                        {t("freezone.commit.dialog.label.markStale")}
-                      </span>
+                      <span className="leading-relaxed">{t("freezone.commit.markStaleHint")}</span>
                     </label>
                   </>
                 )}
@@ -949,7 +948,7 @@ export function CommitDialog({
 
           <div className="flex items-start gap-2 px-1 text-[11px] leading-relaxed text-amber-100/70">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-200/55" />
-            <span>{t("freezone.commit.dialog.warning.overwriteAsset", { targetLabel })}</span>
+            <span>{t("freezone.commit.overwriteWarning", { target: targetLabel })}</span>
           </div>
 
           {error && (
@@ -961,7 +960,7 @@ export function CommitDialog({
 
         <footer className="flex items-center justify-end gap-2 px-5 py-3.5">
           <UiButton variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
-            {t("freezone.commit.dialog.button.cancel")}
+            {t("common.cancel")}
           </UiButton>
           <UiButton
             variant="primary"
@@ -973,10 +972,10 @@ export function CommitDialog({
             {submitting ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                {t("freezone.commit.dialog.button.submitting")}
+                {t("freezone.commit.submitting")}
               </>
             ) : (
-              t("freezone.commit.dialog.button.submit")
+              t("freezone.commit.submit")
             )}
           </UiButton>
         </footer>
@@ -1016,14 +1015,10 @@ export function sceneOptionLabel(scene: SceneAsset): string {
   return sceneOptionValue(scene);
 }
 
-function renderMediaLabel(
-  mediaType: DropMediaType,
-  t: (key: string) => string = (key) => key,
-): string {
-  if (mediaType === "video") return t("freezone.commit.dialog.mediaType.video");
-  if (mediaType === "audio") return t("freezone.commit.dialog.mediaType.audio");
-  if (mediaType === "model") return t("freezone.commit.dialog.mediaType.model");
-  return t("freezone.commit.dialog.mediaType.image");
+function renderMediaLabel(mediaType: DropMediaType, t: TFn): string {
+  return t(`freezone.commit.mediaKinds.${mediaType}`, {
+    defaultValue: t("freezone.commit.mediaKinds.image"),
+  });
 }
 
 function sourceDisplayName(sourceUrl: string): string {
@@ -1042,20 +1037,24 @@ export function directorWorldSourceDisplayName(
   nodeData: Record<string, unknown> | null | undefined,
   sourceUrl: string,
   fallback: string,
-  t: (key: string) => string = (key) => key,
+  t: TFn,
 ): string {
   const source = activeDirectorWorldSource(nodeData, sourceUrl);
+  // label 是节点里存的来源名（用户可改），属于业务内容，原样显示。
   const label = stringFromUnknown(source?.label);
   if (label) return label;
   const sourceKind = stringFromUnknown(source?.source_kind);
-  if (sourceKind === "master") return t("freezone.commit.dialog.directorWorldSource.master");
-  if (sourceKind === "reverse") return t("freezone.commit.dialog.directorWorldSource.reverse");
-  if (sourceKind === "pano") return source?.source_type === "pano360" ? t("freezone.commit.dialog.directorWorldSource.pano360") : t("freezone.commit.dialog.directorWorldSource.panoPano");
-  if (sourceKind === "custom") return t("freezone.commit.dialog.directorWorldSource.custom");
-  if (sourceKind === "uploaded") return t("freezone.commit.dialog.directorWorldSource.uploaded");
+  const K = "freezone.commit.worldSources";
+  if (sourceKind === "master") return t(`${K}.master`);
+  if (sourceKind === "reverse") return t(`${K}.reverse`);
+  if (sourceKind === "pano") {
+    return source?.source_type === "pano360" ? t(`${K}.pano360`) : t(`${K}.pano`);
+  }
+  if (sourceKind === "custom") return t(`${K}.custom`);
+  if (sourceKind === "uploaded") return t(`${K}.uploaded`);
   const sourceType = stringFromUnknown(source?.source_type);
-  if (sourceType === "pano360") return t("freezone.commit.dialog.directorWorldSource.pano360");
-  return fallback && !looksLikeAssetFilename(fallback) ? fallback : t("freezone.commit.dialog.directorWorldSource.default");
+  if (sourceType === "pano360") return t(`${K}.pano360`);
+  return fallback && !looksLikeAssetFilename(fallback) ? fallback : t(`${K}.generic`);
 }
 
 function activeDirectorWorldSource(
@@ -1152,10 +1151,7 @@ function buildTarget(
   return null;
 }
 
-function renderTargetLabel(
-  target: PushTarget,
-  t: (key: string) => string = (key) => key,
-): string {
+function renderTargetLabel(target: PushTarget, t: TFn): string {
   if (
     target.kind === "frame" ||
     target.kind === "sketch" ||
@@ -1180,36 +1176,8 @@ function renderTargetLabel(
   return `${(target as unknown as Record<string, unknown>).prop_id} / Prop Reference`;
 }
 
-function shortKindLabel(
-  kind: PushTargetKind,
-  t: (key: string) => string = (key) => key,
-): string {
-  const keyMap: Record<PushTargetKind, string> = {
-    frame: "freezone.commit.dialog.kind.frame",
-    sketch: "freezone.commit.dialog.kind.sketch",
-    director_render: "freezone.commit.dialog.kind.directorRender",
-    selected_background: "freezone.commit.dialog.kind.selectedBackground",
-    video: "freezone.commit.dialog.kind.video",
-    beat_audio: "freezone.commit.dialog.kind.beatAudio",
-    identity: "freezone.commit.dialog.kind.identity",
-    identity_costume: "freezone.commit.dialog.kind.identityCostume",
-    identity_portrait: "freezone.commit.dialog.kind.identityPortrait",
-    portrait: "freezone.commit.dialog.kind.portrait",
-    scene_master: "freezone.commit.dialog.kind.sceneMaster",
-    scene_reverse_master: "freezone.commit.dialog.kind.sceneReverseMaster",
-    scene_spatial_layout: "Scene Spatial Layout",
-    scene_360: "Scene 360",
-    scene_director_world: "freezone.commit.dialog.kind.sceneDirectorWorld",
-    scene_director_pano_360: "freezone.commit.dialog.kind.sceneDirectorPano360",
-    scene_3gs_active_ply: "freezone.commit.dialog.kind.scene3gsActivePly",
-    scene_3gs_master_ply: "freezone.commit.dialog.kind.scene3gsMasterPly",
-    scene_3gs_reverse_ply: "freezone.commit.dialog.kind.scene3gsReversePly",
-    scene_3gs_pano_ply: "freezone.commit.dialog.kind.scene3gsPanoPly",
-    scene_3gs_custom_scene: "freezone.commit.dialog.kind.scene3gsCustomScene",
-    scene_3gs_collision_glb: "freezone.commit.dialog.kind.scene3gsCollisionGlb",
-    prop_ref: "freezone.commit.dialog.kind.propRef",
-  };
-  return t(keyMap[kind] || "freezone.commit.dialog.kind.propRef");
+function shortKindLabel(kind: PushTargetKind, t: TFn): string {
+  return t(`freezone.commit.shortKinds.${kind}`);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

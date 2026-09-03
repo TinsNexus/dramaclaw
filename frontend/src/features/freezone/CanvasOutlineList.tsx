@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
+import type { TFunction } from "i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -41,7 +42,11 @@ import {
   type CanvasNodeType,
 } from "@/features/canvas/domain/canvasNodes";
 import { resolveNodePrimaryAsset } from "@/features/canvas/domain/canvasAssets";
-import { resolveNodeDisplayName } from "@/features/canvas/domain/nodeDisplay";
+import {
+  localizeDefaultNodeDisplayName,
+  localizeNodeDisplayName,
+  resolveNodeDisplayName,
+} from "@/features/canvas/domain/nodeDisplay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,9 +121,48 @@ function outlineMediaUrl(node: CanvasNode): string | null {
   return resolveNodePrimaryAsset(node)?.url ?? outlineThumbUrl(node);
 }
 
-function toOutlineItem(node: CanvasNode): CanvasOutlineItem {
+/**
+ * 副信息只补名字没说的那部分：
+ * 名字被用户改过（或本来就是提示词）时补类型，名字本身就是默认类型名时不重复一遍；
+ * 再补一个创建时刻，用来区分「同一条提示词生成三次」这种连名字带类型都一样的行。
+ *
+ * 时刻读的是 `createdAt` 而**不是** `generationStartedAt`：后者是临时字段，每条生成
+ * 链路在成功和失败时都会把它写回 null（见 VideoNode / ImageGenNode / 各 Overlay），
+ * 只在转圈那几十秒里看得见，跑完就蒸发——恰恰在事后回头找「谁是谁」的那一刻什么
+ * 都不剩。`createdAt` 由 nodeFactory 在建节点时落一次，之后没人改。
+ *
+ * 用绝对时刻而不是「3 分钟前」：相对时间要么算 Date.now() 污染纯函数，要么显示的是
+ * 上次渲染那一刻的旧值。加字段之前存的老画布没有 createdAt，那些行退回只显示类型。
+ */
+function outlineMeta(
+  node: CanvasNode,
+  type: CanvasNodeType,
+  name: string,
+  t: TFunction,
+): string | null {
+  const parts: string[] = [];
+  const typeLabel = localizeDefaultNodeDisplayName(type, node.data, t);
+  if (typeLabel && typeLabel !== name) {
+    parts.push(typeLabel);
+  }
+  const createdAt = (node.data as { createdAt?: unknown }).createdAt;
+  if (typeof createdAt === "number" && Number.isFinite(createdAt) && createdAt > 0) {
+    parts.push(formatOutlineStamp(createdAt));
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function formatOutlineStamp(epochMs: number): string {
+  const date = new Date(epochMs);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toOutlineItem(node: CanvasNode, t: TFunction): CanvasOutlineItem {
   const type = node.type as CanvasNodeType;
   const group = isGroupNode(node);
+  const name = localizeNodeDisplayName(type, node.data, t);
   return {
     id: node.id,
     kind: group ? "group" : "node",
@@ -126,6 +170,7 @@ function toOutlineItem(node: CanvasNode): CanvasOutlineItem {
     type,
     thumbUrl: group ? null : outlineThumbUrl(node),
     mediaUrl: group ? null : outlineMediaUrl(node),
+    meta: group ? null : outlineMeta(node, type, name, t),
     children: [],
   };
 }
@@ -134,10 +179,10 @@ function toOutlineItem(node: CanvasNode): CanvasOutlineItem {
  * 把画布节点压成一棵大纲树：组变成文件夹（名字就是组名），组内成员挂在它下面，
  * 其余节点平铺在顶层。父节点找不到（或父节点不是组）的一律回到顶层，不丢节点。
  */
-export function buildCanvasOutline(nodes: CanvasNode[]): CanvasOutlineItem[] {
+export function buildCanvasOutline(nodes: CanvasNode[], t: TFunction): CanvasOutlineItem[] {
   const items = new Map<string, CanvasOutlineItem>();
   for (const node of nodes) {
-    items.set(node.id, toOutlineItem(node));
+    items.set(node.id, toOutlineItem(node, t));
   }
 
   const roots: CanvasOutlineItem[] = [];
@@ -317,6 +362,9 @@ export function canvasOutlineSignature(nodes: CanvasNode[]): string {
         resolveNodeDisplayName(type, node.data, i18n.t),
         (isGroupNode(node) ? null : outlineThumbUrl(node)) ?? "",
         (isGroupNode(node) ? null : outlineMediaUrl(node)) ?? "",
+        // 签名只用来判「画布变了没」，不进界面，所以取语言无关的原始值 ——
+        // 换语言不该让签名变，那是 useMemo 的 t 依赖去管的事。
+        String((node.data as { createdAt?: unknown }).createdAt ?? ""),
       ].join("\u0001");
     })
     .join("\u0002");
@@ -354,8 +402,8 @@ export function CanvasOutlineList({ collapsed = false }: { collapsed?: boolean }
   const outline = useMemo(
     // signature 变了才重建；节点从 store 现取，免得把 nodes 也订阅进来。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    () => buildCanvasOutline(useCanvasStore.getState().nodes),
-    [signature],
+    () => buildCanvasOutline(useCanvasStore.getState().nodes, t),
+    [signature, t],
   );
 
   const filtering = filterKey !== "all" || query.trim() !== "";
@@ -593,10 +641,10 @@ function OutlineTypeFilter({
             aria-label={t("freezone.canvasOutline.filter")}
             title={compact ? t("freezone.canvasOutline.filterTitle", { label }) : undefined}
             className={
-              "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition hover:bg-[rgb(var(--text-rgb)/0.1)] hover:text-text-dark " +
+              "inline-flex h-6 shrink-0 items-center gap-1 px-1 text-[11px] transition-colors hover:text-text-dark " +
               (active
-                ? "border-[var(--ui-border-strong)] bg-[rgb(var(--text-rgb)/0.08)] text-text-dark"
-                : "border-[var(--ui-border-soft)] bg-[rgb(var(--text-rgb)/0.03)] text-text-muted")
+                ? "text-primary"
+                : "text-text-muted")
             }
           />
         }
@@ -682,7 +730,18 @@ type OutlineRowProps = {
 };
 
 const THUMB_CLASS =
-  "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--ui-border-soft)] bg-[rgb(var(--text-rgb)/0.03)]";
+  // ring 而不是 border：border 会把 36px 撑成 38px，和空缩略图的图标框对不齐。
+  "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[rgb(var(--text-rgb)/0.05)] ring-1 ring-inset ring-[rgb(var(--text-rgb)/0.09)]";
+
+/** 缩略图本身就是内容的类型，再叠一个「图片」角标纯属噪音。 */
+const PLAIN_IMAGE_TYPES: ReadonlySet<CanvasNodeType> = new Set([
+  CANVAS_NODE_TYPES.upload,
+  CANVAS_NODE_TYPES.imageEdit,
+  CANVAS_NODE_TYPES.imageGen,
+  CANVAS_NODE_TYPES.exportImage,
+]);
+
+
 
 const CanvasOutlineRow = memo(function CanvasOutlineRow(props: OutlineRowProps) {
   const { item, depth, collapsedGroupIds, selectedNodeId, renamingId, onToggleGroup, onFocusNode } =
@@ -694,9 +753,15 @@ const CanvasOutlineRow = memo(function CanvasOutlineRow(props: OutlineRowProps) 
   const collapsed = collapsedGroupIds.has(item.id);
 
   const rowClass =
-    "group/row relative flex w-full items-center gap-2 rounded-lg pr-1.5 transition " +
-    (selected ? "bg-[rgb(var(--text-rgb)/0.08)]" : "hover:bg-[rgb(var(--text-rgb)/0.05)]");
-  const leadClass = "flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left";
+    // h-11 / mb-px 必须和 OUTLINE_ROW_STRIDE_PX 对上：虚拟化不量高度，直接按 stride 定位。
+    // 这里不能写 `h-[${...}px]` 之类的模板串——Tailwind 扫的是源码里的字面量，
+    // 运行时拼出来的类名不会进产物（和 mask-image 那次同一个坑）。
+    "ui-outline-row group/row relative mb-px flex h-11 w-full items-center gap-2 rounded-[8px] pr-1.5 transition-colors duration-150 " +
+    // 选中使用产品主色的低透明度层，hover 保持中性，不用额外竖线重复表达状态。
+    (selected
+      ? "bg-primary/[0.14] ring-1 ring-inset ring-primary/20"
+      : "hover:bg-[rgb(var(--text-rgb)/0.05)]");
+  const leadClass = "flex h-full min-w-0 flex-1 items-center gap-2 text-left";
 
   const lead =
     item.kind === "group" ? (

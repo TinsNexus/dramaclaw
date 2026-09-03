@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Aperture, Camera, ChevronDown, Focus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { ImageGenCameraSelection } from '@/features/canvas/domain/canvasNodes';
 import { useFreezoneCameraOptions } from '@/features/canvas/hooks/useFreezoneCameraOptions';
@@ -91,7 +92,7 @@ export function CameraPickerPopover({
   const focalLengths = options?.focal_lengths_mm ?? [];
   const apertures = options?.apertures ?? [];
 
-  // Draft state — committed only on 使用.
+  // Draft state — committed only when the user confirms.
   const [draftCameraId, setDraftCameraId] = useState<string | null>(
     selection?.cameraBodyId ?? null,
   );
@@ -158,12 +159,14 @@ export function CameraPickerPopover({
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex h-11 items-center justify-between px-4">
-        <span className="text-sm font-medium text-text-dark">{t('node.cameraPicker.title')}</span>
+        <span className="text-sm font-medium text-text-dark">
+          {t('canvas.cameraPicker.title')}
+        </span>
         <button
           type="button"
           onClick={onClose}
           className="flex size-6 items-center justify-center rounded-md text-text-muted/90 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
-          aria-label={t('node.cameraPicker.close')}
+          aria-label={t('common.close')}
         >
           <X className="size-3.5" />
         </button>
@@ -171,7 +174,7 @@ export function CameraPickerPopover({
 
       <div className="flex items-start justify-center gap-5 px-6 pb-4 pt-3">
         <Column
-          label={t('node.cameraPicker.cameraBody')}
+          label={t('canvas.cameraPicker.body')}
           captionLabel={selectedCameraLabel}
           items={cameraBodies.map((item) => ({
             key: item.id,
@@ -186,7 +189,7 @@ export function CameraPickerPopover({
           t={t}
         />
         <Column
-          label={t('node.cameraPicker.lens')}
+          label={t('canvas.cameraPicker.lens')}
           captionLabel={selectedLensLabel}
           items={lenses.map((item) => ({
             key: item.id,
@@ -201,7 +204,7 @@ export function CameraPickerPopover({
           t={t}
         />
         <Column
-          label={t('node.cameraPicker.focalLength')}
+          label={t('canvas.cameraPicker.focal')}
           captionLabel="mm"
           items={focalLengths.map((value) => ({
             key: String(value),
@@ -215,7 +218,7 @@ export function CameraPickerPopover({
           t={t}
         />
         <Column
-          label={t('node.cameraPicker.aperture')}
+          label={t('canvas.cameraPicker.aperture')}
           captionLabel={draftAperture ?? ''}
           items={apertures.map((value) => ({
             key: value,
@@ -237,7 +240,7 @@ export function CameraPickerPopover({
           onClick={() => onConfirm(null)}
           className="h-8 rounded-md px-3 text-[12px] font-medium text-text-dark/78 transition-colors hover:bg-white/[0.08] hover:text-text-dark"
         >
-          {t('node.cameraPicker.clear')}
+          {t('canvas.cameraPicker.clear')}
         </button>
         <button
           type="button"
@@ -245,7 +248,7 @@ export function CameraPickerPopover({
           disabled={!options}
           className="h-8 min-w-[50px] rounded-md bg-primary px-3 text-[13px] text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-text-muted"
         >
-          {t('node.cameraPicker.use')}
+          {t('common.use')}
         </button>
       </div>
     </div>
@@ -283,7 +286,7 @@ function Column({
   isLoading,
   t: tProp = (key: string) => key,
 }: ColumnProps) {
-  const t = tProp;
+  const { t } = useTranslation();
   const canPrev = selectedIndex > 0;
   const canNext = selectedIndex < items.length - 1;
   const translateY = HIGHLIGHT_TOP - selectedIndex * ITEM_HEIGHT;
@@ -296,7 +299,7 @@ function Column({
           disabled={!canPrev}
           onClick={() => canPrev && onSelect(selectedIndex - 1)}
           className={CAMERA_PICKER_ARROW_CLASS}
-          aria-label={t('node.cameraPicker.prevItem')}
+          aria-label={t('canvas.cameraPicker.prev')}
         >
           <ChevronDown className="size-3.5 rotate-180" />
         </button>
@@ -354,7 +357,7 @@ function Column({
 
         {isLoading && items.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-[11px] text-text-muted">
-            {t('node.cameraPicker.loading')}
+            {t('canvas.cameraPicker.loading')}
           </div>
         )}
       </div>
@@ -365,7 +368,7 @@ function Column({
           disabled={!canNext}
           onClick={() => canNext && onSelect(selectedIndex + 1)}
           className={CAMERA_PICKER_ARROW_CLASS}
-          aria-label={t('node.cameraPicker.nextItem')}
+          aria-label={t('canvas.cameraPicker.next')}
         >
           <ChevronDown className="size-3.5" />
         </button>

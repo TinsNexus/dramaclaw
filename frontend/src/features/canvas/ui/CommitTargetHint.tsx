@@ -25,15 +25,25 @@ interface Props {
 // 里 `current_sketch` / `current_frame` 等),commit 后下次 canvas reload
 // 会以该 role 长出独立 asset 节点。
 interface SlotMapping {
+  /** 短词的词条 key —— 「草图」「分镜」这类要跟界面语言走。 */
   candidateKey: string;
   promotedNode: string;
 }
 const SLOT_MAPPING_BY_WORKFLOW: Record<string, SlotMapping> = {
-  beat_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
-  selected_background_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
-  director_combined_to_sketch: { candidateKey: 'canvas.commitTargetHint.candidate.sketch', promotedNode: 'current_sketch' },
-  sketch_to_frame: { candidateKey: 'canvas.commitTargetHint.candidate.frame', promotedNode: 'current_frame' },
-  background_sketch_to_frame: { candidateKey: 'canvas.commitTargetHint.candidate.frame', promotedNode: 'current_frame' },
+  beat_to_sketch: { candidateKey: 'canvas.commitHint.sketch', promotedNode: 'current_sketch' },
+  selected_background_to_sketch: {
+    candidateKey: 'canvas.commitHint.sketch',
+    promotedNode: 'current_sketch',
+  },
+  director_combined_to_sketch: {
+    candidateKey: 'canvas.commitHint.sketch',
+    promotedNode: 'current_sketch',
+  },
+  sketch_to_frame: { candidateKey: 'canvas.commitHint.frame', promotedNode: 'current_frame' },
+  background_sketch_to_frame: {
+    candidateKey: 'canvas.commitHint.frame',
+    promotedNode: 'current_frame',
+  },
 };
 
 function deriveSlotMapping(workflowDefaultId?: string): SlotMapping | null {
@@ -64,7 +74,6 @@ export function CommitTargetHint({
   className,
 }: Props) {
   const { t } = useTranslation();
-
   const hint = useMemo(() => {
     const beatCtx = mainlineContexts.find((ctx) => ctx.kind === 'beat');
     const slotMapping = deriveSlotMapping(workflowDefaultId);
@@ -76,17 +85,17 @@ export function CommitTargetHint({
         const candidate = t(slotMapping.candidateKey);
         return {
           variant: 'typed' as const,
-          text: t('canvas.commitTargetHint.typedMessage', {
+          text: t('canvas.commitHint.typed', {
             episode: beatCtx.episode,
             beat: beatCtx.beat,
-            candidate,
-            promotedNode: slotMapping.promotedNode,
+            candidate: t(slotMapping.candidateKey),
+            promoted: slotMapping.promotedNode,
           }),
         };
       }
       return {
         variant: 'untyped' as const,
-        text: t('canvas.commitTargetHint.untypedMessage', {
+        text: t('canvas.commitHint.untyped', {
           episode: beatCtx.episode,
           beat: beatCtx.beat,
         }),
@@ -94,9 +103,9 @@ export function CommitTargetHint({
     }
     return {
       variant: 'free' as const,
-      text: t('canvas.commitTargetHint.freeMessage'),
+      text: t('canvas.commitHint.free'),
     };
-  }, [mainlineContexts, workflowDefaultId, t]);
+  }, [mainlineContexts, t, workflowDefaultId]);
 
   const variantClass =
     hint.variant === 'typed'
@@ -108,7 +117,7 @@ export function CommitTargetHint({
   return (
     <div
       className={`shrink-0 rounded-md border px-2 py-1 text-[10px] leading-tight ${variantClass} ${className ?? ''}`}
-      title={t('canvas.commitTargetHint.title')}
+      title={t('canvas.commitHint.title')}
     >
       {hint.text}
     </div>

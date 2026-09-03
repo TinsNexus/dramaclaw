@@ -72,10 +72,10 @@ interface EraseOverlayProps {
 
 type Tool = 'brush' | 'rect' | 'eraser';
 
-// 比例与分辨率档位来自后台「媒体模型」对选中模型的配置，这里只留下渲染用的
-// 中文别名（未命中时直接显示原值）。
-const ASPECT_RATIO_LABELS: Partial<Record<FreezoneRedrawAspectRatio, string>> = {
-  original: '原图',
+// 比例与分辨率档位来自后台「媒体模型」对选中模型的配置，这里只留下要改写的
+// 档位对应的词条 key（未命中时直接显示原值）。
+const ASPECT_RATIO_LABEL_KEYS: Partial<Record<FreezoneRedrawAspectRatio, string>> = {
+  original: 'canvas.paintTools.aspectOriginal',
 };
 
 const NUM_IMAGE_OPTIONS = [1, 2, 3, 4] as const;
@@ -214,8 +214,8 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
       sourceImgRef.current = img;
       setImageDims({ w, h });
     };
-    img.onerror = () => setError(t('canvas.eraseOverlay.errorLoadingImage'));
-  }, [imageSource]);
+    img.onerror = () => setError(t('canvas.paintTools.loadSourceFailed'));
+  }, [imageSource, t]);
 
   // Esc 退出擦除。
   useEffect(() => {
@@ -457,7 +457,7 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
     (resultAspectRatio: string, position: { x: number; y: number }) => {
       const generationStartedAt = Date.now();
       const nextNodeId = addNode(CANVAS_NODE_TYPES.exportImage, position, {
-        displayName: t('canvas.eraseOverlay.erase'),
+        displayName: t('canvas.eraseOverlay.displayName'),
         imageUrl: null,
         previewImageUrl: null,
         aspectRatio: resultAspectRatio,
@@ -543,11 +543,11 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
     if (submitting) return;
     const project = readUrl().project;
     if (!project) {
-      setError(t('canvas.eraseOverlay.errorNoProject'));
+      setError(t('canvas.paintTools.noProject'));
       return;
     }
     if (!hasMask) {
-      setError(t('canvas.eraseOverlay.errorNoMask'));
+      setError(t('canvas.eraseOverlay.needMask'));
       return;
     }
     setError(null);
@@ -682,21 +682,21 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
               event.stopPropagation();
               onClose();
             }}
-            title={t('canvas.eraseOverlay.closeErase')}
-            aria-label={t('canvas.eraseOverlay.closeErase')}
+            title={t('canvas.eraseOverlay.close')}
+            aria-label={t('canvas.eraseOverlay.close')}
           >
             <X className="h-4 w-4" />
           </button>
 
           <ToolbarDivider />
 
-          <ToolBtn active={tool === 'brush'} onClick={() => setTool('brush')} title={t('canvas.eraseOverlay.toolBrush')}>
+          <ToolBtn active={tool === 'brush'} onClick={() => setTool('brush')} title={t('canvas.paintTools.brush')}>
             <Brush className="h-4 w-4" />
           </ToolBtn>
-          <ToolBtn active={tool === 'rect'} onClick={() => setTool('rect')} title={t('canvas.eraseOverlay.toolRect')}>
+          <ToolBtn active={tool === 'rect'} onClick={() => setTool('rect')} title={t('canvas.paintTools.rect')}>
             <Square className="h-4 w-4" />
           </ToolBtn>
-          <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} title={t('canvas.eraseOverlay.toolEraser')}>
+          <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} title={t('canvas.paintTools.eraser')}>
             <Eraser className="h-4 w-4" />
           </ToolBtn>
 
@@ -715,16 +715,16 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
               onMouseDown={(event) => event.stopPropagation()}
               className={ERASE_SLIDER_CLASS}
               style={brushSliderStyle}
-              title={t('canvas.eraseOverlay.brushSize')}
+              title={t('canvas.paintTools.brushSize')}
             />
           </div>
 
           <ToolbarDivider />
 
-          <IconBtn onClick={handleUndo} disabled={!canUndo} title={t('canvas.eraseOverlay.undo')}>
+          <IconBtn onClick={handleUndo} disabled={!canUndo} title={t('canvas.paintTools.undo')}>
             <Undo2 className="h-4 w-4" />
           </IconBtn>
-          <IconBtn onClick={handleRedo} disabled={!canRedo} title={t('canvas.eraseOverlay.redo')}>
+          <IconBtn onClick={handleRedo} disabled={!canRedo} title={t('canvas.paintTools.redo')}>
             <Redo2 className="h-4 w-4" />
           </IconBtn>
         </div>
@@ -744,27 +744,27 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
           onClick={(event) => event.stopPropagation()}
         >
           <EraseDropdown<FreezoneRedrawAspectRatio>
-            label={t('canvas.eraseOverlay.labelAspectRatio')}
+            label={t('canvas.paintTools.aspect')}
             value={effectiveAspectRatio}
             options={aspectRatioOptions}
             renderLabel={(v) => {
-              const key = ASPECT_RATIO_LABELS[v];
+              const key = ASPECT_RATIO_LABEL_KEYS[v];
               return key ? t(key) : v;
             }}
             onChange={setAspectRatio}
           />
           <EraseDropdown<string>
-            label={t('canvas.eraseOverlay.labelResolution')}
+            label={t('canvas.paintTools.resolution')}
             value={effectiveImageSize}
             options={sizeOptions}
             renderLabel={(v) => v}
             onChange={setImageSize}
           />
           <EraseDropdown<number>
-            label={t('canvas.eraseOverlay.labelNumImages')}
+            label={t('canvas.paintTools.count')}
             value={numImages}
             options={NUM_IMAGE_OPTIONS}
-            renderLabel={(v) => t('canvas.eraseOverlay.numImagesFormat', { count: v })}
+            renderLabel={(v) => t('canvas.paintTools.countValue', { n: v })}
             onChange={setNumImages}
           />
 
@@ -780,7 +780,7 @@ export const EraseOverlay = memo(({ node, imageSource, onClose }: EraseOverlayPr
             onClick={handleSubmit}
             disabled={submitting || !imageDims || billingRuleMissing}
             className={`ml-1 shrink-0 ${NODE_GENERATE_BUTTON_BASE_CLASS} ${NODE_GENERATE_BUTTON_ENABLED_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
-            title={t('canvas.eraseOverlay.submitErase')}
+            title={t('canvas.eraseOverlay.submit')}
           >
             <ArrowUp className="h-4 w-4" />
           </button>

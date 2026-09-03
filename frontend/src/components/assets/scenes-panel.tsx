@@ -37,6 +37,7 @@ import { useNavigateToAsset } from "@/hooks/use-assets-deep-link";
 import {
   backendErrorResponseToastMessage,
   backendErrorToastMessage,
+  taskResponseToastMessage,
   BillingRuleNotConfiguredError,
   humanizeTaskError,
 } from "@/lib/api-errors";
@@ -285,10 +286,10 @@ function SceneDialog({
           aria-label={t("assets.scenes.fields.type")}
           className={SCENE_DIALOG_SELECT_TRIGGER_CLASS}
         >
-          <SelectValue>{sceneTypeLabel(draft.scene_type)}</SelectValue>
+          <SelectValue>{sceneTypeLabel(draft.scene_type, t)}</SelectValue>
         </SelectTrigger>
         <SelectContent align="start" alignItemWithTrigger={false}>
-          {sceneTypeOptions(draft.scene_type).map((option) => (
+          {sceneTypeOptions(draft.scene_type, t).map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
@@ -377,15 +378,15 @@ function SceneDialog({
                       aria-label={t("assets.scenes.fields.timeOfDay")}
                       className={SCENE_DIALOG_SELECT_TRIGGER_CLASS}
                     >
-                      <SelectValue>{timeOfDayLabel(draft.time_of_day)}</SelectValue>
+                      <SelectValue>{timeOfDayLabel(draft.time_of_day, t)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start" alignItemWithTrigger={false}>
                       <SelectItem value="__NO_SCENE_TIME__">
-                        {timeOfDayLabel("")}
+                        {timeOfDayLabel("", t)}
                       </SelectItem>
                       {sceneTimeChoices.map((option) => (
                         <SelectItem key={option} value={option}>
-                          {timeOfDayLabel(option)}
+                          {timeOfDayLabel(option, t)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1332,7 +1333,7 @@ export function ScenesPanel({
       return;
     }
     buildActivity.markStarted({ taskId: res.task_id });
-    toast.success(res.message);
+    toast.success(taskResponseToastMessage(res, t));
   }
 
   async function handleDelete(scene: SceneAsset) {

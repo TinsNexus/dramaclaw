@@ -357,8 +357,8 @@ export function LoginCinematicPage() {
       <button
         type="button"
         className={`${layout.backToTop} ${pageScrolled ? layout.backToTopVisible : ""}`}
-        aria-label={t("landing.common.backToTop")}
-        title={t("landing.common.backToTop")}
+        aria-label={t("loginCinematic.backToTop")}
+        title={t("loginCinematic.backToTop")}
         onClick={scrollToTop}
       >
         <ChevronUp aria-hidden="true" />

@@ -64,6 +64,69 @@ export const GEN_MODE_TO_CATALOG_MODE: Record<VideoGenMode, string> = {
   videoEdit: "video_edit",
 };
 
+/**
+ * 这些模式的输出画幅由输入关键帧/源视频决定，不能提交用户保存的固定比例。
+ * 只计算本次请求的有效值，不覆盖节点中的比例，切回其它模式时可恢复用户选择。
+ */
+export function videoModeForcesAutomaticAspectRatio(mode: VideoGenMode): boolean {
+  return mode === "firstFrame" || mode === "firstLastFrame" || mode === "videoEdit";
+}
+
+export interface VideoKeyframeCandidate {
+  url: string;
+  slot?: VideoKeyframeSlot | null;
+  legacyDisplayName?: string | null;
+}
+
+/**
+ * 从视频节点的上游图片中解析稳定的首帧/尾帧槽位。
+ *
+ * 新画布以 edge.data.keyframeSlot 为准，节点名称只负责展示，用户重命名不会改变语义。
+ * 旧画布没有槽位字段时才兼容“首帧/尾帧”标题，最后按连线顺序补齐未分配图片。
+ */
+export function resolveVideoKeyframeUrls(
+  candidates: readonly VideoKeyframeCandidate[],
+): { firstFrameUrl: string | null; lastFrameUrl: string | null } {
+  let firstFrameUrl: string | null = null;
+  let lastFrameUrl: string | null = null;
+  const unassigned: string[] = [];
+
+  for (const candidate of candidates) {
+    if (candidate.slot === "first") {
+      if (!firstFrameUrl) firstFrameUrl = candidate.url;
+      continue;
+    }
+    if (candidate.slot === "last") {
+      if (!lastFrameUrl) lastFrameUrl = candidate.url;
+      continue;
+    }
+
+    const displayName = String(candidate.legacyDisplayName ?? "").trim();
+    // 老数据里的 displayName 是写死的中文槽位名，属于**存量数据格式**不是界面文案。
+    if (displayName.includes("首帧") && !firstFrameUrl) { // i18n-exempt
+      firstFrameUrl = candidate.url;
+    } else if (displayName.includes("尾帧") && !lastFrameUrl) { // i18n-exempt
+      lastFrameUrl = candidate.url;
+    } else {
+      unassigned.push(candidate.url);
+    }
+  }
+
+  if (!firstFrameUrl) firstFrameUrl = unassigned.shift() ?? null;
+  if (!lastFrameUrl) lastFrameUrl = unassigned.shift() ?? null;
+  return { firstFrameUrl, lastFrameUrl };
+}
+
+/**
+ * 模型入参的统一形态：既可以只给一个 id 字符串，也可以给媒体目录下发的模型对象
+ * （`supportedModes` 存在时以它为准，那是 Admin 显式配置的能力声明）。
+ */
+export type VideoModelRef =
+  | string
+  | {
+      id?: string;
+      apiModel?: string;
+      supportedModes?: string[];
       referenceAudioMax?: number | null;
       supportsGenerateAudio?: boolean;
     }
@@ -381,13 +444,14 @@ export function formatAudioDurationClips(
  * 不受支持），因此这三条只会在真正会丢素材 / 400 的场景触发；2.0 / HappyHorse 的自动
  * 推导 effect 会先把模式导到能消费素材的模式，不会误伤。
  */
+/** 返回 i18n key（非 null 时由调用方 `t()` 出文案），不是可直接展示的句子。 */
 export function videoSubmitMediaRejectionReason(
   mode: VideoGenMode,
   model: VideoModelRef,
   counts: { images: number; videos: number; audios: number },
 ): string | null {
   if (counts.videos > 0 && mode !== "allReference" && mode !== "videoEdit") {
-    return "该模型不支持视频素材";
+    return "node.videoModel.reason.videoUnsupported";
   }
   const videoEditAcceptsAudio =
     mode === "videoEdit" &&
@@ -397,10 +461,10 @@ export function videoSubmitMediaRejectionReason(
     typeof model.referenceAudioMax === "number" &&
     model.referenceAudioMax > 0;
   if (counts.audios > 0 && mode !== "allReference" && !videoEditAcceptsAudio) {
-    return "该模型不支持音频素材";
+    return "node.videoModel.reason.audioUnsupported";
   }
   if (counts.images > 1 && !videoModelAcceptsMultipleImages(model)) {
-    return "该模型单次仅支持 1 张图片";
+    return "node.videoModel.reason.singleImageOnly";
   }
   return null;
 }
@@ -427,6 +491,7 @@ export function videoSubmitMediaRejectionReason(
  * - Grok Video Channel 只支持图片。注：它当前在后端是关掉的
  *   （`FREEZONE_DISABLED_VIDEO_BACKENDS`），不会出现在选择器里，这条分支是休眠的。
  */
+/** 同上：返回的是 i18n key，调用方负责 `t()`。 */
 export function videoModelReferenceDisabledReason(
   model: VideoModelRef,
   counts: { images: number; videos: number; audios: number },
@@ -435,42 +500,42 @@ export function videoModelReferenceDisabledReason(
     const supportsAllReference = isVideoModeSupportedByModel("allReference", model);
     const supportsVideoEdit = isVideoModeSupportedByModel("videoEdit", model);
     if (counts.videos > 0 && !supportsAllReference && !supportsVideoEdit) {
-      return "该模型不支持视频素材";
+      return "node.videoModel.reason.videoUnsupported";
     }
     const supportsVideoEditAudio =
       supportsVideoEdit &&
       typeof model.referenceAudioMax === "number" &&
       model.referenceAudioMax > 0;
     if (counts.audios > 0 && !supportsAllReference && !supportsVideoEditAudio) {
-      return "该模型不支持音频素材";
+      return "node.videoModel.reason.audioUnsupported";
     }
     if (counts.images > 1 && !videoModelAcceptsMultipleImages(model)) {
-      return "该模型单次仅支持 1 张图片";
+      return "node.videoModel.reason.singleImageOnly";
     }
     return null;
   }
   const modelId = videoModelIdOf(model);
   if (isGrokVideoChannelModel(modelId)) {
     if (counts.videos > 0 || counts.audios > 0) {
-      return "Grok Video Channel 仅支持图片素材";
+      return "node.videoModel.reason.grokImagesOnly";
     }
     if (counts.images > 8) {
-      return "Grok Video Channel 最多支持 1 张首帧和 7 张参考图";
+      return "node.videoModel.reason.grokImageLimit";
     }
     return null;
   }
   if (isHappyHorseVideoModel(modelId)) {
     if (counts.audios > 0) {
-      return "该模型不支持音频素材";
+      return "node.videoModel.reason.audioUnsupported";
     }
     return null;
   }
   if (isSeedance1xVideoModel(modelId)) {
     if (counts.videos > 0 || counts.audios > 0) {
-      return "该模型仅支持图片素材";
+      return "node.videoModel.reason.imagesOnly";
     }
     if (counts.images > 1) {
-      return "该模型单次仅支持 1 张图片";
+      return "node.videoModel.reason.singleImageOnly";
     }
   }
   return null;
