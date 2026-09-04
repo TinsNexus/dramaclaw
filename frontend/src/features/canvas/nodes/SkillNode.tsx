@@ -619,7 +619,6 @@ export const SkillNode = memo(({ id, data, width, selected }: SkillNodeProps) =>
   const addNode = useCanvasStore((state) => state.addNode);
   const addEdgeWithData = useCanvasStore((state) => state.addEdgeWithData);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
-  const providerLabels = useMemo(() => getProviderLabels(t), [t]);
   // 只订阅与本节点相连的边、以及入边的源节点。useShallow 逐元素比较,使得拖动「无关」
   // 节点时本 SkillNode 不再重渲染 —— 边对象在拖拽中引用稳定,源节点只在自身变化时换引用。
   const incomingEdges = useCanvasStore(

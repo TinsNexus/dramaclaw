@@ -1505,7 +1505,6 @@ function CanvasConflictOverlay({
   readConflictSnapshot: () => ConflictSnapshot | null;
 }) {
   const { t } = useTranslation();
-  const defaultErrorMessage = t("freezone.shell.conflictDefaultMessage");
   const [savingCopy, setSavingCopy] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   // Read once on mount so the "下载本地 JSON" button always renders against

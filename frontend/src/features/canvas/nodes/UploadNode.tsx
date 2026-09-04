@@ -130,7 +130,7 @@ function resolveDroppedMediaFile(event: DragEvent<HTMLElement>): File | null {
   return null;
 }
 
-function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): Promise<string> {
+function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -143,7 +143,7 @@ function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): P
   });
 }
 
-function imageSize(dataUrl: string, t: (key: string) => string = (key) => key): Promise<{ width: number; height: number }> {
+function imageSize(dataUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
@@ -172,7 +172,7 @@ function numberTuple3(value: unknown, fallback: [number, number, number]): [numb
     : fallback;
 }
 
-function snapshotMarkerFromDirectorLayerItem(item: unknown, t: (key: string) => string = (key) => key): ThreeDSceneSnapshot["actors"][number] {
+function snapshotMarkerFromDirectorLayerItem(item: unknown): ThreeDSceneSnapshot["actors"][number] {
   const data = item && typeof item === 'object' ? item as Record<string, unknown> : {};
   const placementData = data.placement && typeof data.placement === 'object'
     ? data.placement as Record<string, unknown>
@@ -205,16 +205,15 @@ function snapshotMarkerFromDirectorLayerItem(item: unknown, t: (key: string) => 
 
 function sceneSnapshotFromDirectorControlBundle(
   bundle: DirectorControlFrameBundle | null,
-  t: (key: string) => string = (key) => key,
 ): ThreeDSceneSnapshot | null {
   const frameMeta = bundle?.frame_meta;
   if (!frameMeta?.layer) return null;
   return {
     schemaVersion: 1,
     savedAt: Date.now(),
-    actors: (frameMeta.layer.actors ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item, t)),
-    props: (frameMeta.layer.props ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item, t)),
-    stagings: (frameMeta.layer.stagings ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item, t)),
+    actors: (frameMeta.layer.actors ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item)),
+    props: (frameMeta.layer.props ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item)),
+    stagings: (frameMeta.layer.stagings ?? []).map((item) => snapshotMarkerFromDirectorLayerItem(item)),
     world: { activeSourceId: resolveDirectorControlBundleSourceId(bundle) ?? undefined },
     camera: frameMeta.camera?.state as ThreeDSceneSnapshot["camera"],
   };
@@ -355,7 +354,7 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
     [data.director_control_bundle],
   );
   const directorInitialScene = useMemo(
-    () => sceneSnapshotFromDirectorControlBundle(directorControlBundle, t),
+    () => sceneSnapshotFromDirectorControlBundle(directorControlBundle),
     [directorControlBundle, t],
   );
   const directorInitialSourceId = directorInitialScene?.world?.activeSourceId;
@@ -695,12 +694,12 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
         if (projectId && meta.captureBundle) {
           const bundle = await uploadDirectorCaptureBundle(projectId, id, meta.captureBundle);
           const [combinedDataUrl, envOnlyDataUrl] = await Promise.all([
-            blobToDataUrl(meta.captureBundle.combined, t),
-            blobToDataUrl(meta.captureBundle.env_only, t),
+            blobToDataUrl(meta.captureBundle.combined),
+            blobToDataUrl(meta.captureBundle.env_only),
           ]);
           const [combinedSize, envOnlySize] = await Promise.all([
-            imageSize(combinedDataUrl, t),
-            imageSize(envOnlyDataUrl, t),
+            imageSize(combinedDataUrl),
+            imageSize(envOnlyDataUrl),
           ]);
           const baseMetadata = {
             viewer: 'director_world',
@@ -744,8 +743,8 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
           }
           return;
         }
-        const dataUrl = await blobToDataUrl(blob, t);
-        const size = await imageSize(dataUrl, t);
+        const dataUrl = await blobToDataUrl(blob);
+        const size = await imageSize(dataUrl);
         const uploadedUrl = await uploadLocalImageToBackend(
           dataUrl,
           `director-world-${id}-combined-${Date.now()}.png`,

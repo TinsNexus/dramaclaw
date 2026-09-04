@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
 import { FileVideo, Film, Loader2, Upload, X } from "lucide-react";
 
 import { submitFreezoneExtract, uploadFreezoneImage } from "@/api/ops";
@@ -196,7 +195,7 @@ export function VideoReferenceDialog({
             </p>
           </Section>
 
-          {progress.stage !== "idle" && <ProgressBar progress={progress} t={t} />}
+          {progress.stage !== "idle" && <ProgressBar progress={progress} />}
 
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs leading-relaxed text-red-300 break-words">

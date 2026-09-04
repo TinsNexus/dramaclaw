@@ -14,7 +14,6 @@ import {
   type EdgeChange,
   type NodeChange,
 } from '@xyflow/react';
-import i18n from '@/i18n';
 
 import {
   CANVAS_NODE_TYPES,

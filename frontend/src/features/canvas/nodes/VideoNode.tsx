@@ -1555,6 +1555,19 @@ export const VideoNode = memo(
         !prev &&
         hasAudioUpstream &&
         data.genMode !== "allReference" &&
+        !(data.genMode === "videoEdit" && videoEditAcceptsAudio) &&
+        !isHappyHorseModel &&
+        supportsAllReference
+      ) {
+        updateNodeData(id, { genMode: "allReference" });
+      }
+    }, [
+      data.genMode,
+      hasAudioUpstream,
+      id,
+      isHappyHorseModel,
+      supportsAllReference,
+      updateNodeData,
       videoEditAcceptsAudio,
     ]);
 
@@ -1616,6 +1629,16 @@ export const VideoNode = memo(
     useEffect(() => {
       if (upstreamCounts.videos === 0) return;
       if (isHappyHorseModel) return;
+      if (genMode === "videoEdit" && supportsVideoEdit) return;
+      if (!supportsAllReference) return;
+      if (genMode === "allReference") return;
+      updateNodeData(id, { genMode: "allReference" });
+    }, [
+      upstreamCounts.videos,
+      genMode,
+      id,
+      isHappyHorseModel,
+      supportsAllReference,
       supportsVideoEdit,
       updateNodeData,
     ]);
@@ -2124,6 +2147,171 @@ export const VideoNode = memo(
           }
           return resolveVideoKeyframeUrls(candidates);
         };
+
+        const validateReferenceDurations = async (
+          media: "audio" | "video",
+          refs: Array<{ url: string; label: string; durationMs: number | null }>,
+        ): Promise<boolean> => {
+          const configured = referenceDurationLimitsMs(selectedVideoModel, media);
+          const limits = {
+            minMs:
+              configured.minMs ??
+              (media === "audio" && isSeedance20Model
+                ? MIN_AUDIO_REFERENCE_DURATION_MS
+                : undefined),
+            maxMs:
+              configured.maxMs ??
+              (media === "audio" && isSeedance20Model
+                ? MAX_AUDIO_REFERENCE_DURATION_MS
+                : undefined),
+            totalMinMs: configured.totalMinMs,
+            totalMaxMs:
+              configured.totalMaxMs ??
+              (media === "audio" && isSeedance20Model
+                ? MAX_AUDIO_REFERENCE_TOTAL_DURATION_MS
+                : undefined),
+          };
+          if (refs.length === 0 || Object.values(limits).every((value) => value == null)) {
+            return true;
+          }
+          const resolvedDurations = await Promise.all(
+            refs.map((ref) =>
+              typeof ref.durationMs === "number" && ref.durationMs > 0
+                ? Promise.resolve(ref.durationMs)
+                : media === "audio"
+                  ? probeAudioDurationMs(ref.url)
+                  : probeVideoDurationMs(ref.url),
+            ),
+          );
+          const rejection = audioReferenceDurationRejection(
+            refs.map((ref, index) => ({
+              label: ref.label,
+              durationMs: resolvedDurations[index] ?? null,
+            })),
+            {
+              minMs: limits.minMs ?? null,
+              maxMs: limits.maxMs ?? null,
+              totalMinMs: limits.totalMinMs,
+              totalLimitMs: limits.totalMaxMs ?? null,
+              perClipLimits: limits.minMs != null || limits.maxMs != null,
+            },
+          );
+          if (!rejection) return true;
+
+          const clips = formatAudioDurationClips(rejection.clips, (key, vars) =>
+            t(key, vars),
+          );
+          const prefix =
+            media === "audio" ? "node.videoNode.audio" : "node.videoNode.referenceDuration";
+          const message =
+            rejection.kind === "tooShort"
+              ? t(`${prefix}.${media === "audio" ? "durationTooShort" : "videoTooShort"}`, {
+                  min: formatAudioDurationSeconds(limits.minMs ?? 0),
+                  clips,
+                })
+              : rejection.kind === "tooLong"
+                ? t(`${prefix}.${media === "audio" ? "durationTooLong" : "videoTooLong"}`, {
+                    max: formatAudioDurationSeconds(limits.maxMs ?? 0),
+                    clips,
+                  })
+                : rejection.kind === "totalTooShort"
+                  ? t(
+                      `${prefix}.${media === "audio" ? "durationTotalTooShort" : "videoTotalTooShort"}`,
+                      {
+                        min: formatAudioDurationSeconds(rejection.limitMs),
+                        total: formatAudioDurationSeconds(rejection.totalMs),
+                        clips,
+                      },
+                    )
+                  : t(
+                      `${prefix}.${media === "audio" ? "durationTotalTooLong" : "videoTotalTooLong"}`,
+                      {
+                        max: formatAudioDurationSeconds(rejection.limitMs),
+                        total: formatAudioDurationSeconds(rejection.totalMs),
+                        clips,
+                      },
+                    );
+          toast.error(message, { duration: 5_000 });
+          updateNodeData(id, {
+            isGenerating: false,
+            generationStartedAt: null,
+          });
+          return false;
+        };
+
+        const durationClamped = clampVideoDuration(durationSec, durationBounds);
+        const cameraTemplateId = cameraMovementId;
+        // 后端按 canvas_id + node_id 记录每个节点的生成历史。多条生成时每个
+        // 兄弟节点用各自的 targetId 作 node_id，历史才能分别落到对应节点。
+        const canvasId = readUrl().canvas ?? "default";
+
+        // 后端不再支持一次出多条，改为按「生成数量」并发调用 N 次接口。先按
+        // genMode 组装出一个「调一次接口」的闭包 doSubmit，校验失败则置空提前返回。
+        let doSubmit: ((targetId: string) => Promise<FreezoneJobRef>) | null = null;
+        if (genMode === "firstFrame" || genMode === "firstLastFrame") {
+          const keyframes = collectUpstreamKeyframeUrls();
+          const firstFrameUrl = keyframes.firstFrameUrl;
+          const lastFrameUrl = genMode === "firstLastFrame" ? keyframes.lastFrameUrl : null;
+          if (!firstFrameUrl && !lastFrameUrl) {
+            console.warn(
+              "[video-node] firstLastFrame submit without any frame",
+            );
+            updateNodeData(id, {
+              isGenerating: false,
+              generationStartedAt: null,
+            });
+            return;
+          }
+          doSubmit = (targetId) =>
+            submitFreezoneVideoKeyframes(projectId, {
+              firstFrameUrl,
+              lastFrameUrl,
+              genMode,
+              prompt: composedPrompt,
+              cameraTemplateId,
+              aspectRatio: submitAspectRatio,
+              resolution: qualityToResolution(quality),
+              durationSeconds: durationClamped,
+              generateAudio,
+              model: selectedVideoModel?.catalogId ?? modelId,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
+              sceneOptimize: sceneOptimize ?? null,
+              canvasId,
+              nodeId: targetId,
+            });
+        } else if (genMode === "imageToVideo" || genMode === "imageReference") {
+          // Unified i2v endpoint: 1 image = 图生视频, 2-9 images = 图片参考视频.
+          const imageUrls = collectUpstreamImageUrls().slice(
+            0,
+            referenceCaps?.image ?? 9,
+          );
+          if (imageUrls.length === 0) {
+            console.warn("[video-node] i2v submit without any upstream image");
+            updateNodeData(id, {
+              isGenerating: false,
+              generationStartedAt: null,
+            });
+            return;
+          }
+          doSubmit = (targetId) =>
+            submitFreezoneVideoI2v(projectId, {
+              imageUrls,
+              prompt: composedPrompt,
+              cameraTemplateId,
+              aspectRatio: submitAspectRatio,
+              resolution: qualityToResolution(quality),
+              durationSeconds: durationClamped,
+              generateAudio,
+              model: selectedVideoModel?.catalogId ?? modelId,
+              genMode,
+              modelParams: data.modelParams,
+              humanReview: supportsHumanReview && humanReview,
+              sceneOptimize: sceneOptimize ?? null,
+              canvasId,
+              nodeId: targetId,
+            });
+        } else if (genMode === "videoEdit") {
           // 视频编辑：1 个源视频，并按媒体目录上限附带参考图片和独立参考音频。
           // 不再是 HappyHorse 专属 —— 目录里声明了 video_edit 的模型都走这条路。
           const upstream = collectUpstream();
@@ -2150,6 +2338,33 @@ export const VideoNode = memo(
             );
           }
           const imageUrls = allImageUrls.slice(0, imageLimit);
+          const audioLimit = referenceCaps?.audio ?? 0;
+          const audioRefs = upstream
+            .filter(isAudioNode)
+            .map((node, index) => {
+              const url =
+                typeof node.data.audioUrl === "string" ? node.data.audioUrl : "";
+              const rawLabel =
+                (typeof node.data.sourceFileName === "string"
+                  ? node.data.sourceFileName
+                  : "") ||
+                (typeof node.data.displayName === "string"
+                  ? node.data.displayName
+                  : "");
+              return {
+                url,
+                label:
+                  rawLabel ||
+                  t("node.videoNode.audio.clipFallbackLabel", { index: index + 1 }),
+                durationMs:
+                  typeof node.data.durationMs === "number"
+                    ? node.data.durationMs
+                    : null,
+              };
+            })
+            .filter((item) => item.url.length > 0)
+            .slice(0, audioLimit);
+          if (!(await validateReferenceDurations("audio", audioRefs))) return;
           doSubmit = (targetId) =>
             submitFreezoneVideoEdit(projectId, {
               videoUrl,

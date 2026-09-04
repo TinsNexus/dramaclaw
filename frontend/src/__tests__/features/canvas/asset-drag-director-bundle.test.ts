@@ -197,10 +197,6 @@ describe("director bundle canvas assets", () => {
       resolve(process.cwd(), "public/locales/zh/translation.json"),
       "utf8",
     );
-    const vi = readFileSync(
-      resolve(process.cwd(), "public/locales/vi/translation.json"),
-      "utf8",
-    );
     const badges = readFileSync(
       resolve(process.cwd(), "src/features/freezone/context/NodeContextBadges.tsx"),
       "utf8",

@@ -10,7 +10,6 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import { AlertTriangle, Expand, FileVideo2, X } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import {
   CANVAS_NODE_TYPES,
@@ -324,7 +323,7 @@ export const VideoStoryNode = memo(({ id, data, selected, width, height }: Video
           ) : hasRows ? (
             <StoryTable rows={rows} compact onCellCommit={handleCellCommit} t={t} />
           ) : (
-            <EmptyStoryState rawResult={data.rawResult ?? null} t={t} />
+            <EmptyStoryState rawResult={data.rawResult ?? null} />
           )}
         </div>
 

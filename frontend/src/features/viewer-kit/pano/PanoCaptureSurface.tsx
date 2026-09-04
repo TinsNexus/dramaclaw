@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 import { Viewer, CONSTANTS } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 import { Camera, Loader2, RotateCcw, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

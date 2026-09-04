@@ -132,9 +132,6 @@ export function ExtractFramesDialog({
         analysis: analyses[i] ?? null,
       }));
       onFramesReady(frames);
-      const completionMsg = analyses.length > 0
-        ? t("pipelineImport.extractFrames.progressDoneWithAnalysis", { count: frames.length })
-        : t("pipelineImport.extractFrames.progressDone", { count: frames.length });
       setProgress({
         stage: "done",
         message: analyses.length > 0

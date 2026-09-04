@@ -12,7 +12,9 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import i18n from "@/i18n";
+// 直接引入 i18next 包本身而非 @/i18n 引导模块：后者会带上 HttpBackend 初始化副作用，
+// 在这条被广泛 import 的底层链路上触发会打乱 mock 掉 react-i18next 的测试。
+import i18n from "i18next";
 import {
   AudioLines,
   BookOpen,
@@ -23,9 +25,7 @@ import {
   Video,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 
-import i18n from "@/i18n";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssetLibraryModal } from "@/features/canvas/ui/AssetLibraryModal";
@@ -535,7 +535,7 @@ export function AssetLibraryPanel({
 }: AssetLibraryPanelProps) {
   const { t } = useTranslation();
   const canvasKind = resolveCanvasKind(metadata);
-  const beatTabLabelKey =
+  const beatTabLabel =
     canvasKind === "default" || canvasKind === "blank"
       ? t(`${A}.tabs.beatAll`)
       : canvasKind === "episode"
@@ -855,7 +855,7 @@ export function AssetLibraryPanel({
                           : "text-white/35 hover:text-white/60"
                       }`}
                     >
-                      {t(item.labelKey)}
+                      {item.label}
                       {item.count > 0 ? (
                         <span className="ml-0.5 text-[10px] opacity-60">({item.count})</span>
                       ) : null}
@@ -1083,7 +1083,7 @@ function AssetCard({
   const isConfirming = replaceCtx?.confirmingAssetId === asset.id;
   const isReplacing = replaceCtx?.busyAssetId === asset.id;
   const dragPayload = disabled ? null : assetToDragPayload(asset);
-  const typeBadge = sceneAssetTypeBadge(asset, t);
+  const typeBadge = sceneAssetTypeBadge(asset);
 
   const handleDragStart = (event: ReactDragEvent<HTMLDivElement>) => {
     if (!dragPayload) return;
@@ -1275,14 +1275,12 @@ function buildLibraryAssets({
   projectAssets,
   beatContext,
   canvasKind,
-  t = (key) => key,
 }: {
   project: string;
   metadata: Record<string, unknown> | null;
   projectAssets: FreezoneProjectAsset[];
   beatContext: FreezoneBeatContextResponse | null;
   canvasKind: CanvasKind;
-  t?: (key: string, vars?: Record<string, unknown>) => string;
 }): LibraryAsset[] {
   const out: LibraryAsset[] = [];
   const seen = new Set<string>();
@@ -1329,7 +1327,7 @@ function buildLibraryAssets({
     addUnique(out, seen, fromFreezoneAsset(asset, { fromBeatContext: false, projectId: project }));
   }
   attachThreeDCovers(out);
-  return coalesceSceneDirectorWorldAssets(out, t);
+  return coalesceSceneDirectorWorldAssets(out);
 }
 
 function attachThreeDCovers(assets: LibraryAsset[]): void {
@@ -1367,7 +1365,6 @@ function attachThreeDCovers(assets: LibraryAsset[]): void {
 
 function coalesceSceneDirectorWorldAssets(
   assets: LibraryAsset[],
-  t: (key: string, vars?: Record<string, unknown>) => string = (key) => key,
 ): LibraryAsset[] {
   const grouped = new Map<string, LibraryAsset[]>();
   for (const asset of assets) {
@@ -1391,7 +1388,6 @@ function coalesceSceneDirectorWorldAssets(
           sceneId,
           grouped.get(sceneId) ?? [],
           assets.filter((candidate) => sceneIdForLibraryAsset(candidate) === sceneId),
-          t,
         );
         if (bundled) next.push(bundled);
       }
@@ -1406,7 +1402,6 @@ function createSceneDirectorWorldAsset(
   sceneId: string,
   sourceAssets: LibraryAsset[],
   sceneAssets: LibraryAsset[],
-  t: (key: string, vars?: Record<string, unknown>) => string = (key) => key,
 ): LibraryAsset | null {
   const rawSources = sourceAssets
     .map((asset) => directorWorldSourceFromSceneAsset(sceneId, asset))
@@ -1642,7 +1637,6 @@ const SCENE_BADGE_CLASSNAMES: Record<string, string> = {
 
 function sceneAssetTypeBadge(
   asset: LibraryAsset,
-  t: ReturnType<typeof useTranslation>["t"],
 ): { label: string; title: string; className: string } | null {
   if (asset.tab !== "scenes") return null;
   const className = SCENE_BADGE_CLASSNAMES[asset.role ?? ""];

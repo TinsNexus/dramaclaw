@@ -33,7 +33,6 @@ export type CreditPromotionDisplay = {
 
 export function formatCreditPromotionLabel(
   promotion?: CreditPromotionDisplay | null,
-  t: (key: string, opts?: Record<string, string | number>) => string = (key) => key,
 ): string | null {
   const basisPoints = Number(promotion?.discount_basis_points);
   if (!Number.isFinite(basisPoints) || basisPoints <= 0 || basisPoints >= 10_000) {
@@ -121,7 +120,6 @@ export function CreditCostPill({
   disabled?: boolean;
   className?: string;
 }) {
-  const { t } = useTranslation();
   // Hidden inside the canvas (a provider sets this) so cost badges don't show
   // next to canvas node buttons; unaffected everywhere else.
   if (useCreditDisplayHidden()) return null;

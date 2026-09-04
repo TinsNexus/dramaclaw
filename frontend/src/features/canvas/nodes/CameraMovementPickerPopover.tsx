@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import {
   type CameraMovementPreset,

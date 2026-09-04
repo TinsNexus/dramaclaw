@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
-import { useTranslation } from "react-i18next";
 import styles from "./scroll-video-scene.module.css";
 import { COMMUNITY_WATCH_WORK } from "./watch-link";
 

@@ -12,7 +12,6 @@ import { createPortal } from 'react-dom';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Plus, Search, X, AudioWaveform } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { AudioVoiceRef } from '@/features/canvas/domain/canvasNodes';
@@ -486,7 +485,7 @@ function MyVoicesTab({
           <CenteredHint className="text-rose-400">{error}</CenteredHint>
         )}
         {!loading && !error && total === 0 && (
-          <EmptyState onClone={handleClone} t={t} />
+          <EmptyState onClone={handleClone} />
         )}
         {!loading &&
           !error &&

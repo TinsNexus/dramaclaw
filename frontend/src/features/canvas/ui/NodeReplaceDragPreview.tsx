@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AudioLines, Box, Film, Replace } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import { useAssetDropStore } from '@/stores/assetDropStore';
 import { resolveMediaUrl } from '@/lib/media-url';

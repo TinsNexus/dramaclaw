@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import { ScrollVideoScene } from "./ScrollVideoScene";
-import { useTranslation } from "react-i18next";
 import { cinematicVideos } from "./media";
 
 export function SecondScreenVideo({

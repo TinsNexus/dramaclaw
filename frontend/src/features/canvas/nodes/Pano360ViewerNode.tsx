@@ -37,7 +37,6 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { Viewer, CONSTANTS } from '@photo-sphere-viewer/core';
 import '@photo-sphere-viewer/core/index.css';
 
@@ -114,6 +113,14 @@ const DIRECTION_OFFSETS: Record<string, number> = {
   back: 180,
   left: -90,
   seam: -180,
+};
+
+const DIRECTION_LABEL_KEYS: Record<string, string> = {
+  front: 'node.pano360.direction.front',
+  right: 'node.pano360.direction.right',
+  back: 'node.pano360.direction.back',
+  left: 'node.pano360.direction.left',
+  seam: 'node.pano360.direction.seam',
 };
 
 // 帧名会落到画布节点的显示文本上，但这几张表是模块级常量、取不到 t，
@@ -918,7 +925,7 @@ export const Pano360ViewerNode = memo(({ id, data, selected, width, height }: Pa
   // 多方向截图：逐帧捕获后，每张都落成独立的图片节点，并放进一个前端展示用的
   // 分组里（不新建组合节点类型）。yaw 以用户设定的「正前方」为基准。
   const captureToGroup = useCallback(
-    async (cols: number, frames: CaptureFrameSpec[], fov: number, groupName: string, translator: (key: string) => string) => {
+    async (cols: number, frames: CaptureFrameSpec[], fov: number, groupName: string) => {
       const viewer = viewerRef.current;
       if (!viewer || !data.imageUrl) return;
       setIsCapturing(true);

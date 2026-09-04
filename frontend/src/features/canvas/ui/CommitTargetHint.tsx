@@ -82,7 +82,6 @@ export function CommitTargetHint({
         // 关键:主线技能节点是 trigger+display 一体,产物先落在本节点 imageUrl,
         // 没有下游的"分镜节点"。commit 之后 mainline DB 才生成 `current_xxx`
         // 资产 — 下次打开 canvas 才会看到独立的 asset 节点。
-        const candidate = t(slotMapping.candidateKey);
         return {
           variant: 'typed' as const,
           text: t('canvas.commitHint.typed', {

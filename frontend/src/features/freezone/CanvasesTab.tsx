@@ -319,6 +319,24 @@ const CANVAS_MENU_ITEM_CLASS =
  * 反而成了这块面板最显眼的字。
  */
 function CanvasSelect({
+  items,
+  currentCanvasId,
+  loading,
+  username,
+  restoringMainline,
+  deletingCanvasId,
+  canRestoreMainline,
+  onSwitch,
+  onCreate,
+  onRestoreMainline,
+  onDelete,
+}: {
+  items: CanvasDisplaySummary[];
+  currentCanvasId: string;
+  loading: boolean;
+  username?: string | null;
+  restoringMainline: boolean;
+  deletingCanvasId: string | null;
   canRestoreMainline: boolean;
   onSwitch: (id: string) => void;
   onCreate: () => void;

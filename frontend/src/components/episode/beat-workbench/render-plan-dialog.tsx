@@ -103,8 +103,6 @@ interface PartialDispatchState {
   shapeOk: boolean;
 }
 
-const RENDER_REGEN_FEATURE_KEY = "mainline.render_regen";
-
 interface RenderPlanDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;

@@ -24,7 +24,6 @@ export function SeventhPipelineScreen({
   if (exitProgress >= 0.99) return null;
   if (!shouldMount && progress <= 0.01) return null;
 
-  const { t } = useTranslation();
   const activeIndex = Math.min(steps.length - 1, Math.floor(sequenceProgress * steps.length));
   const style = {
     "--seventh-opacity": progress * (1 - exitProgress),

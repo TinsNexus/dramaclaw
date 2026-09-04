@@ -132,13 +132,13 @@ interface UpstreamRef {
   textContent?: string | null;
 }
 
-function nodeLabel(node: CanvasNode, t: (key: string) => string = (key) => key): string {
+function nodeLabel(node: CanvasNode): string {
   const dn = (node.data as { displayName?: unknown }).displayName;
   if (typeof dn === 'string' && dn.trim().length > 0) return dn;
   return node.type ?? i18n.t('node.threeDWorld.upstreamNodeFallback');
 }
 
-function upstreamRef(node: CanvasNode | undefined | null, t: (key: string) => string = (key) => key): UpstreamRef | null {
+function upstreamRef(node: CanvasNode | undefined | null): UpstreamRef | null {
   if (!node) return null;
   if (isImageGenNode(node)) {
     const ref =
@@ -147,7 +147,7 @@ function upstreamRef(node: CanvasNode | undefined | null, t: (key: string) => st
         : null;
     const url = node.data.imageUrl || ref;
     if (!url) return null;
-    return { nodeId: node.id, kind: 'image', displayName: nodeLabel(node, t), imageUrl: url };
+    return { nodeId: node.id, kind: 'image', displayName: nodeLabel(node), imageUrl: url };
   }
   if (
     isUploadNode(node) ||
@@ -159,14 +159,14 @@ function upstreamRef(node: CanvasNode | undefined | null, t: (key: string) => st
     return {
       nodeId: node.id,
       kind: 'image',
-      displayName: nodeLabel(node, t),
+      displayName: nodeLabel(node),
       imageUrl: node.data.imageUrl,
     };
   }
   if (isTextAnnotationNode(node)) {
     const text = (node.data.content ?? '').trim();
     if (!text) return null;
-    return { nodeId: node.id, kind: 'text', displayName: nodeLabel(node, t), textContent: text };
+    return { nodeId: node.id, kind: 'text', displayName: nodeLabel(node), textContent: text };
   }
   return null;
 }
@@ -508,7 +508,7 @@ interface ReferenceTextRef {
   displayName: string;
 }
 
-function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): Promise<string> {
+function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -521,7 +521,7 @@ function blobToDataUrl(blob: Blob, t: (key: string) => string = (key) => key): P
   });
 }
 
-function imageSize(dataUrl: string, t: (key: string) => string = (key) => key): Promise<{ width: number; height: number }> {
+function imageSize(dataUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
@@ -622,6 +622,30 @@ interface OpsPanelProps {
   isGenerating: boolean;
   hasUpstream: boolean;
   billingRuleMissing: boolean;
+  modelTaskBlocked: boolean;
+  modelTaskMessage: string | null;
+  creditCostDisplay: string | null;
+  creditPromotion?: CreditPromotionDisplay | null;
+  errorMessage?: string | null;
+  sourceKind: DirectorImageSourceKind;
+  referenceImages: ReferenceImageRef[];
+  selectedReferenceNodeId: string | null;
+  referenceImage: ReferenceImageRef | null;
+  referenceText: ReferenceTextRef | null;
+  onReferenceImageChange: (nodeId: string) => void;
+  onSourceKindChange: (next: DirectorImageSourceKind) => void;
+  onSubmit: () => void;
+  onFocusUpstream: (nodeId: string) => void;
+  onDetachUpstream: (nodeId: string) => void;
+}
+
+// 生成入口属于已连线的 ThreeDWorldNode：图片节点右侧 + 负责表达画布关系，
+// 本节点负责把上游图片提交成 3DGS source。这里保留引用、错误和历史信息，
+// 避免把 source 类型下拉误当成导演世界 source 选择器。
+function OpsPanel({
+  isGenerating,
+  hasUpstream,
+  billingRuleMissing,
   modelTaskBlocked,
   modelTaskMessage,
   creditCostDisplay,
@@ -799,6 +823,7 @@ function HistoryPanel({
 
 export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: ThreeDWorldNodeProps) => {
   const { t } = useTranslation();
+  const modelTaskAccess = useModelTaskAccess();
   const worldCreditCost = useGenerationCreditCost(
     'feature',
     'freezone.image_to_3gs',
@@ -879,7 +904,7 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
     sources.sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0));
     const refs: UpstreamRef[] = [];
     for (const node of sources) {
-      const ref = upstreamRef(node, t);
+      const ref = upstreamRef(node);
       if (ref) refs.push(ref);
     }
     return refs;
@@ -1181,12 +1206,12 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
         if (projectId && meta.captureBundle) {
           const bundle = await uploadDirectorCaptureBundle(projectId, id, meta.captureBundle);
           const [combinedDataUrl, envOnlyDataUrl] = await Promise.all([
-            blobToDataUrl(meta.captureBundle.combined, t),
-            blobToDataUrl(meta.captureBundle.env_only, t),
+            blobToDataUrl(meta.captureBundle.combined),
+            blobToDataUrl(meta.captureBundle.env_only),
           ]);
           const [combinedSize, envOnlySize] = await Promise.all([
-            imageSize(combinedDataUrl, t),
-            imageSize(envOnlyDataUrl, t),
+            imageSize(combinedDataUrl),
+            imageSize(envOnlyDataUrl),
           ]);
           const baseMetadata = {
             viewer: 'director_world',
@@ -1231,8 +1256,8 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
           }
           return;
         }
-        const dataUrl = await blobToDataUrl(blob, t);
-        const size = await imageSize(dataUrl, t);
+        const dataUrl = await blobToDataUrl(blob);
+        const size = await imageSize(dataUrl);
         const uploadedUrl = await uploadLocalImageToBackend(
           dataUrl,
           `3gs-${id}-${meta.kind}-${Date.now()}.png`,
@@ -1455,6 +1480,8 @@ export const ThreeDWorldNode = memo(({ id, data, selected, width, height }: Thre
             isGenerating={isGenerating}
             hasUpstream={hasUpstream}
             billingRuleMissing={worldBillingRuleMissing}
+            modelTaskBlocked={modelTaskAccess.blocked}
+            modelTaskMessage={modelTaskAccess.message}
             creditCostDisplay={worldCreditCostDisplay}
             creditPromotion={worldCreditCost.data?.data.promotion}
             errorMessage={data.errorMessage}

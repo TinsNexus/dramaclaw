@@ -4,6 +4,8 @@
 // 界面引用，reason / label 也直接拼进 contextPromptCompiler 那份锁中文的提示词。
 // 等它真被挂到某个面板上时，这些串要一起入词条；在那之前整份免检。
 // i18n-exempt-start
+import { useTranslation } from "react-i18next";
+
 import type { ContextMatch } from "./contextMatching";
 import {
   matchForBeatToSketch,

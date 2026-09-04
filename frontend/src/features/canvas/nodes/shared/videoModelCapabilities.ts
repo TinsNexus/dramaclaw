@@ -133,6 +133,128 @@ export type VideoModelRef =
   | null
   | undefined;
 
+/** 未配置的新字段沿用旧行为：支持原生音频，且默认开启。 */
+export function videoModelSupportsGenerateAudio(model: VideoModelRef): boolean {
+  return typeof model === "string" || model?.supportsGenerateAudio !== false;
+}
+
+export function videoModelDefaultGenerateAudio(model: VideoModelRef): boolean {
+  return videoModelSupportsGenerateAudio(model);
+}
+
+/** 从模型入参里取出用于能力启发式判定的 id（优先 apiModel，它才是打给上游的名字）。 */
+function videoModelIdOf(model: VideoModelRef): string | null | undefined {
+  return typeof model === "string" ? model : (model?.apiModel ?? model?.id);
+}
+
+/**
+ * 指定模型是否支持某 genMode（与可见 tab / 切模型时是否重置残留模式口径一致）。
+ * - HappyHorse：文生 / 首帧(i2v) / 图片参考(r2v) / 视频编辑。
+ * - 非 HappyHorse：视频编辑是 HappyHorse 专属；全能参考与「真尾帧」首尾帧只有
+ *   Seedance 2.0 后端支持（非 2.0 打 omni→400、首尾帧静默丢尾帧）；文生 / 首帧 /
+ *   图片参考其余视频模型均支持。
+ */
+export function isVideoModeSupportedByModel(
+  mode: VideoGenMode,
+  model: VideoModelRef,
+): boolean {
+  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
+    return model.supportedModes?.includes(GEN_MODE_TO_CATALOG_MODE[mode]) ?? false;
+  }
+  const modelId = videoModelIdOf(model);
+  if (isHappyHorseVideoModel(modelId)) {
+    return (
+      mode === "textToVideo" ||
+      mode === "firstFrame" ||
+      mode === "imageToVideo" ||
+      mode === "imageReference" ||
+      mode === "videoEdit"
+    );
+  }
+  if (isSeedance1xVideoModel(modelId)) {
+    return mode === "textToVideo" || mode === "firstFrame";
+  }
+  if (mode === "videoEdit") return false;
+  if (mode === "allReference" || mode === "firstLastFrame") {
+    return isSeedance2VideoModel(modelId);
+  }
+  return true;
+}
+
+/**
+ * 空态 CTA 只覆盖「铺素材起步」的图片 / 首尾帧模式——文生视频无需素材、视频编辑走
+ * 独立入口，都不在空态 CTA 里。与 `spawnFrameUploads` 接受的模式一一对应。
+ */
+export type VideoEmptyStateCtaMode =
+  | "allReference"
+  | "imageReference"
+  | "firstFrame"
+  | "imageToVideo"
+  | "firstLastFrame";
+
+/**
+ * 视频节点「空态」CTA 的模式顺序——只列该模型**真正能起步**的图片 / 首尾帧模式：
+ * - HappyHorse：首帧 → 图片参考；
+ * - Seedance 2.0：全能参考 → 图片参考 → 首尾帧；
+ * - Seedance 1.x 及其它非 2.0 非 HappyHorse：全能参考会 400、首尾帧尾帧被静默丢弃、
+ *   多图参考也不支持，只给确实可用的「首帧」。
+ */
+export function videoEmptyStateCtaModes(
+  model: VideoModelRef,
+): VideoEmptyStateCtaMode[] {
+  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
+    const order: VideoEmptyStateCtaMode[] = [
+      "allReference",
+      "imageToVideo",
+      "firstFrame",
+      "imageReference",
+      "firstLastFrame",
+    ];
+    return order.filter((mode) => isVideoModeSupportedByModel(mode, model));
+  }
+  const modelId = videoModelIdOf(model);
+  if (isHappyHorseVideoModel(modelId)) {
+    return ["imageToVideo", "firstFrame", "imageReference"];
+  }
+  if (isSeedance2VideoModel(modelId)) {
+    return ["allReference", "imageToVideo", "firstFrame", "imageReference", "firstLastFrame"];
+  }
+  return ["firstFrame"];
+}
+
+/**
+ * 非 HappyHorse 模型「首次接入图片素材」后的默认模式：Seedance 2.0 用全能参考
+ * （omni，1-9 图 + 视频 + 音频的通用入口），其余（Seedance 1.x）不支持全能参考，
+ * 退到确实可用的「首帧」，避免默认推导把 1.x 顶进一个提交必 400 的模式。
+ */
+export function videoUpstreamImageDefaultMode(
+  model: VideoModelRef,
+): VideoGenMode | null {
+  if (typeof model === "object" && model !== null && (model.supportedModes?.length ?? 0) > 0) {
+    for (const mode of [
+      "allReference",
+      "imageToVideo",
+      "firstFrame",
+      "imageReference",
+    ] as const) {
+      if (isVideoModeSupportedByModel(mode, model)) return mode;
+    }
+    return null;
+  }
+  const modelId = videoModelIdOf(model);
+  if (isHappyHorseVideoModel(modelId)) return "imageToVideo";
+  return isSeedance2VideoModel(modelId) ? "allReference" : "firstFrame";
+}
+
+/**
+ * 该 genMode 是否**必须带提示词**才能提交：文生 / 全能参考 后端强校验 prompt；
+ * 首帧 / 图生视频 / 图片参考 / 首尾帧 / 视频编辑允许空提示词（只要素材齐备即可提交）。
+ */
+export function videoModeRequiresPrompt(mode: VideoGenMode): boolean {
+  return mode === "textToVideo" || mode === "allReference";
+}
+
+/**
  * 该 genMode 是否**必须有上游素材**才能提交：只有文生视频不需要，其余模式的提交
  * 分支都会在素材为空时直接 return（见 VideoNode 的 handleSubmit）。
  *

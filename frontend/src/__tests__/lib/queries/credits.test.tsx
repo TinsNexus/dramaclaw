@@ -250,4 +250,3 @@ describe("credit scope helpers", () => {
     expect(creditOrgOf({ ...base, organization: { org_id: "org-1", name: "" } })).toBeNull();
   });
 });
-});

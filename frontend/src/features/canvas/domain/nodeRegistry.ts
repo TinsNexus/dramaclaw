@@ -33,6 +33,7 @@ import {
   DEFAULT_VIDEO_MODEL_ID,
 } from '../ui/ProviderModelPicker';
 import { readLastVideoModel } from './lastVideoModel';
+import { DEFAULT_NODE_DISPLAY_NAME } from './nodeDisplay';
 
 export type MenuIconKey = 'upload' | 'sparkles' | 'layout' | 'text' | 'video' | 'audio' | 'script' | 'pano360' | 'threeDWorld' | 'videoCompose';
 

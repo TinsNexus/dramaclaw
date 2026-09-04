@@ -9,9 +9,7 @@ import { AppleMark, GithubMark, WindowsMark } from "@/components/platform-marks"
 import { useDesktopRelease } from "@/hooks/use-desktop-release";
 import { PRODUCT_MANUAL_URL } from "@/lib/product-manual";
 import {
-  FALLBACK_DOWNLOAD_URL,
   detectDesktopPlatform,
-  resolveDesktopDownloadUrl,
   type DesktopPlatform,
 } from "@/lib/desktop-download";
 import styles from "@/components/login/login.module.css";
@@ -115,22 +113,6 @@ function DesktopDownload() {
         </div>
       </div>
     </div>
-  );
-}
-
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M16.36 12.72c.02-2.32 1.9-3.43 1.98-3.49-1.08-1.58-2.76-1.8-3.36-1.82-1.43-.14-2.79.84-3.52.84-.72 0-1.84-.82-3.03-.8-1.56.02-3 .9-3.8 2.29-1.62 2.81-.41 6.97 1.16 9.25.77 1.11 1.69 2.36 2.9 2.32 1.16-.05 1.6-.75 3.01-.75 1.4 0 1.8.75 3.03.72 1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.25-2.54 1.27-2.6-.03-.01-2.43-.94-2.44-3.71zM14.1 5.98c.64-.78 1.07-1.85.95-2.93-.92.04-2.03.61-2.69 1.38-.59.69-1.11 1.79-.97 2.84 1.02.08 2.07-.52 2.71-1.29z" />
-    </svg>
-  );
-}
-
-function WindowsMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M3 5.7l7.2-.98v6.95H3V5.7zm0 12.6l7.2.98v-6.86H3v5.88zm8.05 1.09L21 20.75v-8.34h-9.95v6.98zM11.05 4.6v7.07H21V3.25l-9.95 1.35z" />
-    </svg>
   );
 }
 

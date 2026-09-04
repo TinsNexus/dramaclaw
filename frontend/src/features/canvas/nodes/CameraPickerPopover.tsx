@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Aperture, Camera, ChevronDown, Focus, X } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import type { ImageGenCameraSelection } from '@/features/canvas/domain/canvasNodes';
 import { useFreezoneCameraOptions } from '@/features/canvas/hooks/useFreezoneCameraOptions';
@@ -186,7 +185,6 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="camera"
           isLoading={isLoading}
-          t={t}
         />
         <Column
           label={t('canvas.cameraPicker.lens')}
@@ -201,7 +199,6 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="lens"
           isLoading={isLoading}
-          t={t}
         />
         <Column
           label={t('canvas.cameraPicker.focal')}
@@ -215,7 +212,6 @@ export function CameraPickerPopover({
           variant="text"
           fallbackKind="focal"
           isLoading={isLoading}
-          t={t}
         />
         <Column
           label={t('canvas.cameraPicker.aperture')}
@@ -230,7 +226,6 @@ export function CameraPickerPopover({
           variant="image"
           fallbackKind="aperture"
           isLoading={isLoading}
-          t={t}
         />
       </div>
 
@@ -272,7 +267,6 @@ interface ColumnProps {
   variant: 'image' | 'text';
   fallbackKind: FallbackKind;
   isLoading: boolean;
-  t?: (key: string) => string;
 }
 
 function Column({
@@ -284,7 +278,6 @@ function Column({
   variant,
   fallbackKind,
   isLoading,
-  t: tProp = (key: string) => key,
 }: ColumnProps) {
   const { t } = useTranslation();
   const canPrev = selectedIndex > 0;

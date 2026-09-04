@@ -82,6 +82,13 @@ interface PendingUpload {
   fileName: string;
   previewUrl: string;
   media: AssetLibraryMedia;
+  /** 标签可以不选，后端会按媒介兜底推一个。 */
+  category: AssetCategory | null;
+  folder: AssetFolderKey;
+  status: 'uploading' | 'failed';
+  error?: string;
+}
+
 export interface AssetLibrarySelection {
   media: AssetLibraryMedia;
   url: string;
@@ -243,6 +250,26 @@ export function AssetLibraryModal({
     }
   }, [project]);
 
+  // 自建文件夹是后加的路由，老后端会 404；当成「还没有自建文件夹」处理，系统
+  // 文件夹照常可用，不要因此整个弹窗报错。
+  const refreshFolders = useCallback(async () => {
+    if (!project) return;
+    try {
+      const folders = await fetchFreezoneAssetLibraryFolders(project);
+      setCustomFolders(Array.isArray(folders) ? folders : []);
+    } catch (err) {
+      console.warn('[asset-library] load folders failed, treat as empty', err);
+      setCustomFolders([]);
+    }
+  }, [project]);
+
+  // 打开即自动同步：先加载已有库(静默兜底)，再从主线自动同步合并。只有当
+  // 既无已有库、同步又失败时，才提示错误(通常代表后端还没重启/路由缺失)。
+  const initializeLibrary = useCallback(
+    async (isCancelled?: () => boolean) => {
+      if (!project) return;
+      setIsLoadingLibrary(true);
+      setLibraryError(null);
       const [base] = await Promise.all([refreshLibrary(), refreshFolders()]);
       if (isCancelled?.()) return;
       setIsSyncing(true);

@@ -109,13 +109,6 @@ function countBillableTextChars(text: string): number {
   return text.replace(/[\s\u3000]+/gu, '').length;
 }
 
-// 「文字生成音乐」的默认音乐描述——点击后预填进文本节点，用户可在此基础上改。
-// 同样是原样发给模型的提示词，锁中文。
-// i18n-exempt-start
-const TEXT_TO_MUSIC_DEFAULT_CONTENT =
-  '生成一首现代品牌电子音乐（约 110 BPM），干净有力的低频贝斯，清晰电子鼓点，整体风格高级、未来感强。开场节奏型贝斯与简洁合成器音色建立律动。主段加入稳定鼓点，节奏清晰，保持克制的张力。强化段加入更丰富的音层，合成器音色提升，律动增强但不过度拥挤。结尾鼓点减弱，仅保留低频与氛围音渐出，干净利落收尾。';
-// i18n-exempt-end
-
 const SPAWN_UPLOAD_WIDTH = 320;
 
 /** 反推提示词通常十几秒返回，用它给 loading 覆盖层估算进度推进。 */

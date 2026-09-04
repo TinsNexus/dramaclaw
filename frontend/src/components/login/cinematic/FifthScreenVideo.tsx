@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
-import { useTranslation } from "react-i18next";
 import styles from "./fifth-screen-video.module.css";
 import { cinematicVideos } from "./media";
 

@@ -48,7 +48,6 @@ export function MaskEditor({
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  const { t } = useTranslation();
   const [tool, setTool] = useState<Tool>("brush");
   const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH);
   const [prompt, setPrompt] = useState("");

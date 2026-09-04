@@ -1920,7 +1920,7 @@ export async function submitFreezoneScene360FromMaster(
   if (!sceneId) throw new Error("submitFreezoneScene360FromMaster: missing sceneId");
   const result = await apiCall<{
     ok: boolean;
-    task_type: string;
+    task_type: "stage_asset";
     task_key: string;
     task_id?: string;
     scope?: string;

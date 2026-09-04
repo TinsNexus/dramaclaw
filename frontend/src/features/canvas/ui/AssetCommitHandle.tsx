@@ -4,7 +4,6 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Replace } from 'lucide-react';
 import { Position } from '@xyflow/react';
-import { useTranslation } from 'react-i18next';
 
 import {
   deriveNodeDropInfo,

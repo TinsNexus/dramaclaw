@@ -58,8 +58,6 @@ export function CreateIdentityDialog({
     };
   }, [project]);
 
-  const { t } = useTranslation();
-
   const canSubmit = useMemo(
     () => !!character.trim() && !!identityName.trim() && !submitting,
     [character, identityName, submitting],

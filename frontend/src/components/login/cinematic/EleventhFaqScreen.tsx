@@ -1,7 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import loginStyles from "@/components/login/login.module.css";
 import SideRays from "@/components/react-bits/side-rays";
 import styles from "./eleventh-faq-screen.module.css";

@@ -2583,7 +2583,6 @@ export function SuperChatPanel({
       notifiedTaskKeysRef.current.add(dedupeKey);
 
       const label = buildChatTaskLabel(event.task, t);
-      const errorMsg = event.task.error || event.task.current_task || t("superchat.taskFailureNoDetails");
       const text =
         event.type === "task_complete"
           ? t("aiAssistant.taskCompleteNotice", { label })

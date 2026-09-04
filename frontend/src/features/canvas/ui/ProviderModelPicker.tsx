@@ -40,7 +40,7 @@ export type ProviderId =
 
 export interface ProviderOption {
   id: ProviderId;
-  labelKey: string;
+  label: string;
 }
 
 export interface ModelOption {

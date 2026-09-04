@@ -452,7 +452,6 @@ interface CollectArgs {
 
 function collectAssets(
   args: CollectArgs,
-  t: (key: string) => string = (key) => key,
 ): ImportableAsset[] {
   const out: ImportableAsset[] = [];
 

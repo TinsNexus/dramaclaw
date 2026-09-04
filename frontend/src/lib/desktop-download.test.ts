@@ -185,7 +185,6 @@ describe("resolveDesktopRelease", () => {
     expect(warn).toHaveBeenCalled();
   });
 });
-});
 
 describe("detectDesktopPlatform", () => {
   it("classifies Windows user agents", () => {

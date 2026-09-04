@@ -76,7 +76,7 @@ function resolveExportResultDefault(data: Partial<CanvasNodeData>): string {
 
 export function getDefaultNodeDisplayName(type: CanvasNodeType, data: Partial<CanvasNodeData>, t: (key: string) => string = (key) => key): string {
   if (type === CANVAS_NODE_TYPES.exportImage) {
-    return resolveExportResultDefault(data, t);
+    return resolveExportResultDefault(data);
   }
   return t(DEFAULT_NODE_DISPLAY_NAME[type]);
 }
@@ -108,7 +108,7 @@ export function resolveNodeDisplayName(type: CanvasNodeType, data: Partial<Canva
     }
   }
 
-  return getDefaultNodeDisplayName(type, data, t);
+  return getDefaultNodeDisplayName(type, data);
 }
 
 /** 渲染用：用户没改过名就按当前语言显示，改过就原样显示。 */
@@ -128,5 +128,5 @@ export function isNodeUsingDefaultDisplayName(type: CanvasNodeType, data: Partia
   if (!customTitle) {
     return true;
   }
-  return customTitle === getDefaultNodeDisplayName(type, data, t);
+  return customTitle === getDefaultNodeDisplayName(type, data);
 }

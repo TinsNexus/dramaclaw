@@ -14,6 +14,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 // 这里取的是 i18next 默认实例（`@/i18n` 初始化的就是它）。chip 是脱离 React 的
 // 裸 DOM，拿不到 useTranslation 的 t，只能在模块级取。
 import i18n from 'i18next';
@@ -119,7 +120,7 @@ export function truncateChipLabel(text: string, max = CHIP_LABEL_MAX_CHARS): str
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : text;
 }
 
-function buildChipElement(candidate: MentionCandidate, t: (key: string, opts?: Record<string, unknown>) => string = (key) => key): HTMLElement {
+function buildChipElement(candidate: MentionCandidate): HTMLElement {
   const span = document.createElement('span');
   span.contentEditable = 'false';
   span.dataset.mention = candidate.key;
@@ -239,7 +240,7 @@ function insertPlainTextAtRange(range: Range, text: string): Range {
   return after;
 }
 
-function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidate[], t: (key: string, opts?: Record<string, unknown>) => string = (key) => key): void {
+function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidate[]): void {
   while (root.firstChild) {
     root.removeChild(root.firstChild);
   }
@@ -262,7 +263,7 @@ function rebuildDOM(root: HTMLElement, text: string, candidates: MentionCandidat
     const name = match[1];
     const candidate = candidates.find((c) => c.name === name);
     if (candidate) {
-      root.appendChild(buildChipElement(candidate, t));
+      root.appendChild(buildChipElement(candidate));
     } else {
       appendTextWithLineBreaks(root, match[0]);
     }
@@ -390,7 +391,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
       const el = editorRef.current;
       if (!el) return;
       if (value === lastSerializedRef.current) return;
-      rebuildDOM(el, value, candidates, t);
+      rebuildDOM(el, value, candidates);
       lastSerializedRef.current = value;
     }, [value, candidates, t]);
 
@@ -567,7 +568,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
           range.setEnd(ctx.textNode, ctx.caretOffset);
         }
         range.deleteContents();
-        const chip = buildChipElement(candidate, t);
+        const chip = buildChipElement(candidate);
         range.insertNode(chip);
 
         // Drop a trailing space and put the caret after it so the next
@@ -596,7 +597,7 @@ export const PromptMentionEditor = forwardRef<PromptMentionEditorHandle, PromptM
         const el = editorRef.current;
         setReplaceTarget(null);
         if (!el || !el.contains(chipEl)) return;
-        const fresh = buildChipElement(candidate, t);
+        const fresh = buildChipElement(candidate);
         chipEl.replaceWith(fresh);
         el.focus();
         const sel = window.getSelection();

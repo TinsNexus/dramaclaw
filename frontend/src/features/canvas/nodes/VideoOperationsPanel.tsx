@@ -224,6 +224,7 @@ interface VideoOperationsPanelProps {
   durationBounds: { min: number; max: number };
   sceneOptimize: Seedance2SceneOptimize | undefined;
   sceneOptimizeOptions: readonly Seedance2SceneOptimize[];
+  supportsGenerateAudio: boolean;
   generateAudio: boolean;
   supportsHumanReview: boolean;
   humanReview: boolean;
@@ -969,6 +970,17 @@ export function VideoOperationsPanel({
                   <ProviderModelPicker
                     selectedModelId={modelId}
                     onChange={(nextModelId) => {
+                      const nextModel = availableVideoModels.find(
+                        (item) => item.id === nextModelId,
+                      );
+                      // 切换模型后，若当前 genMode 不被新模型支持（如 HappyHorse
+                      // 专属的 videoEdit 切到普通模型），重置为通用安全值 textToVideo，
+                      // 让状态机按新模型 + 上游重新推导；否则残留模式会在提交时打到
+                      // 不支持的端点被后端 400（界面还停在错误的 tab）。
+                      const resetGenMode =
+                        data.genMode != null &&
+                        !isVideoModeSupportedByModel(
+                          data.genMode,
                           nextModel,
                         );
                       updateNodeData(id, {
@@ -1011,6 +1023,7 @@ export function VideoOperationsPanel({
                     durationBounds={durationBounds}
                     sceneOptimize={sceneOptimize}
                     sceneOptimizeOptions={sceneOptimizeOptions}
+                    supportsGenerateAudio={supportsGenerateAudio}
                     generateAudio={generateAudio}
                     onChange={(patch) => updateNodeData(id, patch)}
                   />
@@ -1096,7 +1109,8 @@ export function VideoOperationsPanel({
                     title={
                       selectedModelReferenceError ?? (isGenerating
                         ? t("node.videoNode.submitBusy")
-                        : (mediaRejectionReason ?? t("node.videoNode.submit")))
+                        : (modelTaskAccess.message ?? mediaRejectionReason ??
+                          t("node.videoNode.submit")))
                     }
                     onClick={(event) => {
                       event.stopPropagation();
@@ -1391,6 +1405,12 @@ interface VideoConfigChipProps {
   durationBounds: { min: number; max: number };
   sceneOptimize?: Seedance2SceneOptimize;
   sceneOptimizeOptions: readonly Seedance2SceneOptimize[];
+  supportsGenerateAudio: boolean;
+  generateAudio: boolean;
+  onChange: (patch: Partial<VideoNodeData>) => void;
+}
+
+function VideoConfigChip({
   followInputAspectRatio,
   followInputDuration,
   aspectRatio,
@@ -1401,6 +1421,76 @@ interface VideoConfigChipProps {
   durationBounds,
   sceneOptimize,
   sceneOptimizeOptions,
+  supportsGenerateAudio,
+  generateAudio,
+  onChange,
+}: VideoConfigChipProps) {
+  const { t } = useTranslation();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  // Local draft for the direct-entry duration box. The field stays free text
+  // while editing so a half-typed value isn't fought by clamping, but we still
+  // want the slider and bottom chip to track the box live — so on each keystroke
+  // we commit as soon as the draft is a *complete integer already inside* the
+  // model's bounds. An out-of-range interim (the "1" of "12" when min is 5) is
+  // held as draft only and NOT committed, so the user is never stranded at the
+  // min mid-typing; blur/Enter clamps anything still out of range on the way out.
+  const [durationDraft, setDurationDraft] = useState<string>(String(durationSec));
+  useEffect(() => {
+    setDurationDraft(String(durationSec));
+  }, [durationSec]);
+  const handleDurationInput = (raw: string) => {
+    setDurationDraft(raw);
+    const parsed = Number(raw);
+    if (
+      raw.trim() !== "" &&
+      Number.isInteger(parsed) &&
+      parsed >= durationBounds.min &&
+      parsed <= durationBounds.max &&
+      parsed !== durationSec
+    ) {
+      onChange({ durationSec: parsed });
+    }
+  };
+  const commitDuration = () => {
+    const parsed = Number(durationDraft);
+    if (durationDraft.trim() === "" || !Number.isFinite(parsed)) {
+      setDurationDraft(String(durationSec)); // revert empty/garbage to current
+      return;
+    }
+    const clamped = clampVideoDuration(parsed, durationBounds);
+    setDurationDraft(String(clamped));
+    if (clamped !== durationSec) onChange({ durationSec: clamped });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        triggerRef.current?.contains(event.target as Node) ||
+        popoverRef.current?.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown, true);
+    return () => document.removeEventListener("mousedown", onPointerDown, true);
+  }, [isOpen]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((prev) => !prev);
+        }}
+        className={NODE_TEXT_CONTROL_TRIGGER_CLASS}
+      >
+        <span>
           {followInputAspectRatio || aspectRatio === "auto"
             ? t("node.videoNode.aspect.auto")
             : aspectRatio}
@@ -1475,10 +1565,12 @@ interface VideoConfigChipProps {
             })}
           </div>
 
-          <div className={VIDEO_PARAM_LABEL_CLASS}>
-            {t("node.videoNode.duration.title")}
-          </div>
-          <div className="mb-4 flex items-center gap-3">
+          {!followInputDuration && (
+            <>
+              <div className={VIDEO_PARAM_LABEL_CLASS}>
+                {t("node.videoNode.duration.title")}
+              </div>
+              <div className="mb-4 flex items-center gap-3">
             <input
               type="range"
               min={durationBounds.min}

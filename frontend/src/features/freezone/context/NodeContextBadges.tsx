@@ -2,7 +2,6 @@
 // Copyright (c) 2026 ClaymoreLab
 import { useTranslation } from "react-i18next";
 import { isMainlineContext, type MainlineContext } from "./mainlineContext";
-import { useTranslation } from "react-i18next";
 import type { TFn } from "@/lib/i18n-types";
 import type { CandidateBindingRole } from "./mainlineContext";
 
