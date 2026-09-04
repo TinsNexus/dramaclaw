@@ -347,7 +347,6 @@
   },
   "auth": {
     "businessWechat": {
-      "label": "Business Contact",
       "note": "For partnerships, please add a note — we'll prioritize your request",
       "open": "View business WeChat QR code",
       "qrAlt": "Business WeChat QR code",
@@ -4689,9 +4688,7 @@
   "loginCinematic": {
     "announcement": {
       "close": "Close announcements",
-      "collapse": "Collapse this announcement",
       "confirm": "Confirm",
-      "expand": "Expand this announcement",
       "label": "Notices",
       "markAllRead": "Mark all read",
       "open": "View announcements",
@@ -6865,18 +6862,6 @@
       "waveClear": "Next wave incoming!",
       "won": "Board cleared!"
     },
-    "catch": {
-      "canvasLabel": "Piko Catch game board",
-      "finished": "Idea collection complete",
-      "hint": "Move Piko left and right, catch idea stars and crystals, and avoid red glitches",
-      "lost": "Piko needs a quick rest",
-      "ready": "Catch the falling ideas",
-      "result": "You collected {{score}} idea points",
-      "score": "Ideas {{score}}",
-      "start": "Start catching",
-      "status": "Lives {{lives}} · {{seconds}}s",
-      "title": "Piko Catch"
-    },
     "countdownHint": "Ready to go~",
     "energy": "Energy",
     "feedback": {
@@ -6972,15 +6957,6 @@
       "score": "Ideas"
     },
     "resultMeta": "Piko hit {{caught}} inspiration pieces",
-    "rollingBall": {
-      "canvasLabel": "Rolling Ball game board",
-      "hint": "Move left and right to land on the scrolling platforms",
-      "lost": "The ball slipped away",
-      "ready": "Keep rolling down",
-      "score": "Landings {{score}}",
-      "start": "Start game",
-      "title": "Rolling Ball"
-    },
     "score": "Idea power {{score}}",
     "stackGame": {
       "assistReady": "One nudge ready",

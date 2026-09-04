@@ -78,8 +78,8 @@ describe("NovelFormatDialog", () => {
     const { baseElement } = await renderIn("zh");
     const shown = baseElement.textContent ?? "";
 
-    expect(shown).toContain("1-1 苏鸾寝殿 深夜 内");
-    expect(shown).toContain("苏糖：锦绣，几更了？");
+    expect(shown).toContain("1-1 Tẩm điện Tô Loan 深夜 内");
+    expect(shown).toContain("Tô Đường：Cẩm Tú, canh mấy rồi?");
     expect(shown).not.toContain("SEOUL SUBWAY STATION");
   });
 });

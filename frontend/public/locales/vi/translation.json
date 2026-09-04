@@ -1320,7 +1320,6 @@
       "star": "Star"
     },
     "businessWechat": {
-      "label": "Liên hệ hợp tác",
       "open": "Xem mã QR WeChat hợp tác",
       "qrAlt": "Mã QR WeChat hợp tác",
       "title": "Thêm WeChat hợp tác",
@@ -2256,15 +2255,6 @@
       "score": "Điểm {{score}}",
       "lives": "Mạng {{lives}}"
     },
-    "rollingBall": {
-      "title": "Quả bóng lăn",
-      "canvasLabel": "Bảng trò chơi quả bóng lăn",
-      "hint": "Di chuyển trái phải để hạ cánh trên các nền tảng cuộn",
-      "start": "Bắt đầu trò chơi",
-      "ready": "Hạ cánh xuống đường",
-      "lost": "Quả bóng trượt mất rồi",
-      "score": "Hạ cánh {{score}}"
-    },
     "flying": {
       "title": "Piko Bay",
       "canvasLabel": "Bảng trò chơi Piko Bay",
@@ -2273,18 +2263,6 @@
       "ready": "Sẵn sàng cất cánh",
       "lost": "Piko va chạm với cổng năng lượng",
       "score": "Cánh cổng {{score}}"
-    },
-    "catch": {
-      "title": "Piko Catch",
-      "canvasLabel": "Bảng trò chơi Piko Catch",
-      "hint": "Di chuyển Piko trái phải, bắt các sao ý tưởng và tinh thể, tránh các khối lỗi màu đỏ",
-      "start": "Bắt đầu bắt",
-      "ready": "Bắt các ý tưởng rơi xuống",
-      "finished": "Hoàn thành bộ sưu tập ý tưởng",
-      "lost": "Piko cần nghỉ ngơi một chút",
-      "score": "Ý tưởng {{score}}",
-      "status": "Mạng {{lives}} · {{seconds}}s",
-      "result": "Bạn đã thu thập {{score}} điểm ý tưởng"
     },
     "leap": {
       "title": "Piko Nhảy",
@@ -6361,9 +6339,7 @@
     "moreInfo": "Thêm thông tin",
     "announcement": {
       "close": "Đóng thông báo",
-      "collapse": "Thu gọn thông báo này",
       "confirm": "Xác nhận",
-      "expand": "Mở rộng thông báo này",
       "markAllRead": "Đánh dấu đã đọc tất cả",
       "open": "Xem thông báo",
       "pinned": "Đã ghim",

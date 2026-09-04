@@ -7,22 +7,6 @@ import type { PushTarget } from "@/api/push";
 import { CommitDialog } from "@/features/freezone/commit/CommitDialog";
 import { promoteToAsset, previewAssetImpact } from "@/features/freezone/commit/promoteToAsset";
 
-// Mock react-i18next to return Vietnamese translations
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const translations: Record<string, string> = {
-        "freezone.commit.dialog.button.submit": "Gửi",
-        "freezone.commit.dialog.button.cancel": "Hủy",
-        "freezone.commit.dialog.label.impactPreview": "Xem trước tác động",
-        "freezone.commit.dialog.label.calculatingImpact": "Đang tính toán phạm vi tác động…",
-        "freezone.commit.dialog.warning.overwriteAsset": "Sẽ ghi đè tài sản hiện có \"{{targetLabel}}\"; tệp gốc sẽ được giữ trong lịch sử.",
-      };
-      return translations[key] || key;
-    },
-  }),
-}));
-
 vi.mock("@/api/projects", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/projects")>()),
   listCharacters: vi.fn(async () => []),
@@ -86,7 +70,7 @@ describe("CommitDialog submit", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     expect(onSuccess.mock.calls[0]?.[2]).toEqual(target);

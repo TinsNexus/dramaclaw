@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
-import { vi } from "vitest";
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-  initReactI18next: {
-    type: "3rdParty",
-    init: () => {},
-  },
-}));
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
@@ -75,21 +63,21 @@ describe("AudioOperationsPanel music advanced settings", () => {
     renderPanel({ audioKind: "music" });
 
     // 默认收起，时长下拉不在文档中
-    expect(screen.queryByText("node.audioOperationPanel.musicLengthLabel")).toBeNull();
+    expect(screen.queryByText("音乐时长")).toBeNull();
 
     // 点「高级设置」展开——若 Tooltip 在运行时为 undefined 会在此渲染抛错
-    fireEvent.click(screen.getByTitle("node.audioOperationPanel.advancedSettingsTooltip"));
+    fireEvent.click(screen.getByTitle("高级设置"));
 
-    expect(screen.getByText("node.audioOperationPanel.musicLengthLabel")).toBeTruthy();
+    expect(screen.getByText("音乐时长")).toBeTruthy();
     // UiSelect 渲染预设标签（默认 30 秒，触发器+选项可能各出现一次）
-    expect(screen.getAllByText("node.audioOperationPanel.preset30s").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("30秒").length).toBeGreaterThan(0);
   });
 
   it("does not show the 高级设置 button for speech (clone) audio nodes", () => {
     renderPanel({ audioKind: "speech" });
-    expect(screen.queryByTitle("node.audioOperationPanel.advancedSettingsTooltip")).toBeNull();
+    expect(screen.queryByTitle("高级设置")).toBeNull();
     // 语音模式保留「音色设置」
-    expect(screen.getByTitle("node.audioOperationPanel.voiceSettingsTooltip")).toBeTruthy();
+    expect(screen.getByTitle("音色设置")).toBeTruthy();
   });
 
   // 回归：音频节点引用了非空文本节点时，应允许提交——但不把内容灌进生成器文本框。

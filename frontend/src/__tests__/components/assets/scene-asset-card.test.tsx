@@ -134,16 +134,16 @@ describe("SceneAssetCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "重生 背面" }));
     expect(handlers.onGenerateReverse).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tạo 360" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成 360" }));
     expect(handlers.onGeneratePano).toHaveBeenCalledWith("master");
 
-    fireEvent.click(screen.getByRole("button", { name: "Xoá 360" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除 360" }));
     expect(handlers.onDeletePano).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mở trình xem 360" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开360查看器" }));
     expect(handlers.onOpenPanoViewer).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mở Director World" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开导演世界" }));
     expect(handlers.onOpenStageViewer).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: "正面→导演世界" }));
@@ -155,7 +155,7 @@ describe("SceneAssetCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认并启动" }));
     expect(handlers.onGenerateStagePly).toHaveBeenCalledWith("master");
 
-    fireEvent.click(screen.getByRole("button", { name: "360→Director World" }));
+    fireEvent.click(screen.getByRole("button", { name: "360→导演世界" }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
       "场景全景转 SOG，确认后将立即启动任务。",
     );
@@ -218,10 +218,10 @@ describe("SceneAssetCard", () => {
       notes: "",
     });
 
-    expect(screen.queryByText(/hiện tại/)).not.toBeInTheDocument();
-    expect(screen.queryByText("Director World (phim trường chưa sẵn sàng)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/当前导演世界/)).not.toBeInTheDocument();
+    expect(screen.queryByText("导演世界（片场未就绪）")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mở Director World" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开导演世界" }));
     expect(handlers.onOpenStageViewer).toHaveBeenCalledOnce();
   });
 

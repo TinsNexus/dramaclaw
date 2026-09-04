@@ -347,7 +347,6 @@
   },
   "auth": {
     "businessWechat": {
-      "label": "商务联系",
       "note": "商务合作请备注，我们会优先处理",
       "open": "查看商务微信二维码",
       "qrAlt": "商务微信二维码",
@@ -4689,9 +4688,7 @@
   "loginCinematic": {
     "announcement": {
       "close": "关闭公告",
-      "collapse": "收起这条公告",
       "confirm": "确认",
-      "expand": "展开这条公告",
       "label": "公告",
       "markAllRead": "全部已读",
       "open": "查看公告",
@@ -6865,18 +6862,6 @@
       "waveClear": "下一波来了！",
       "won": "全部清除！"
     },
-    "catch": {
-      "canvasLabel": "Piko 接物游戏区域",
-      "finished": "灵感收集完成",
-      "hint": "左右移动 Piko，接住灵感星和晶体，避开红色故障块",
-      "lost": "Piko 需要休息一下",
-      "ready": "接住掉落的灵感",
-      "result": "本局收集了 {{score}} 点灵感",
-      "score": "灵感 {{score}}",
-      "start": "开始接取",
-      "status": "生命 {{lives}} · {{seconds}} 秒",
-      "title": "Piko 接接乐"
-    },
     "countdownHint": "准备开始咯～",
     "energy": "能量",
     "feedback": {
@@ -6972,15 +6957,6 @@
       "score": "灵感值"
     },
     "resultMeta": "Piko 击中了 {{caught}} 个灵感碎片",
-    "rollingBall": {
-      "canvasLabel": "滚动小球游戏区域",
-      "hint": "控制小球左右移动，落到不断滚动的平台上",
-      "lost": "小球掉下去了",
-      "ready": "一路向下",
-      "score": "落台 {{score}}",
-      "start": "开始游戏",
-      "title": "滚动小球"
-    },
     "score": "灵感值 {{score}}",
     "stackGame": {
       "assistReady": "扶一下可用",

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Elastic-2.0
 // Copyright (c) 2026 ClaymoreLab
-import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
+
+import { zhT as t } from "../../helpers/i18n-fixtures";
 
 import {
   CANVAS_NODE_TYPES,
@@ -20,24 +21,6 @@ import {
   matchesOutlineQuery,
   outlineFilterTypes,
 } from "@/features/freezone/CanvasOutlineList";
-import {
-  DEFAULT_NODE_DISPLAY_NAME,
-  EXPORT_RESULT_DISPLAY_NAME,
-} from "@/features/canvas/domain/nodeDisplay";
-
-// 大纲的默认名现在走 i18n。这里把 key 解回中文规范默认值，好让下面的断言仍然对着
-// 用户看得见的文案写，而不是对着 key。
-const t = ((key: string) => {
-  const nodeType = key.replace("node.displayName.", "");
-  if (nodeType !== key) {
-    return DEFAULT_NODE_DISPLAY_NAME[nodeType as keyof typeof DEFAULT_NODE_DISPLAY_NAME];
-  }
-  const resultKind = key.replace("node.exportResult.", "");
-  if (resultKind !== key) {
-    return EXPORT_RESULT_DISPLAY_NAME[resultKind as keyof typeof EXPORT_RESULT_DISPLAY_NAME];
-  }
-  return key;
-}) as unknown as TFunction;
 
 function node(
   id: string,
@@ -63,7 +46,7 @@ describe("buildCanvasOutline", () => {
 
     expect(outline.map((item) => [item.id, item.kind, item.name])).toEqual([
       ["a", "node", "封面"],
-      ["b", "node", "Video"],
+      ["b", "node", "视频"],
     ]);
   });
 

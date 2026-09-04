@@ -5,47 +5,6 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockTranslations: Record<string, string> = {
-  "freezone.assetLibrary.panelTab.library": "Tư liệu Mạch chính",
-  "freezone.assetLibrary.panelTab.canvases": "Canvas Dự án",
-  "freezone.assetLibrary.tabLabel.scenes": "Bối cảnh",
-  "freezone.assetLibrary.tabLabel.currentBeat": "Beat hiện tại",
-  "freezone.assetLibrary.tabLabel.allBeats": "Tất cả Beat",
-  "freezone.assetLibrary.tabLabel.episodeBeats": "Beat Tập",
-  "freezone.assetLibrary.tabLabel.characters": "Nhân vật",
-  "freezone.assetLibrary.tabLabel.props": "Đạo cụ",
-  "freezone.assetLibrary.error.assetLoadFailed": "Không thể tải tư liệu dự án: {{error}}",
-  "freezone.assetLibrary.sceneTypeBadge.frontView.label": "Hình Phía Trước",
-  "freezone.assetLibrary.sceneTypeBadge.backView.label": "Hình Phía Sau",
-  "freezone.assetLibrary.sceneTypeBadge.directorWorld.label": "Director World",
-  "freezone.assetLibrary.sceneTypeBadge.pano360.label": "Hình 360",
-  "freezone.assetLibrary.directorWorldLabel.title": "{{sceneLabel}} / Thế giới đạo diễn",
-  "freezone.assetLibrary.ariaLabel.expandDrawer": "Mở rộng ngăn tư liệu",
-  "freezone.assetLibrary.ariaLabel.collapseDrawer": "Thu gọn ngăn tư liệu",
-  "freezone.assetLibrary.toggle.expand": "Mở rộng",
-  "freezone.assetLibrary.toggle.collapse": "Thu gọn",
-  "freezone.assetLibrary.search.placeholder": "Tìm kiếm tư liệu...",
-  "freezone.assetLibrary.emptyState.noAssets": "Không có tư liệu",
-};
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, vars?: Record<string, unknown>) => {
-      let result = mockTranslations[key] || key;
-      if (vars) {
-        Object.entries(vars).forEach(([varKey, varValue]) => {
-          result = result.replace(`{{${varKey}}}`, String(varValue));
-        });
-      }
-      return result;
-    },
-  }),
-  initReactI18next: {
-    type: "3rdParty",
-    init: () => {},
-  },
-}));
-
 const listFreezoneBeatContext = vi.fn();
 const listFreezoneProjectAssets = vi.fn();
 const fetchFreezoneVideoCharacterLibrary = vi.fn();
@@ -187,8 +146,8 @@ describe("AssetLibraryPanel beat context", () => {
       { wrapper: makeWrapper() },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Tư liệu Mạch chính" }));
-    await screen.findByText(/Không thể tải tư liệu dự án: network down/);
+    fireEvent.click(screen.getByRole("tab", { name: "主线资产" }));
+    await screen.findByText(/项目素材加载失败：network down/);
 
     act(() => {
       rerender(
@@ -204,7 +163,7 @@ describe("AssetLibraryPanel beat context", () => {
 
     await vi.waitFor(() => expect(listFreezoneProjectAssets).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => {
-      expect(screen.queryByText(/Không thể tải tư liệu dự án/)).toBeNull();
+      expect(screen.queryByText(/项目素材加载失败/)).toBeNull();
     });
   });
 
@@ -266,11 +225,11 @@ describe("AssetLibraryPanel beat context", () => {
       { wrapper: makeWrapper() },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Tư liệu Mạch chính" }));
-    fireEvent.click(screen.getByRole("button", { name: /Bối cảnh/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "主线资产" }));
+    fireEvent.click(screen.getByRole("button", { name: /场景/ }));
     expect(await screen.findByText("厨房")).toBeInTheDocument();
-    expect(screen.queryByText("Dựng Director")).toBeNull();
-    expect(screen.queryByText("Nền hiện tại · Beat 1")).toBeNull();
+    expect(screen.queryByText("导演合成图")).toBeNull();
+    expect(screen.queryByText("当前背景 · Beat 1")).toBeNull();
   });
 
   it("keeps concrete scene slots and hides auxiliary scene pointers", async () => {
@@ -422,12 +381,12 @@ describe("AssetLibraryPanel beat context", () => {
       { wrapper: makeWrapper() },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Tư liệu Mạch chính" }));
-    fireEvent.click(screen.getByRole("button", { name: /Bối cảnh/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "主线资产" }));
+    fireEvent.click(screen.getByRole("button", { name: /场景/ }));
 
     expect(await screen.findByText("厨房 / master")).toBeInTheDocument();
     expect(screen.getByText("厨房 / reverse master")).toBeInTheDocument();
-    expect(screen.getByText("厨房 / Thế giới đạo diễn")).toBeInTheDocument();
+    expect(screen.getByText("厨房 / 导演世界")).toBeInTheDocument();
     expect(screen.getByText("卧室 / master")).toBeInTheDocument();
     expect(screen.queryByText("厨房 / 旧 360")).toBeNull();
     expect(screen.queryByText("厨房 / director pano 360")).toBeNull();
@@ -436,14 +395,14 @@ describe("AssetLibraryPanel beat context", () => {
     expect(screen.queryByText("厨房 / 3D 世界（360）")).toBeNull();
     expect(screen.queryByText("厨房 / 3D 世界（当前）")).toBeNull();
     expect(screen.queryByText("厨房 / 3D 碰撞体")).toBeNull();
-    expect(screen.getAllByText("Hình Phía Trước")).toHaveLength(2);
-    expect(screen.getAllByText("Hình Phía Sau")).toHaveLength(1);
-    expect(screen.getAllByText("Director World")).toHaveLength(1);
-    expect(screen.queryByText("Hình 360")).toBeNull();
-    expect(screen.queryByText("Thế giới Phía Trước")).toBeNull();
-    expect(screen.queryByText("Thế giới Phía Sau")).toBeNull();
-    expect(screen.queryByText("Thế giới 360")).toBeNull();
-    expect(screen.getByRole("button", { name: /Bối cảnh.*4/ })).toBeInTheDocument();
+    expect(screen.getAllByText("正面图")).toHaveLength(2);
+    expect(screen.getAllByText("背面图")).toHaveLength(1);
+    expect(screen.getAllByText("导演世界")).toHaveLength(1);
+    expect(screen.queryByText("360图")).toBeNull();
+    expect(screen.queryByText("正面世界")).toBeNull();
+    expect(screen.queryByText("背面世界")).toBeNull();
+    expect(screen.queryByText("360世界")).toBeNull();
+    expect(screen.getByRole("button", { name: /场景.*4/ })).toBeInTheDocument();
   });
 
   it("hides the mainline asset tab when the mainline surface is disabled", async () => {

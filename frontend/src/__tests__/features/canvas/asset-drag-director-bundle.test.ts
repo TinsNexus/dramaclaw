@@ -180,7 +180,7 @@ describe("director bundle canvas assets", () => {
     expect(zh).not.toContain("导演合成 bundle");
     expect(vi).not.toContain("composite bundle");
     // Source code should reference these strings via i18n keys
-    expect(dialog).toContain("freezone.commit.dialog.kind.directorRender");
+    expect(dialog).toContain("freezone.commit.shortKinds.");
     expect(shell).toContain("commitDirectorRenderFromCanvasSource");
   });
 

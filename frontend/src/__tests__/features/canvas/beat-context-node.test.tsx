@@ -252,8 +252,8 @@ describe("BeatContextNode", () => {
   it("renders selectable identity and prop chips instead of CSV inputs", () => {
     renderNode();
 
-    expect(screen.getByText("Danh tính xuất hiện")).toBeInTheDocument();
-    expect(screen.getByText("Đạo cụ xuất hiện")).toBeInTheDocument();
+    expect(screen.getByText("出场身份")).toBeInTheDocument();
+    expect(screen.getByText("出场道具")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /面馆男青年_青年时期/ }),
     ).toBeInTheDocument();
@@ -308,9 +308,9 @@ describe("BeatContextNode", () => {
       }),
     );
 
-    expect(screen.getByText("Ngữ cảnh beat tuỳ chỉnh")).toBeInTheDocument();
+    expect(screen.getByText("自定义镜头上下文")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Đồng bộ lên mạch chính" }),
+      screen.queryByRole("button", { name: "同步到主线" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("EP? / Beat ?")).not.toBeInTheDocument();
     expect(screen.queryByText("EP1 / Beat 3")).not.toBeInTheDocument();
@@ -337,16 +337,16 @@ describe("BeatContextNode", () => {
     );
 
     expect(screen.getAllByText("EP1 / Beat 3").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Bối cảnh")).toBeInTheDocument();
-    expect(screen.getByLabelText("Thời gian")).toBeInTheDocument();
+    expect(screen.getByLabelText("场景")).toBeInTheDocument();
+    expect(screen.getByLabelText("时间")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Đồng bộ lên mạch chính" }),
+      screen.getByRole("button", { name: "同步到主线" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Ngữ cảnh đã đồng bộ; kỹ năng sẽ dùng node hiện tại."),
+      screen.getByText("上下文已同步；技能会使用当前节点。"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Ngữ cảnh tuỳ chỉnh; chỉ dùng trong canvas hiện tại."),
+      screen.queryByText("自定义上下文；仅当前画布使用。"),
     ).not.toBeInTheDocument();
   });
 
@@ -375,10 +375,10 @@ describe("BeatContextNode", () => {
       }),
     );
 
-    const visual = screen.getByPlaceholderText("Chưa đặt; nhấp để nhập mô tả khung hình mở đầu");
+    const visual = screen.getByPlaceholderText("未设置;点击输入起始画面描述");
     fireEvent.change(visual, { target: { value: "@", selectionStart: 1 } });
 
-    const identityTemplate = screen.getByText("Nhân vật").closest("button");
+    const identityTemplate = screen.getByText("人物").closest("button");
     expect(identityTemplate).not.toBeNull();
     fireEvent.click(identityTemplate!);
 
@@ -391,7 +391,7 @@ describe("BeatContextNode", () => {
       },
     });
 
-    const propTemplate = screen.getByText("Đạo cụ").closest("button");
+    const propTemplate = screen.getByText("道具").closest("button");
     expect(propTemplate).not.toBeNull();
     fireEvent.click(propTemplate!);
 
@@ -576,11 +576,11 @@ describe("BeatContextNode", () => {
       "aria-pressed",
       "false",
     );
-    expect(screen.getByRole("button", { name: "Không có nhân vật" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "无角色出场" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Không có đạo cụ xuất hiện" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "无道具出场" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -618,11 +618,11 @@ describe("BeatContextNode", () => {
     fireEvent.blur(visual);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Không có nhân vật" })).toHaveAttribute(
+      expect(screen.getByRole("button", { name: "无角色出场" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
-      expect(screen.getByRole("button", { name: "Không có đạo cụ xuất hiện" })).toHaveAttribute(
+      expect(screen.getByRole("button", { name: "无道具出场" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -658,17 +658,17 @@ describe("BeatContextNode", () => {
     expect(
       document.querySelector('input[type=\"color\"]'),
     ).not.toBeInTheDocument();
-    const identityColor = screen.getByLabelText("Màu danh tính 女主");
-    const propColor = screen.getByLabelText("Màu đạo cụ 雨伞");
+    const identityColor = screen.getByLabelText("身份颜色 女主");
+    const propColor = screen.getByLabelText("道具颜色 雨伞");
 
     await user.click(identityColor);
-    const actorCyan = screen.getByRole("button", { name: "Màu nhân vật #00FFFF" });
+    const actorCyan = screen.getByRole("button", { name: "人物颜色 #00FFFF" });
     expect(actorCyan.closest(".max-h-56.overflow-auto")).toBeNull();
     await user.click(actorCyan);
     expect(identityColor).toHaveStyle({ backgroundColor: "#00FFFF" });
 
     await user.click(propColor);
-    await user.click(screen.getByRole("button", { name: "Màu đạo cụ #B71C1C" }));
+    await user.click(screen.getByRole("button", { name: "道具颜色 #B71C1C" }));
     expect(propColor).toHaveStyle({ backgroundColor: "#B71C1C" });
 
     expect(updateBeat).not.toHaveBeenCalled();
@@ -677,9 +677,9 @@ describe("BeatContextNode", () => {
   it("does not restore stale persisted syncing status as an active refresh", () => {
     renderNode(makeData({ syncStatus: "syncing" }));
 
-    expect(screen.queryByText("Đang đồng bộ lên mạch chính...")).not.toBeInTheDocument();
+    expect(screen.queryByText("正在同步到主线...")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Ngữ cảnh đã đồng bộ; kỹ năng sẽ dùng node hiện tại."),
+      screen.getByText("上下文已同步；技能会使用当前节点。"),
     ).toBeInTheDocument();
   });
 
@@ -722,13 +722,13 @@ describe("BeatContextNode", () => {
       }),
     );
 
-    await chooseUiSelectOption(user, "Bối cảnh", "兰州拉面馆");
+    await chooseUiSelectOption(user, "场景", "兰州拉面馆");
     expect(updateBeat).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Bối cảnh" })).toHaveTextContent("兰州拉面馆");
+    expect(screen.getByRole("button", { name: "场景" })).toHaveTextContent("兰州拉面馆");
 
-    await chooseUiSelectOption(user, "Thời gian", "夜晚");
+    await chooseUiSelectOption(user, "时间", "夜晚");
     expect(updateBeat).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Thời gian" })).toHaveTextContent("夜晚");
+    expect(screen.getByRole("button", { name: "时间" })).toHaveTextContent("夜晚");
   });
 
   it("preserves scene variant when syncing local beat edits", async () => {
@@ -746,7 +746,7 @@ describe("BeatContextNode", () => {
     });
     renderNode(data);
 
-    await user.click(screen.getByRole("button", { name: "Đồng bộ lên mạch chính" }));
+    await user.click(screen.getByRole("button", { name: "同步到主线" }));
 
     await waitFor(() => {
       expect(updateBeat).toHaveBeenCalledWith(
@@ -953,9 +953,9 @@ describe("BeatContextNode", () => {
 
     expect(updateBeat).not.toHaveBeenCalled();
     expect(createCanvasFromPreset).not.toHaveBeenCalled();
-    expect(screen.queryByText("Đang đồng bộ lên mạch chính...")).not.toBeInTheDocument();
+    expect(screen.queryByText("正在同步到主线...")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Đồng bộ lên mạch chính" }));
+    await user.click(screen.getByRole("button", { name: "同步到主线" }));
 
     await waitFor(() => {
       const state = useCanvasStore.getState();

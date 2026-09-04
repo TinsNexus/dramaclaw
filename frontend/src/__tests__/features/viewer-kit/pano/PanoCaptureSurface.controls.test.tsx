@@ -4,51 +4,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, any>) => {
-      const translations: Record<string, string> = {
-        "viewerKit.panoCapture.fovPresetFisheye": "Cá mắt 160°",
-        "viewerKit.panoCapture.fovPresetWide": "Rộng 120°",
-        "viewerKit.panoCapture.fovPresetStandard": "Tiêu chuẩn 70°",
-        "viewerKit.panoCapture.fovPresetTelephoto": "Tele 8°",
-        "viewerKit.panoCapture.captureLabel": "Chụp ảnh",
-        "viewerKit.panoCapture.contextSaveTarget": "Lưu đích selected_background",
-        "viewerKit.panoCapture.resetButton": "Đặt lại",
-        "viewerKit.panoCapture.lockViewButton": "Chính lưu hiện tại",
-        "viewerKit.panoCapture.enterPlanetView": "Chế độ xem tiểu hành tinh",
-        "viewerKit.panoCapture.exitPlanetView": "Thoát chế độ xem tiểu hành tinh",
-        "viewerKit.panoCapture.copyCorrectionJson": "Sao chép JSON tham số",
-        "viewerKit.panoCapture.saving": "Đang lưu",
-        "viewerKit.panoCapture.saveCorrection": "Lưu hiệu chỉnh",
-        "viewerKit.panoCapture.hideGuides": "Ẩn hướng dẫn",
-        "viewerKit.panoCapture.showGuides": "Hiển thị hướng dẫn",
-        "viewerKit.panoCapture.resetCropFrame": "Đặt lại khung cắt",
-        "viewerKit.panoCapture.setFrontFromView": "Đặt hiện tại làm mặt trước",
-        "viewerKit.panoCapture.resetSphereCorrection": "Đặt lại hiệu chỉnh",
-        "viewerKit.panoCapture.saved": "Đã lưu",
-        "viewerKit.panoCapture.clearCaptureHistory": "Xóa lịch sử chụp ảnh",
-        "viewerKit.panoCapture.screenshotAlt": "Chụp ảnh {{id}}",
-        "viewerKit.panoCapture.screenshotLabel": "Chụp ảnh {{id}}",
-        "viewerKit.panoCapture.downloadScreenshot": "Tải xuống chụp ảnh {{id}}",
-      };
-      let result = translations[key] ?? key;
-      // Handle template interpolation for variables like {{id}}
-      if (options) {
-        Object.entries(options).forEach(([varName, varValue]) => {
-          result = result.replace(`{{${varName}}}`, String(varValue));
-        });
-      }
-      return result;
-    },
-    i18n: {
-      language: "vi",
-      resolvedLanguage: "vi",
-    },
-  }),
-  I18nextProvider: ({ children }: React.PropsWithChildren) => children,
-}));
-
 import { PanoCaptureSurface } from "@/features/viewer-kit/pano/PanoCaptureSurface";
 import { fovToZoom } from "@/features/viewer-kit/pano/panoCapture";
 import type { PanoViewerManifest } from "@/features/viewer-kit/pano/panoManifest";
@@ -180,12 +135,12 @@ describe("PanoCaptureSurface controls", () => {
     expect(screen.getByText("scene basement")).toBeInTheDocument();
     expect(screen.getByText("EP 1 / Beat 3")).toBeInTheDocument();
     expect(screen.getByText("canonical pano")).toBeInTheDocument();
-    expect(screen.getByText("Lưu đích selected_background")).toBeInTheDocument();
+    expect(screen.getByText("保存目标 selected_background")).toBeInTheDocument();
     expect(screen.getByText(/yaw 90\.0°/)).toBeInTheDocument();
     expect(screen.getByText(/pitch 30\.0°/)).toBeInTheDocument();
     expect(screen.getByText(/fov 70°/)).toBeInTheDocument();
     expect(screen.getByText(/26mm/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tiêu chuẩn 70°" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "标准 70°" })).toBeInTheDocument();
     expect(screen.getByLabelText("Front yaw value")).toHaveValue(15);
     expect(screen.getByLabelText("Correction roll")).toBeInTheDocument();
     expect(screen.getByLabelText("Correction roll value")).toHaveValue(1);
@@ -193,8 +148,8 @@ describe("PanoCaptureSurface controls", () => {
     expect(screen.getByLabelText("Correction pitch value")).toHaveValue(2);
     expect(screen.getByLabelText("Correction yaw")).toBeInTheDocument();
     expect(screen.getByLabelText("Correction yaw value")).toHaveValue(3);
-    expect(screen.getByRole("button", { name: "Đặt hiện tại làm mặt trước" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Đặt lại hiệu chỉnh" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "当前设为正面" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重置校正" })).toBeInTheDocument();
   });
 
   it("applies FOV, direction, and correction actions to the viewer", async () => {
@@ -209,7 +164,7 @@ describe("PanoCaptureSurface controls", () => {
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
     const viewer = viewerInstances[0];
 
-    await user.click(screen.getByRole("button", { name: "Rộng 120°" }));
+    await user.click(screen.getByRole("button", { name: "广角 120°" }));
     expect(viewer.zoom).toHaveBeenCalledWith(fovToZoom(120));
 
     await user.click(screen.getByRole("button", { name: "Right" }));
@@ -218,7 +173,7 @@ describe("PanoCaptureSurface controls", () => {
       pitch: 0,
     });
 
-    await user.click(screen.getByRole("button", { name: "Chính lưu hiện tại" }));
+    await user.click(screen.getByRole("button", { name: "当前视角矫正" }));
     expect(viewer.setOption).toHaveBeenCalledWith("sphereCorrection", {
       roll: expect.closeTo((manifest.correction.sphere_correction_deg.roll * Math.PI) / 180, 12),
       tilt: expect.closeTo((32 * Math.PI) / 180, 12),
@@ -242,14 +197,14 @@ describe("PanoCaptureSurface controls", () => {
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
     const viewer = viewerInstances[0];
 
-    await user.click(screen.getByRole("button", { name: "Chế độ xem tiểu hành tinh" }));
+    await user.click(screen.getByRole("button", { name: "小行星视角" }));
     expect(viewer.zoom).toHaveBeenLastCalledWith(fovToZoom(160));
     expect(viewer.rotate).toHaveBeenLastCalledWith({
       yaw: 0,
       pitch: -Math.PI / 2,
     });
 
-    await user.click(screen.getByRole("button", { name: "Thoát chế độ xem tiểu hành tinh" }));
+    await user.click(screen.getByRole("button", { name: "退出小行星" }));
     expect(viewer.zoom).toHaveBeenLastCalledWith(expect.closeTo(fovToZoom(70), 10));
     expect(viewer.rotate).toHaveBeenLastCalledWith({
       yaw: Math.PI / 2,
@@ -278,7 +233,7 @@ describe("PanoCaptureSurface controls", () => {
       pitch: 0,
     });
 
-    await user.click(screen.getByRole("button", { name: "Đặt hiện tại làm mặt trước" }));
+    await user.click(screen.getByRole("button", { name: "当前设为正面" }));
     expect(screen.getByLabelText("Front yaw value")).toHaveValue(90);
 
     fireEvent.change(screen.getByLabelText("Correction yaw value"), {
@@ -299,7 +254,7 @@ describe("PanoCaptureSurface controls", () => {
       pan: expect.closeTo(20 * DEG_TO_RAD, 12),
     });
 
-    await user.click(screen.getByRole("button", { name: "Đặt lại hiệu chỉnh" }));
+    await user.click(screen.getByRole("button", { name: "重置校正" }));
     expect(viewer.setOption).toHaveBeenLastCalledWith("sphereCorrection", {
       roll: 0,
       tilt: 0,
@@ -344,16 +299,16 @@ describe("PanoCaptureSurface controls", () => {
     expect(screen.getByTestId("pano-guide-thirds")).toBeInTheDocument();
     expect(screen.getByTestId("pano-capture-frame")).toBeInTheDocument();
     expect(screen.getByTestId("pano-capture-resize-handle")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Đặt lại khung cắt" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重置截图框" })).toBeInTheDocument();
 
     fireEvent.wheel(screen.getByTestId("pano-capture-frame"), { deltaY: -120 });
 
-    await user.click(screen.getByRole("button", { name: "Ẩn hướng dẫn" }));
+    await user.click(screen.getByRole("button", { name: "隐藏辅助线" }));
     expect(screen.queryByTestId("pano-guide-horizon")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pano-guide-center")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pano-guide-thirds")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Hiển thị hướng dẫn" }));
+    await user.click(screen.getByRole("button", { name: "显示辅助线" }));
     expect(screen.getByTestId("pano-guide-horizon")).toBeInTheDocument();
   });
 
@@ -369,18 +324,18 @@ describe("PanoCaptureSurface controls", () => {
 
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
 
-    await user.click(screen.getByRole("button", { name: "Chụp ảnh" }));
+    await user.click(screen.getByRole("button", { name: "截图" }));
 
     await waitFor(() => expect(onCapture).toHaveBeenCalledTimes(1));
-    expect(screen.getByText("Chụp ảnh 1")).toBeInTheDocument();
+    expect(screen.getByText("截图 1")).toBeInTheDocument();
     expect(screen.getByText(/640 x 360/)).toBeInTheDocument();
-    expect(screen.getByAltText("Chụp ảnh 1")).toHaveAttribute("src", "blob:pano-shot");
-    expect(screen.getByRole("link", { name: "Tải xuống chụp ảnh 1" })).toHaveAttribute(
+    expect(screen.getByAltText("截图 1")).toHaveAttribute("src", "blob:pano-shot");
+    expect(screen.getByRole("link", { name: "下载截图 1" })).toHaveAttribute(
       "download",
       "pano-capture-1.png",
     );
-    await user.click(screen.getByRole("button", { name: "Xóa lịch sử chụp ảnh" }));
-    expect(screen.queryByText("Chụp ảnh 1")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清空截图列表" }));
+    expect(screen.queryByText("截图 1")).not.toBeInTheDocument();
   });
 
   it("shows saved anchor metadata returned by the capture handler", async () => {
@@ -396,9 +351,9 @@ describe("PanoCaptureSurface controls", () => {
     );
 
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
-    await user.click(screen.getByRole("button", { name: "Chụp ảnh" }));
+    await user.click(screen.getByRole("button", { name: "截图" }));
 
-    expect(await screen.findByText(/Đã lưu selected_background/)).toBeInTheDocument();
+    expect(await screen.findByText(/已保存 selected_background/)).toBeInTheDocument();
     expect(
       screen.getByText(/director_control_frames\/ep001\/beat_03\/selected_background\.png/),
     ).toBeInTheDocument();
@@ -421,7 +376,7 @@ describe("PanoCaptureSurface controls", () => {
     );
 
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
-    await user.click(screen.getByRole("button", { name: "Sao chép JSON tham số" }));
+    await user.click(screen.getByRole("button", { name: "复制参数 JSON" }));
 
     await waitFor(() => expect(writeClipboard).toHaveBeenCalledTimes(1));
     const payload = JSON.parse(writeClipboard.mock.calls[0][0]);
@@ -462,7 +417,7 @@ describe("PanoCaptureSurface controls", () => {
     );
 
     await waitFor(() => expect(viewerInstances).toHaveLength(1));
-    await user.click(screen.getByRole("button", { name: "Lưu hiệu chỉnh" }));
+    await user.click(screen.getByRole("button", { name: "保存校正" }));
 
     expect(onSaveCorrection).toHaveBeenCalledWith({
       front_yaw_deg: 15,

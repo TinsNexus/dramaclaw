@@ -391,23 +391,6 @@ export function Header({ ambientBackground = false }: { ambientBackground?: bool
             <CircleHelp className="size-[17px]" />
           </Button>
           <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="group/notification relative size-[32px] text-sidebar-foreground/82 transition-colors duration-150 ease-[var(--ease-out-quint)] hover:bg-white/[0.05] hover:text-white aria-expanded:bg-white/[0.05] aria-expanded:text-white"
-            aria-label={t("header.notifications")}
-            aria-expanded={notificationOpen}
-            onClick={openNotifications}
-          >
-            <Bell className="size-[17px]" />
-            {hasUnreadNotification ? (
-              <span
-                className="absolute right-[8px] top-[8px] size-1 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.72)]"
-                aria-hidden="true"
-              />
-            ) : null}
-          </Button>
-          <Button
             id="mybuddy-companion-entry"
             type="button"
             variant="ghost"

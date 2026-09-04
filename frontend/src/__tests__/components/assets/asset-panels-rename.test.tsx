@@ -169,6 +169,7 @@ describe("asset panel rename behavior", () => {
 
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText('Delete scene "Hall"?')).toBeInTheDocument();
+    // 走原生 confirm 的话对话框根本不会出现，删除也早就发出去了。
     expect(nativeConfirm).not.toHaveBeenCalled();
     expect(deleted).toBe(false);
 
@@ -252,7 +253,7 @@ describe("asset panel rename behavior", () => {
     renderWithProviders(<ScenesPanel project="demo" />);
 
     await screen.findByText("Hall_Snow");
-    expect(screen.getByText("Phái sinh từ Hall")).toBeInTheDocument();
+    expect(screen.getByText("Derived from Hall")).toBeInTheDocument();
   });
 
   it("keeps scene variant groups compact without repeating a lower count label", async () => {
@@ -314,7 +315,7 @@ describe("asset panel rename behavior", () => {
     await user.click(screen.getByRole("button", { name: "Select scene Hall" }));
 
     expect(screen.getByText("Hall_Night")).toBeInTheDocument();
-    expect(screen.queryByText("Door_Day")).not.toBeInTheDocument();
+    expect(screen.queryByText("Door_上午")).not.toBeInTheDocument();
   });
 
   it("remembers the selected scene group after the scene panel unmounts", async () => {
@@ -368,11 +369,10 @@ describe("asset panel rename behavior", () => {
     await user.click(await screen.findByRole("button", { name: "New scene" }));
     const dialog = screen.getByRole("dialog");
 
-    const inputs = within(dialog).getAllByRole("textbox");
-    expect(inputs.length).toBeGreaterThan(0);
-    expect(within(dialog).queryByLabelText(/Base scene/)).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/Variant/)).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/Time/)).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Scene name")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("基础场景")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("变体")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("时间")).not.toBeInTheDocument();
   });
 
   it("creates scene variants from the selected base scene and stores only variant delta prompt", async () => {
@@ -423,9 +423,16 @@ describe("asset panel rename behavior", () => {
 
     await waitFor(() => expect(postBody).toBeDefined());
     expect(postBody).toMatchObject({
+      name: "Hall_漏水_夜晚",
       base_scene_id: "Hall",
+      variant_id: "漏水",
+      time_of_day: "夜晚",
       variant_prompt: "floor water and dripping ceiling",
+      description: "",
     });
+    expect(String((postBody as { environment_prompt?: string }).environment_prompt)).not.toContain(
+      "wide hall",
+    );
   });
 
   it("allows graph scene rebuild when derived scenes exist", async () => {
@@ -448,11 +455,9 @@ describe("asset panel rename behavior", () => {
     renderWithProviders(<ScenesPanel project="demo" />);
 
     await screen.findByText("Hall_Snow");
-    const buttons = screen.getAllByRole("button");
-    const buildButton = buttons.find(b => b.textContent?.includes("Build") || b.textContent?.includes("build"));
-    if (buildButton) {
-      expect(buildButton).not.toBeDisabled();
-    }
+    const buildButton = screen.getByRole("button", { name: "Build from graph" });
+    expect(buildButton).not.toBeDisabled();
+    expect(buildButton).not.toHaveAttribute("title");
   });
 
   it("sends the edited prop name in PATCH payload", async () => {
@@ -476,7 +481,7 @@ describe("asset panel rename behavior", () => {
     renderWithProviders(<PropsPanel project="demo" />);
 
     await screen.findByText("Sword");
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.change(screen.getByDisplayValue("Sword"), {
       target: { value: "MoonSword" },
     });
@@ -499,11 +504,10 @@ describe("asset panel rename behavior", () => {
     renderWithProviders(<PropsPanel project="demo" />);
 
     await screen.findByText("TOKEN");
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     const dialog = screen.getByRole("dialog");
-    const options = within(dialog).queryAllByRole("option");
-    expect(options.length).toBeGreaterThanOrEqual(0);
+    expect(within(dialog).getByText("Artifact")).toBeInTheDocument();
   });
 
 
@@ -557,13 +561,10 @@ describe("asset panel rename behavior", () => {
     renderWithProviders(<ScenesPanel project="demo" />);
 
     expect(await screen.findAllByText("Hall")).not.toHaveLength(0);
-    const allButtons = await screen.findAllByRole("button");
-    const openWorldButtons = allButtons.filter(b =>
-      b.textContent?.includes("Open") || b.textContent?.includes("Mở") || b.textContent?.includes("打开")
-    );
-    if (openWorldButtons.length > 0) {
-      await user.click(openWorldButtons[openWorldButtons.length - 1]);
-    }
+    const openWorldButtons = await screen.findAllByRole("button", {
+      name: "Open Director World",
+    });
+    await user.click(openWorldButtons[openWorldButtons.length - 1]);
     await user.click(await screen.findByRole("button", { name: "mock-save-scene-world" }));
 
     await waitFor(() => expect(saveBody).toBeDefined());
@@ -571,6 +572,7 @@ describe("asset panel rename behavior", () => {
       active_source_id: "scene-pano:Hall",
       snapshot: { world: { activeSourceId: "scene-pano:Hall" } },
     });
+    expect(screen.queryByText(/当前导演世界/)).not.toBeInTheDocument();
   });
 
 });

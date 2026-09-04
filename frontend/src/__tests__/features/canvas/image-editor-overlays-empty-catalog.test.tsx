@@ -147,7 +147,7 @@ describe("超分面板", () => {
     };
     render(<UpscaleEditorOverlay node={UPSCALE_NODE} />);
 
-    fireEvent.click(screen.getByTitle("upscaleEditor.submit"));
+    fireEvent.click(screen.getByTitle("canvas.upscaleEditor.submit"));
     await waitFor(() => expect(submitFreezoneUpscale).toHaveBeenCalled());
   });
 });

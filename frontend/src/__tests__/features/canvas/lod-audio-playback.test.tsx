@@ -101,7 +101,7 @@ describe('AudioWaveformPlayer 播放态外抛', () => {
     expect(audio).not.toBeNull();
 
     // jsdom 不实现 play()，直接驱动组件监听的 pause/ended 事件与播放入口。
-    const playButton = container.querySelector('button[aria-label="play"]');
+    const playButton = container.querySelector('button[aria-label="播放"]');
     expect(playButton).not.toBeNull();
     // jsdom 的 paused 恒为 true，togglePlay 会走 play() 分支。
     await act(async () => {
@@ -121,7 +121,7 @@ describe('AudioWaveformPlayer 播放态外抛', () => {
       <AudioWaveformPlayer src="blob:audio" onPlayingChange={onPlayingChange} />,
     );
     await act(async () => {
-      (container.querySelector('button[aria-label="play"]') as HTMLButtonElement).click();
+      (container.querySelector('button[aria-label="播放"]') as HTMLButtonElement).click();
     });
     expect(onPlayingChange).toHaveBeenLastCalledWith(true);
 
