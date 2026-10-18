@@ -46,6 +46,10 @@ import { translateSkillName } from '@/features/freezone/context/skillI18n';
 import { canvasAiGateway, canvasEventBus } from '@/features/canvas/application/canvasServices';
 import { stashExternalFile } from '@/features/canvas/application/pendingExternalFiles';
 import {
+  WORKFLOW_RUN_UPDATED_EVENT,
+  type WorkflowRunUpdatedDetail,
+} from '@/features/canvas/application/workflowExecutionActivity';
+import {
   CANVAS_NODE_TYPES,
   type BeatContextNodeData,
   type CanvasEdge,
@@ -116,7 +120,9 @@ import { embedStoryboardImageMetadata } from '@/commands/image';
 import { nodeTypes as canvasNodeTypes } from './nodes';
 import { edgeTypes as canvasEdgeTypes } from './edges';
 import { NodeSelectionMenu } from './NodeSelectionMenu';
+import { CanvasPickBanner } from './ui/CanvasPickBanner';
 import { SelectedNodeOverlay } from './ui/SelectedNodeOverlay';
+import { LightEditorCanvasOverlay } from './ui/LightEditorCanvasOverlay';
 import { MultiSelectionToolbar } from './ui/MultiSelectionToolbar';
 import {
   MultiSelectionConnectButton,
@@ -149,7 +155,12 @@ import {
   type SnapAlignDragSession,
 } from './snap-align/resolveSnapAlignDrag';
 import { computeAutoLayout } from './application/autoLayout';
-import { migratePastedNodeAssets } from './application/crossProjectAssets';
+import { holdCanvasAutosave } from '@/features/freezone/canvasAutosaveHold';
+import {
+  migratePastedNodeAssets,
+  withholdForeignAssetUrls,
+  type PastedNodeForMigration,
+} from './application/crossProjectAssets';
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_EDGE_OPTIONS = { type: 'disconnectableEdge' };
@@ -718,13 +729,27 @@ interface PendingNodePlacement {
 }
 
 interface CanvasProps {
+  projectId?: string;
+  canvasId?: string;
   onBlankPaneClick?: () => void;
   controlsPlacement?: 'bottom-right' | 'top-right';
+  /**
+   * 故事板 overlay（AssetBoardView）等全屏视图盖在保活画布上时置 true：
+   * 屏蔽画布注册的所有 window/document 级键盘与粘贴监听，并隐藏会压在
+   * overlay 之上的悬浮控件（CanvasQuickActionBar）。否则 Delete/Tab/⌘Z/
+   * 粘贴等会穿透到隐藏画布（删节点、弹 NodeSelectionMenu、建上传节点并
+   * 持久化）。不能复用 useViewerImmersiveBody 的 body class 方案——那会把
+   * 故事板自己隐藏掉（见 src/index.css 的 viewer-immersive 规则）。
+   */
+  suspended?: boolean;
 }
 
 export function Canvas({
+  projectId,
+  canvasId,
   onBlankPaneClick,
   controlsPlacement = 'bottom-right',
+  suspended = false,
 }: CanvasProps = {}) {
   const { t } = useTranslation();
   const reactFlowInstance = useReactFlow();
@@ -732,6 +757,10 @@ export function Canvas({
   const nodeTypes = useMemo(() => canvasNodeTypes, []);
   const edgeTypes = useMemo(() => canvasEdgeTypes, []);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // 用 ref 镜像 suspended：各全局键盘/粘贴监听读 ref 而非闭包值，
+  // prop 变化不触发监听器重绑，切换视图零成本即时生效。
+  const suspendedRef = useRef(suspended);
+  suspendedRef.current = suspended;
   const suppressNextPaneClickRef = useRef(false);
   // After a marquee box-select we must swallow the trailing pane `click` at the capture
   // phase: React Flow's Pane onClick calls resetSelectedElements() unconditionally (right
@@ -755,11 +784,28 @@ export function Canvas({
 
   const [minimapPinned, setMinimapPinned] = useState(false);
   const [minimapHovered, setMinimapHovered] = useState(false);
-  // 小地图拖动期间必须钉住不卸载：非固定模式下指针一拖出小地图就会触发
-  // onMouseLeave → 180ms 后 minimapVisible 变 false → MiniMap 卸载 →
-  // useSmoothMinimapPan 的清理函数摘掉 window 监听，拖动直接断在半路。
+  const [workflowExecutionActive, setWorkflowExecutionActive] = useState(false);
+  // 拖动小地图期间保持其挂载，否则移出区域时会中断平移。
   const [minimapPanning, setMinimapPanning] = useState(false);
   const minimapVisible = minimapPinned || minimapHovered || minimapPanning;
+  useEffect(() => {
+    const handleWorkflowRunUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<WorkflowRunUpdatedDetail>).detail;
+      const status = detail?.status ?? detail?.run?.status;
+      if (status === 'running') {
+        setWorkflowExecutionActive(true);
+      } else if (
+        status === 'completed'
+        || status === 'failed'
+        || status === 'cancelled'
+        || status === 'interrupted'
+      ) {
+        setWorkflowExecutionActive(false);
+      }
+    };
+    window.addEventListener(WORKFLOW_RUN_UPDATED_EVENT, handleWorkflowRunUpdated);
+    return () => window.removeEventListener(WORKFLOW_RUN_UPDATED_EVENT, handleWorkflowRunUpdated);
+  }, []);
   // 小地图弹层（含上方的书签数字行）靠 hover 显示。数字行是小地图上方、隔着间隙的
   // 独立 DOM 子树:鼠标从小地图移到数字按钮的途中会先离开小地图,若立即把
   // minimapHovered 置 false,整个 overlay 会在点到按钮前卸载,导致「点不了」。
@@ -1167,6 +1213,9 @@ export function Canvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (!isSpacePanKey(event) || isTypingTarget(event.target) || isImmersiveViewerActive()) {
         return;
       }
@@ -1174,6 +1223,8 @@ export function Canvas({
       clearMarqueeSelection();
     };
 
+    // keyup 不加 suspendedRef 守卫：它只把 spacePanActiveRef 复位为
+    // false（惰性状态）。若守卫,「按住空格→切故事板→松开」会让 ref 卡在 true。
     const handleKeyUp = (event: KeyboardEvent) => {
       if (!isSpacePanKey(event)) {
         return;
@@ -1568,6 +1619,7 @@ export function Canvas({
       void resumeNodeGeneration({
         node: pendingNode,
         projectId,
+        canvasId,
         updateNodeData,
         getNodeData: (nodeId) =>
           (useCanvasStore
@@ -1578,7 +1630,7 @@ export function Canvas({
         activeTaskResumeNodeIdsRef.current.delete(pendingNode.id);
       });
     }
-  }, [pendingResumeNodeKey, updateNodeData]);
+  }, [canvasId, pendingResumeNodeKey, updateNodeData]);
 
   useEffect(() => {
     const element = wrapperRef.current;
@@ -2243,6 +2295,9 @@ export function Canvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (
         event.defaultPrevented ||
         event.isComposing ||
@@ -2285,6 +2340,9 @@ export function Canvas({
   // a bare digit jumps to it, and ⌘/Ctrl+Shift+E clears them all.
   useEffect(() => {
     const handleBookmarkKeys = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (isTypingTarget(event.target) || isImmersiveViewerActive()) {
         return;
       }
@@ -2327,6 +2385,9 @@ export function Canvas({
   // collides with ⌘M (minimize) or text input.
   useEffect(() => {
     const handleMinimapKey = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
         return;
       }
@@ -2349,11 +2410,15 @@ export function Canvas({
   // keyup that fires off-window (e.g. after an alt-tab) can't leave it stuck on.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (event.code !== 'Space' || isTypingTarget(event.target)) {
         return;
       }
       spacePanActiveRef.current = true;
     };
+    // keyup 不守卫,理由同上面 space-pan capture 监听:只复位为惰性状态。
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.code !== 'Space') {
         return;
@@ -2670,6 +2735,9 @@ export function Canvas({
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       pasteImageHandledRef.current = false;
       if (isTypingTarget(event.target) || isImmersiveViewerActive()) {
         return;
@@ -2776,6 +2844,9 @@ export function Canvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (suspendedRef.current) {
+        return;
+      }
       if (isTypingTarget(event.target)) {
         return;
       }
@@ -3482,7 +3553,19 @@ export function Canvas({
 
       const idMap = new Map<string, string>();
       const sizeMap = new Map<string, { width: number; height: number }>();
-      const pastedForMigration: Array<{ id: string; data: CanvasNodeData }> = [];
+      const pastedForMigration: PastedNodeForMigration[] = [];
+      // 跨项目粘贴（来自序列化剪贴板且源项目 ≠ 当前项目）：指向源项目的媒体 URL 在入
+      // store **之前**就被扣下（withholdForeignAssetUrls），节点先以「素材复制中」占位入
+      // 画布，后端拷完才填回目标项目地址——store 与落库数据里任何时候都没有源项目 URL。
+      // 同时 hold 住当前项目的自动保存，让占位态别白白落一次库；迁移结束（成功或失败）
+      // 再 release，由 useCanvasSync 补存完整节点。hold 超时恢复保存也只会存到占位节点。
+      const sourceProject = snapshot?.sourceProject ?? null;
+      const currentProject = readUrl().project ?? null;
+      const migrationTarget =
+        sourceProject && currentProject && sourceProject !== currentProject
+          ? currentProject
+          : null;
+      const releaseAutosaveHold = migrationTarget ? holdCanvasAutosave(migrationTarget) : null;
       for (const sourceNode of sourceNodes) {
         const data = cloneNodeData(sourceNode.data);
         if ('isGenerating' in (data as Record<string, unknown>)) {
@@ -3522,14 +3605,19 @@ export function Canvas({
               x: sourceNode.position.x + chosenOffset.x + offsetStep * 8,
               y: sourceNode.position.y + chosenOffset.y + offsetStep * 6,
             };
+        const { data: storeData, withheld } = migrationTarget
+          ? withholdForeignAssetUrls(data, migrationTarget)
+          : { data, withheld: [] };
         const nextNodeId = addNode(
           sourceNode.type as CanvasNodeType,
           position,
-          { ...data }
+          { ...storeData }
         );
         idMap.set(sourceNode.id, nextNodeId);
         sizeMap.set(nextNodeId, getNodeSize(sourceNode));
-        pastedForMigration.push({ id: nextNodeId, data });
+        if (withheld.length > 0) {
+          pastedForMigration.push({ id: nextNodeId, withheld });
+        }
       }
 
       const sizeSyncChanges = Array.from(sizeMap.entries()).map(([nodeId, size]) => ({
@@ -3587,37 +3675,37 @@ export function Canvas({
         scheduleCanvasPersist(0);
       }
 
-      // 跨项目粘贴：把节点里指向「源项目」的媒体资产重新上传到当前项目，完成后静默
-      // 改写 URL。后台执行、不阻塞粘贴；单条失败保留原 URL 并提示。仅当来自序列化
-      // 剪贴板（paste）且源项目与当前项目不同才触发——同项目复制/副本无需迁移。
-      const sourceProject = snapshot?.sourceProject ?? null;
-      const currentProject = readUrl().project ?? null;
-      if (
-        sourceProject
-        && currentProject
-        && sourceProject !== currentProject
-        && pastedForMigration.length > 0
-      ) {
+      // 跨项目粘贴：让后端把扣下的源项目媒体拷进当前项目，完成后填回目标地址、摘掉
+      // 占位标记。后台执行、不阻塞粘贴；失败的节点保持字段为空并标记 failed（占位遮罩
+      // 提示删除重贴）。无论成败都要 release 上面的自动保存 hold。
+      if (migrationTarget && pastedForMigration.length > 0) {
         void migratePastedNodeAssets({
           nodes: pastedForMigration,
-          targetProject: currentProject,
+          targetProject: migrationTarget,
           getLiveNodeData: (nodeId) =>
             useCanvasStore.getState().nodes.find((node) => node.id === nodeId)?.data ?? null,
           updateNodeData,
         })
-          .then(({ migrated, failed }) => {
-            if (failed > 0) {
-              toast.error(t('canvas.crossProjectAssets.partialFailure', { count: failed }));
+          .then(({ migrated, failed, failedNodeIds }) => {
+            if (failedNodeIds.length > 0 || failed > 0) {
+              toast.error(
+                t('canvas.crossProjectAssets.partialFailure', { count: Math.max(failed, 1) })
+              );
             } else if (migrated > 0) {
               toast.success(t('canvas.crossProjectAssets.success', { count: migrated }));
             }
-            if (migrated > 0) {
+            if (migrated > 0 || failedNodeIds.length > 0) {
               scheduleCanvasPersist(0);
             }
           })
           .catch((error) => {
             console.warn('[canvas] cross-project asset migration failed', error);
+          })
+          .finally(() => {
+            releaseAutosaveHold?.();
           });
+      } else {
+        releaseAutosaveHold?.();
       }
 
       return { firstNodeId, idMap };
@@ -4875,7 +4963,8 @@ export function Canvas({
         // 低缩放档关掉视口裁剪：此档所有节点都是轻量 shell（见 withLodShell），
         // 全量挂载的渲染树很小；而裁剪在快速平移时每帧挂/卸边界节点，实测 4 秒
         // 拖拽 800+ 次翻腾、p99 帧时 470ms——收益早已倒挂。高缩放档维持裁剪。
-        onlyRenderVisibleElements={!lowDetailActive}
+        // 工作流执行期也要保持节点挂载，避免后台节点因裁剪中断。
+        onlyRenderVisibleElements={!workflowExecutionActive && !lowDetailActive}
         zoomOnDoubleClick={false}
         proOptions={REACT_FLOW_PRO_OPTIONS}
         className="bg-background"
@@ -4899,7 +4988,8 @@ export function Canvas({
         {minimapVisible && <CanvasMinimapBookmarksOverlay onHoverChange={setMinimapHover} />}
 
         <SelectedNodeOverlay />
-        <MultiSelectionToolbar />
+        <LightEditorCanvasOverlay />
+        <MultiSelectionToolbar projectId={projectId} canvasId={canvasId} />
         <MultiSelectionConnectButton
           onBatchOpenMenu={handleBatchConnectOpenMenu}
           onBatchDragStart={handleBatchConnectDragStart}
@@ -5056,14 +5146,17 @@ export function Canvas({
 
       <CanvasFpsMeter />
 
-      <BackToNodesHint />
+      {/* z-[130] 的「回到节点」提示会浮到故事板(z-30)之上，挂起时一并隐藏。 */}
+      {!suspended && <BackToNodesHint />}
 
       <CanvasZoomControl
         onOrganize={handleOrganizeCanvas}
         placement={controlsPlacement}
       />
 
-      {!taskPanelOpen && (
+      {/* 快捷操作条 z-[41] 高于故事板 overlay(z-30)，挂起时必须隐藏；
+          右侧 z-30 的缩放/小地图/FPS 控件与故事板同级、按 DOM 顺序被盖住，无需处理。 */}
+      {!taskPanelOpen && !suspended && (
         <CanvasQuickActionBar
           placement={controlsPlacement}
           skillItems={skillRegistry}
@@ -5096,6 +5189,8 @@ export function Canvas({
           />
         </svg>
       )}
+
+      <CanvasPickBanner />
 
       {showNodeMenu && (
         <NodeSelectionMenu

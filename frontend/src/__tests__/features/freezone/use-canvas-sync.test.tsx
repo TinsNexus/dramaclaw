@@ -20,11 +20,16 @@ import {
   applyRemoteFreezoneCanvas,
   consumeQueuedLocalFreezoneProjections,
   queueLocalFreezoneProjection,
+  registerFreezoneCanvasRuntime,
   removeLocalFreezoneProjection,
 } from "@/features/freezone/canvasSyncRuntime";
+import { holdCanvasAutosave } from "@/features/freezone/canvasAutosaveHold";
 import { projectionScopedId } from "@/features/freezone/projectionGraphIds";
 import { useShotMetadataStore } from "@/features/freezone/shotMetadataStore";
 import { CANVAS_NODE_TYPES } from "@/features/canvas/domain/canvasNodes";
+import {
+  reconcileCompletedVideoComposeProjection,
+} from "@/features/canvas/application/videoComposeProjection";
 import { useCanvasStore } from "@/stores/canvasStore";
 
 vi.mock("@/api/canvas", async (importOriginal) => {
@@ -1059,6 +1064,281 @@ describe("useCanvasSync hydrate lifecycle", () => {
 
     hook.unmount();
   });
+
+  it("rebases a completed compose projection before saving the browser result node", async () => {
+    vi.useFakeTimers();
+    const taskKey = "task:freezone_video_compose:project:project-a:0:compose-job-1";
+    const localComposeNode = {
+      id: "compose-1",
+      type: CANVAS_NODE_TYPES.videoCompose,
+      position: { x: 20, y: 30 },
+      data: {
+        displayName: "Final cut",
+        draftTimeline: { resolution: "1080p", tracks: [] },
+        isGenerating: true,
+        generationTaskKey: taskKey,
+        generationTaskType: "freezone_video_compose",
+        generationTaskJobId: "compose-job-1",
+      },
+    } as any;
+    vi.mocked(getFreezoneCanvas)
+      .mockResolvedValueOnce({
+        nodes: [localComposeNode],
+        edges: [],
+        revision: 7,
+      })
+      .mockResolvedValueOnce({
+        nodes: [
+          {
+            ...localComposeNode,
+            data: {
+              ...localComposeNode.data,
+              resultVideoUrl: "/static/project/compose-job-1.mp4",
+              resultVideoTaskKey: taskKey,
+              resultVideoJobId: "compose-job-1",
+              isGenerating: false,
+              generationStartedAt: null,
+              generationTaskKey: null,
+              generationTaskType: null,
+              generationTaskJobId: null,
+              generationError: null,
+            },
+          },
+        ],
+        edges: [],
+        revision: 8,
+        save_source: "task_projection" as any,
+      });
+    let serverRevision = 8;
+    vi.mocked(putFreezoneCanvas).mockImplementation(
+      async (_project, _canvasId, payload) => {
+        expect(payload.base_revision).toBe(serverRevision);
+        serverRevision += 1;
+        return { saved: true, revision: serverRevision };
+      },
+    );
+
+    const hook = renderHook(() =>
+      useCanvasSync("project-a", "compose_projection_user_eric"),
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(hook.result.current.revision).toBe(7);
+
+    await act(async () => {
+      expect(
+        await reconcileCompletedVideoComposeProjection({
+          projectId: "project-a",
+          canvasId: "compose_projection_user_eric",
+          nodeId: "compose-1",
+          taskKey,
+          jobId: "compose-job-1",
+        }),
+      ).toBe("applied");
+    });
+    expect(hook.result.current.revision).toBe(8);
+
+    act(() => {
+      const store = useCanvasStore.getState();
+      const resultNodeId = store.addNode(
+        CANVAS_NODE_TYPES.video,
+        { x: 600, y: 30 },
+        {
+          videoUrl: "/static/project/compose-job-1.mp4",
+          composeSourceNodeId: "compose-1",
+        },
+      );
+      store.addEdge("compose-1", resultNodeId);
+      store.updateNodeData("compose-1", {
+        resultVideoUrl: "/static/project/compose-job-1.mp4",
+        resultVideoTaskKey: taskKey,
+        resultVideoJobId: "compose-job-1",
+      });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      for (let i = 0; i < 12; i += 1) await Promise.resolve();
+    });
+
+    expect(putFreezoneCanvas).toHaveBeenCalled();
+    const saveCalls = vi.mocked(putFreezoneCanvas).mock.calls;
+    const saved = saveCalls[saveCalls.length - 1][2];
+    expect(saved.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "compose-1",
+          data: expect.objectContaining({
+            resultVideoUrl: "/static/project/compose-job-1.mp4",
+            resultVideoTaskKey: taskKey,
+            resultVideoJobId: "compose-job-1",
+            isGenerating: false,
+            generationTaskKey: null,
+          }),
+        }),
+        expect.objectContaining({
+          data: expect.objectContaining({ composeSourceNodeId: "compose-1" }),
+        }),
+      ]),
+    );
+    expect(hook.result.current.status).toBe("ready");
+
+    hook.unmount();
+  });
+
+  it("does not adopt a compose projection revision that also contains another writer", async () => {
+    vi.useFakeTimers();
+    const taskKey = "task:freezone_video_compose:project:project-a:0:compose-job-2";
+    const localComposeNode = {
+      id: "compose-1",
+      type: CANVAS_NODE_TYPES.videoCompose,
+      position: { x: 20, y: 30 },
+      data: {
+        isGenerating: true,
+        generationTaskKey: taskKey,
+        generationTaskType: "freezone_video_compose",
+        generationTaskJobId: "compose-job-2",
+      },
+    } as any;
+    const projectedComposeNode = {
+      ...localComposeNode,
+      data: {
+        ...localComposeNode.data,
+        resultVideoUrl: "/static/project/compose-job-2.mp4",
+        resultVideoTaskKey: taskKey,
+        resultVideoJobId: "compose-job-2",
+        isGenerating: false,
+        generationTaskKey: null,
+        generationTaskType: null,
+        generationTaskJobId: null,
+      },
+    };
+    const remoteAfterConcurrentWrite = {
+      nodes: [
+        projectedComposeNode,
+        {
+          id: "added-by-other-tab",
+          type: CANVAS_NODE_TYPES.upload,
+          position: { x: 400, y: 30 },
+          data: { imageUrl: "/static/project/other.png" },
+        },
+      ],
+      edges: [],
+      revision: 9,
+      save_source: "task_projection" as any,
+    };
+    vi.mocked(getFreezoneCanvas)
+      .mockResolvedValueOnce({
+        nodes: [localComposeNode],
+        edges: [],
+        revision: 7,
+      })
+      .mockResolvedValue(remoteAfterConcurrentWrite);
+    vi.mocked(putFreezoneCanvas).mockRejectedValue(
+      new ApiError("conflict", 409, {}),
+    );
+
+    const hook = renderHook(() =>
+      useCanvasSync("project-a", "compose_concurrent_user_eric"),
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(hook.result.current.revision).toBe(7);
+
+    await act(async () => {
+      expect(
+        await reconcileCompletedVideoComposeProjection({
+          projectId: "project-a",
+          canvasId: "compose_concurrent_user_eric",
+          nodeId: "compose-1",
+          taskKey,
+          jobId: "compose-job-2",
+        }),
+      ).toBe("unsafe_remote");
+    });
+    expect(hook.result.current.revision).toBe(7);
+
+    act(() => {
+      const store = useCanvasStore.getState();
+      const resultNodeId = store.addNode(
+        CANVAS_NODE_TYPES.video,
+        { x: 600, y: 30 },
+        {
+          videoUrl: "/static/project/compose-job-2.mp4",
+          composeSourceNodeId: "compose-1",
+        },
+      );
+      store.addEdge("compose-1", resultNodeId);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      for (let i = 0; i < 12; i += 1) await Promise.resolve();
+    });
+
+    expect(putFreezoneCanvas).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(putFreezoneCanvas).mock.calls[0][2]).toMatchObject({
+      base_revision: 7,
+    });
+    expect(hook.result.current.status).toBe("conflict");
+    expect(readCanvasDraft("project-a", "compose_concurrent_user_eric")).not.toBeNull();
+
+    hook.unmount();
+  });
+
+  it.each([
+    ["was not written by task projection", "autosave", "compose-job-3"],
+    ["belongs to a different task", "task_projection", "other-job"],
+  ])(
+    "does not adopt a next compose revision that %s",
+    async (_label, saveSource, resultJobId) => {
+      const taskKey = "task:freezone_video_compose:project:project-a:0:compose-job-3";
+      vi.mocked(getFreezoneCanvas).mockResolvedValue({
+        nodes: [
+          {
+            id: "compose-1",
+            type: CANVAS_NODE_TYPES.videoCompose,
+            position: { x: 20, y: 30 },
+            data: {
+              resultVideoUrl: "/static/project/compose-job-3.mp4",
+              resultVideoTaskKey: taskKey,
+              resultVideoJobId: resultJobId,
+            },
+          },
+        ],
+        edges: [],
+        revision: 8,
+        save_source: saveSource as any,
+      });
+      const applyRemote = vi.fn();
+      const unregister = registerFreezoneCanvasRuntime(
+        "project-a",
+        "compose_guard_user_eric",
+        applyRemote,
+        undefined,
+        undefined,
+        undefined,
+        () => 7,
+      );
+
+      expect(
+        await reconcileCompletedVideoComposeProjection({
+          projectId: "project-a",
+          canvasId: "compose_guard_user_eric",
+          nodeId: "compose-1",
+          taskKey,
+          jobId: "compose-job-3",
+        }),
+      ).toBe("unsafe_remote");
+      expect(applyRemote).not.toHaveBeenCalled();
+
+      unregister();
+    },
+  );
 
   // The draft is the only copy of edits that have not reached the server. A
   // save landing clears it — but only if nothing newer is still queued behind
@@ -2145,6 +2425,83 @@ describe("useCanvasSync hydrate lifecycle", () => {
     expect(vi.mocked(putFreezoneCanvas).mock.calls[0][2].metadata).toMatchObject({
       projections: {},
     });
+
+    hook.unmount();
+  });
+
+  // 跨项目粘贴：节点先带着源项目的媒体 URL 进 store，后端拷完素材才改写成目标项目
+  // 的地址。hold 期间只写草稿不发 PUT，release 后补一次保存——源项目 URL 不会先入库。
+  it("holds the content PUT while the project's autosave is held and saves once released", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getFreezoneCanvas).mockResolvedValue({
+      nodes: [],
+      edges: [],
+      revision: 3,
+    } as unknown as Awaited<ReturnType<typeof getFreezoneCanvas>>);
+
+    const hook = renderHook(() => useCanvasSync("project-a", "hold_user_eric"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const release = holdCanvasAutosave("project-a");
+    useCanvasStore
+      .getState()
+      .addNode(
+        CANVAS_NODE_TYPES.upload,
+        { x: 10, y: 10 },
+        { imageUrl: "/static/projects/project-b/freezone/_uploads/a.png" },
+      );
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(putFreezoneCanvas).not.toHaveBeenCalled();
+
+    // The copy lands and the URL is rewritten before the hold is released.
+    const pastedId = useCanvasStore.getState().nodes[0].id;
+    useCanvasStore.getState().updateNodeData(pastedId, {
+      imageUrl: "/static/projects/project-a/freezone/_uploads/copied_a.png",
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(putFreezoneCanvas).not.toHaveBeenCalled();
+
+    release();
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(putFreezoneCanvas).toHaveBeenCalledTimes(1);
+    const payload = JSON.stringify(vi.mocked(putFreezoneCanvas).mock.calls[0][2]);
+    expect(payload).toContain("/static/projects/project-a/freezone/_uploads/copied_a.png");
+    expect(payload).not.toContain("project-b");
+
+    hook.unmount();
+  });
+
+  it("does not save on release when nothing changed during the hold", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getFreezoneCanvas).mockResolvedValue({
+      nodes: [],
+      edges: [],
+      revision: 3,
+    } as unknown as Awaited<ReturnType<typeof getFreezoneCanvas>>);
+
+    const hook = renderHook(() => useCanvasSync("project-a", "hold_idle_user_eric"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const release = holdCanvasAutosave("project-a");
+    release();
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(putFreezoneCanvas).not.toHaveBeenCalled();
 
     hook.unmount();
   });
